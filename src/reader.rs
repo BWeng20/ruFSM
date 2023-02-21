@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::ops::Deref;
 use std::rc::Rc;
 use std::str;
 
@@ -159,6 +158,10 @@ impl ReaderState {
 
         let sr = s.id.clone();
 
+        if self.current.current_state.is_some() {
+            let parent_state = self.get_current_state();
+            (*parent_state).borrow_mut().states.push(sr.clone());
+        }
         self.current.current_state = Some(s.id.clone());
         self.fsm.states.insert(s.id.clone(), Rc::new(RefCell::new(s))); // s.id, s);
 
@@ -178,8 +181,8 @@ impl ReaderState {
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
-        let parent_tag = &self.get_parent_tag();
-        if [TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(parent_tag) {} else {
+        let parent_tag = self.get_parent_tag();
+        if ![TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(&parent_tag) {
             panic!("<transition> inside <{}>. Only allowed inside <initial>, <state> or <parallel>", parent_tag);
         }
         let state = self.get_current_state();
@@ -210,7 +213,14 @@ impl ReaderState {
             }
         }
 
-        (*state).borrow_mut().transitions.push(t);
+        if parent_tag.eq(TAG_INITIAL) {
+            if (*state).borrow().initial.is_some() {
+                panic!("<initial> must not be specified if initial-attribute was given")
+            }
+            (*state).borrow_mut().initial_transition = Some(t);
+        } else {
+            (*state).borrow_mut().transitions.push(t);
+        }
     }
 
 
