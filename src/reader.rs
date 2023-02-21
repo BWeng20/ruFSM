@@ -4,16 +4,17 @@ use std::fs::File;
 use std::io::Read;
 use std::ops::Deref;
 use std::rc::Rc;
-use quick_xml::events::attributes::Attributes;
-use quick_xml::events::{BytesStart, Event};
-use quick_xml::Reader;
-use crate::model::{Fsm, Id, State, StateRef};
 use std::str;
 
-type AttributeMap = HashMap<String,String>;
+use quick_xml::events::{BytesStart, Event};
+use quick_xml::events::attributes::Attributes;
+use quick_xml::Reader;
 
-pub fn read_from_xml_file(mut file: File ) -> Box<Fsm> {
+use crate::model::{Fsm, Id, map_transition_type, ScriptConditionalExpression, State, StateRef, Transition};
 
+type AttributeMap = HashMap<String, String>;
+
+pub fn read_from_xml_file(mut file: File) -> Box<Fsm> {
     let mut contents = String::new();
 
     let r = file.read_to_string(&mut contents);
@@ -38,31 +39,29 @@ struct ReaderStackItem {
 }
 
 impl ReaderStackItem {
-    pub fn new( o : &ReaderStackItem ) -> ReaderStackItem {
+    pub fn new(o: &ReaderStackItem) -> ReaderStackItem {
         ReaderStackItem {
             current_state: o.current_state.clone(),
-            current_tag: o.current_tag.clone()         }
+            current_tag: o.current_tag.clone(),
+        }
     }
 }
 
 
 struct ReaderState {
-
     // True if reader in inside an scxml element
-    in_scxml : bool,
-    id_count : i32,
+    in_scxml: bool,
+    id_count: i32,
 
     // The resulting fsm
-    fsm : Box<Fsm>,
+    fsm: Box<Fsm>,
 
-    current : ReaderStackItem,
-    stack : Vec<ReaderStackItem>
-
+    current: ReaderStackItem,
+    stack: Vec<ReaderStackItem>,
 }
 
 
 impl ReaderState {
-
     pub fn new() -> ReaderState {
         ReaderState {
             in_scxml: false,
@@ -70,14 +69,14 @@ impl ReaderState {
             stack: vec![],
             current: ReaderStackItem {
                 current_state: None,
-                current_tag: "".to_string() },
-            fsm: Box::new(Fsm::new() )
+                current_tag: "".to_string(),
+            },
+            fsm: Box::new(Fsm::new()),
         }
     }
 
-    pub fn push(&mut self, tag : &str) {
-
-        self.stack.push( ReaderStackItem::new(&self.current));
+    pub fn push(&mut self, tag: &str) {
+        self.stack.push(ReaderStackItem::new(&self.current));
         self.current.current_tag = tag.to_string();
     }
 
@@ -93,7 +92,7 @@ impl ReaderState {
         format!("__id{}", self.id_count)
     }
 
-    fn get_state(&self, id : &Id) -> Option<StateRef> {
+    fn get_state(&self, id: &Id) -> Option<StateRef> {
         self.fsm.states.get(id).cloned()
     }
 
@@ -104,7 +103,7 @@ impl ReaderState {
             }
         }
         let state = self.get_state(
-                &self.current.current_state.as_ref().unwrap() );
+            &self.current.current_state.as_ref().unwrap());
         if state.is_none() {
             panic!("Internal error: Current State {} is unknown", self.current.current_state.as_ref().unwrap());
         }
@@ -113,97 +112,112 @@ impl ReaderState {
 
     pub fn get_parent_tag(&self) -> &str {
         let mut r = "";
-        if  !self.stack.is_empty() {
-            r = self.stack.get(self.stack.len()-1).as_ref().unwrap().current_tag.as_str();
+        if !self.stack.is_empty() {
+            r = self.stack.get(self.stack.len() - 1).as_ref().unwrap().current_tag.as_str();
         }
         r
     }
 
-    fn create_state( &mut self, attr : &AttributeMap )-> Id {
+    fn create_state(&mut self, attr: &AttributeMap) -> Id {
         let mut id = attr.get("id").cloned();
         if id.is_none() {
             id = Some(self.generate_id());
         }
         let sid = id.unwrap();
-        let s = State::new( sid.as_str() );
-        self.fsm.states.insert(s.id.clone(), Rc::new( RefCell::new(s)) ); // s.id, s);
+        let s = State::new(sid.as_str());
+        self.fsm.states.insert(s.id.clone(), Rc::new(RefCell::new(s))); // s.id, s);
         sid
     }
 
 
-
     // A new "parallel" element started
-    fn start_parallel(&mut self, attr : &AttributeMap) -> Id {
-        if  !self.in_scxml {
+    fn start_parallel(&mut self, attr: &AttributeMap) -> Id {
+        if !self.in_scxml {
             panic!("<parallel> needed to be below <scxml>");
         }
-        let mut id = attr.get("id").cloned();
-        if id.is_none() {
-            id = Some(self.generate_id());
-        }
+        let state_id = self.create_state(attr);
 
-        let s = self.create_state(attr);
-
-        let s = self.current.current_state.as_ref();
-        if  s.is_some() {
+        if self.current.current_state.is_some() {
             let parent_state = self.get_current_state();
-
-            (*parent_state).borrow_mut().parallel.push(s.unwrap().clone());
+            (*parent_state).borrow_mut().parallel.push(state_id.clone());
         }
-
-        id.unwrap()
-
+        state_id
     }
 
     // A new "state" element started
-    fn start_state(&mut self, attr : &AttributeMap) -> Id {
-        if  !self.in_scxml {
+    fn start_state(&mut self, attr: &AttributeMap) -> Id {
+        if !self.in_scxml {
             panic!("<state> needed to be below <scxml>");
         }
         let mut id = attr.get("id").cloned();
         if id.is_none() {
             id = Some(self.generate_id());
         }
-        let mut s = State::new(id.unwrap().as_str() );
+        let mut s = State::new(id.unwrap().as_str());
 
         s.initial = attr.get(TAG_INITIAL).cloned();
 
         let sr = s.id.clone();
 
         self.current.current_state = Some(s.id.clone());
-        self.fsm.states.insert(s.id.clone(), Rc::new( RefCell::new(s) )); // s.id, s);
+        self.fsm.states.insert(s.id.clone(), Rc::new(RefCell::new(s))); // s.id, s);
 
         sr
     }
 
     // A "initial" element startet (node not attribute)
     fn start_initial(&mut self) {
-        if [TAG_STATE, TAG_PARALLEL].contains(&self.get_parent_tag() ) {
+        if [TAG_STATE, TAG_PARALLEL].contains(&self.get_parent_tag()) {
             if (self.get_current_state().borrow()).initial.is_some() {
                 panic!("<initial> must not be specified if initial-attribute was given")
             }
             // Next a "<transition>" must follow
-
         } else {
             panic!("<initial> only allowed inside <state> or <parallel>");
         }
     }
 
-    fn start_transition(&mut self) {
+    fn start_transition(&mut self, attr: &AttributeMap) {
         let parent_tag = &self.get_parent_tag();
-        if [TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(parent_tag ) {
-
-
-        } else {
+        if [TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(parent_tag) {} else {
             panic!("<transition> inside <{}>. Only allowed inside <initial>, <state> or <parallel>", parent_tag);
         }
+        let state = self.get_current_state();
+        let mut t = Transition::new();
+
+        {
+            let event = attr.get("event");
+            if event.is_some() {
+                t.events = event.unwrap().split_whitespace().map(|s| { s.to_string() }).collect();
+            }
+        }
+        {
+            let cond = attr.get("cond");
+            if cond.is_some() {
+                t.cond = Some(Box::new(ScriptConditionalExpression::new(cond.unwrap())));
+            }
+        }
+        {
+            let target = attr.get("target");
+            if target.is_some() {
+                t.target = Some(target.unwrap().clone());
+            }
+        }
+        {
+            let trans_type = attr.get("type");
+            if trans_type.is_some() {
+                t.transition_type = map_transition_type(trans_type.unwrap())
+            }
+        }
+
+        (*state).borrow_mut().transitions.push(t);
     }
 
 
-    fn start_element(&mut self, reader : &Reader<&[u8]>, e : &BytesStart ) {
+    fn start_element(&mut self, reader: &Reader<&[u8]>, e: &BytesStart) {
         let n = e.name();
         let name = str::from_utf8(n.as_ref()).unwrap();
-        self.push( name );
+        self.push(name);
         match name {
             TAG_SCXML => {
                 if self.in_scxml {
@@ -224,60 +238,56 @@ impl ReaderState {
                 if initial.is_some() {
                     self.fsm.initial = Some(initial.unwrap().clone());
                 }
-            },
+            }
             TAG_STATE => {
                 self.start_state(&decode_attributes(&reader, &mut e.attributes()));
-            },
+            }
             TAG_PARALLEL => {
                 self.start_parallel(&decode_attributes(&reader, &mut e.attributes()));
-            },
+            }
             TAG_INITIAL => {
                 self.start_initial();
-            },
+            }
             TAG_TRANSITION => {
-                self.start_transition();
-            },
+                self.start_transition(&decode_attributes(&reader, &mut e.attributes()));
+            }
             _ => (),
         }
-
     }
 
-    fn end_element(&mut self, name : &str) {
-        if  !self.current.current_tag.eq(name ) {
+    fn end_element(&mut self, name: &str) {
+        if !self.current.current_tag.eq(name) {
             panic!("Illegal end-tag {:?}, expected {:?}", &name, &self.current.current_tag);
         }
         self.pop();
     }
-
-
 }
 
 /**
  * Decode attributes into a hash-map
  */
-fn decode_attributes(reader : &Reader<&[u8]>, attr : &mut Attributes) -> AttributeMap {
+fn decode_attributes(reader: &Reader<&[u8]>, attr: &mut Attributes) -> AttributeMap {
     attr.map(|attr_result| {
-            match attr_result {
-                Ok(a) => {
-                    let key = reader.decoder().decode(a.key.as_ref() );
-                    if key.is_err() {
-                            panic!("unable to read attribute name {:?}, utf8 error {:?}", &a, key.err());
-                    }
-                    let value = a.decode_and_unescape_value(&reader);
-                    if value.is_err() {
-                        panic!("unable to read attribute value  {:?}, utf8 error {:?}", &a, value.err());
-                    }
-                    (key.unwrap().to_string(), value.unwrap().to_string())
-                },
-                Err(err) => {
-                    panic!("unable to read key in DefaultSettings, err = {:?}", err);
+        match attr_result {
+            Ok(a) => {
+                let key = reader.decoder().decode(a.key.as_ref());
+                if key.is_err() {
+                    panic!("unable to read attribute name {:?}, utf8 error {:?}", &a, key.err());
                 }
+                let value = a.decode_and_unescape_value(&reader);
+                if value.is_err() {
+                    panic!("unable to read attribute value  {:?}, utf8 error {:?}", &a, value.err());
+                }
+                (key.unwrap().to_string(), value.unwrap().to_string())
             }
-        }).collect()
+            Err(err) => {
+                panic!("unable to read key in DefaultSettings, err = {:?}", err);
+            }
+        }
+    }).collect()
 }
 
-pub  fn read_from_xml(xml : &str) -> Box<Fsm> {
-
+pub fn read_from_xml(xml: &str) -> Box<Fsm> {
     let mut reader = Reader::from_str(xml);
     reader.trim_text(true);
 
@@ -292,12 +302,12 @@ pub  fn read_from_xml(xml : &str) -> Box<Fsm> {
             // exits the loop when reaching end of file
             Ok(Event::Eof) => break,
 
-            Ok(Event::Start( e)) => {
-                rs.start_element(&mut reader, &e );
+            Ok(Event::Start(e)) => {
+                rs.start_element(&mut reader, &e);
             }
             Ok(Event::End(e)) => {
-                rs.end_element(str::from_utf8( e.name().as_ref() ).unwrap() );
-            },
+                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap());
+            }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 
             // There are several other `Event`s we do not consider here
