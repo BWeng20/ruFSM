@@ -9,7 +9,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::model::{Fsm, Id, map_transition_type, ScriptConditionalExpression, State, StateRef, Transition};
+use crate::fsm::{Fsm, Id, map_transition_type, ScriptConditionalExpression, State, StateRef, Transition};
 
 type AttributeMap = HashMap<String, String>;
 
@@ -25,12 +25,17 @@ pub fn read_from_xml_file(mut file: File) -> Box<Fsm> {
 }
 
 pub const TAG_SCXML: &str = "scxml";
+pub const TAG_ID: &str = "id";
 pub const TAG_DATAMODEL: &str = "datamodel";
 pub const TAG_VERSION: &str = "version";
 pub const TAG_INITIAL: &str = "initial";
 pub const TAG_STATE: &str = "state";
 pub const TAG_PARALLEL: &str = "parallel";
 pub const TAG_TRANSITION: &str = "transition";
+pub const TAG_COND: &str = "cond";
+pub const TAG_EVENT: &str = "event";
+pub const TAG_TARGET: &str = "target";
+pub const TAG_TYPE: &str = "type";
 
 struct ReaderStackItem {
     current_state: Option<Id>,
@@ -132,7 +137,7 @@ impl ReaderState {
     // A new "parallel" element started
     fn start_parallel(&mut self, attr: &AttributeMap) -> Id {
         if !self.in_scxml {
-            panic!("<parallel> needed to be below <scxml>");
+            panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
         let state_id = self.create_state(attr);
 
@@ -146,9 +151,9 @@ impl ReaderState {
     // A new "state" element started
     fn start_state(&mut self, attr: &AttributeMap) -> Id {
         if !self.in_scxml {
-            panic!("<state> needed to be below <scxml>");
+            panic!("<{}> needed to be inside <{}>", TAG_STATE, TAG_SCXML);
         }
-        let mut id = attr.get("id").cloned();
+        let mut id = attr.get(TAG_ID).cloned();
         if id.is_none() {
             id = Some(self.generate_id());
         }
@@ -172,42 +177,43 @@ impl ReaderState {
     fn start_initial(&mut self) {
         if [TAG_STATE, TAG_PARALLEL].contains(&self.get_parent_tag()) {
             if (self.get_current_state().borrow()).initial.is_some() {
-                panic!("<initial> must not be specified if initial-attribute was given")
+                panic!("<{}> must not be specified if initial-attribute was given", TAG_INITIAL)
             }
             // Next a "<transition>" must follow
         } else {
-            panic!("<initial> only allowed inside <state> or <parallel>");
+            panic!("<{}> only allowed inside <{}> or <{}>", TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
         }
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
         let parent_tag = self.get_parent_tag();
         if ![TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(&parent_tag) {
-            panic!("<transition> inside <{}>. Only allowed inside <initial>, <state> or <parallel>", parent_tag);
+            panic!("<{}> inside <{}>. Only allowed inside <{}>, <{}> or <{}>", TAG_TRANSITION, parent_tag,
+                   TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
         }
         let state = self.get_current_state();
         let mut t = Transition::new();
 
         {
-            let event = attr.get("event");
+            let event = attr.get(TAG_EVENT);
             if event.is_some() {
                 t.events = event.unwrap().split_whitespace().map(|s| { s.to_string() }).collect();
             }
         }
         {
-            let cond = attr.get("cond");
+            let cond = attr.get(TAG_COND);
             if cond.is_some() {
                 t.cond = Some(Box::new(ScriptConditionalExpression::new(cond.unwrap())));
             }
         }
         {
-            let target = attr.get("target");
+            let target = attr.get(TAG_TARGET);
             if target.is_some() {
                 t.target = Some(target.unwrap().clone());
             }
         }
         {
-            let trans_type = attr.get("type");
+            let trans_type = attr.get(TAG_TYPE);
             if trans_type.is_some() {
                 t.transition_type = map_transition_type(trans_type.unwrap())
             }
@@ -231,14 +237,13 @@ impl ReaderState {
         match name {
             TAG_SCXML => {
                 if self.in_scxml {
-                    panic!("Only one <scxml> allowed");
+                    panic!("Only one <{}> allowed", TAG_SCXML);
                 }
                 self.in_scxml = true;
                 let map = decode_attributes(&reader, &mut e.attributes());
-                println!("scxml attributes : {:?}", map);
                 let datamodel = map.get(TAG_DATAMODEL);
                 if datamodel.is_some() {
-                    self.fsm.datamodel = datamodel.unwrap().clone();
+                    self.fsm.datamodel = crate::fsm::createDatamodel(datamodel.unwrap());
                 }
                 let version = map.get(TAG_VERSION);
                 if version.is_some() {

@@ -1,8 +1,8 @@
 extern crate core;
 
-mod model;
 mod reader;
 mod tests;
+mod fsm;
 
 fn main() {
     let sm = reader::read_from_xml(r"
