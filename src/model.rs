@@ -1,7 +1,11 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug};
+use std::rc::Rc;
 
 pub type Id = String;
+pub type StateRef = Rc<RefCell<State>>;
+
 
 #[derive(Debug)]
 pub struct Fsm {
@@ -13,7 +17,7 @@ pub struct Fsm {
      * The only real storage to states, identified by the Id
      * If a state has no declared id, it needs a generated one.
      */
-    pub states : HashMap<Id, State>
+    pub states : HashMap<Id, StateRef>
 
 }
 
@@ -95,7 +99,7 @@ impl Transition {
 /**
  * A boolean expression, implemented in the  used datamodel-language.
  */
-trait ConditionalExpression: Debug {
+pub trait ConditionalExpression: Debug {
     fn execute(self: &Self, data : DataModel) -> bool { false }
 }
 
