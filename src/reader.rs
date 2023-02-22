@@ -11,7 +11,7 @@ use quick_xml::Reader;
 
 use crate::fsm::{Fsm, Id, map_transition_type, ScriptConditionalExpression, State, StateRef, Transition};
 
-type AttributeMap = HashMap<String, String>;
+pub type AttributeMap = HashMap<String, String>;
 
 pub fn read_from_xml_file(mut file: File) -> Box<Fsm> {
     let mut contents = String::new();
@@ -97,7 +97,7 @@ impl ReaderState {
     }
 
     fn get_state(&self, id: &Id) -> Option<StateRef> {
-        self.fsm.states.get(id).cloned()
+        self.fsm.get_state(id)
     }
 
     pub fn get_current_state(&self) -> StateRef {
