@@ -1,4 +1,5 @@
-# Finite State Machine Implementation in RUST 
+# Finite State Machine Implementation in RUST
+
 According to W3C Recommendations
 
 See https://www.w3.org/TR/scxml/

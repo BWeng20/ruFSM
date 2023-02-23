@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 
-use std::cell::RefCell;
+use std::borrow::BorrowMut;
 use std::collections::{HashMap, LinkedList, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
@@ -17,48 +17,16 @@ pub const ECMA_SCRIPT_LC: &str = "ecmascript";
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
 
-pub type ItemType<T> = Rc<RefCell<T>>;
-
-#[macro_export]
-macro_rules! newitem {
-($x:expr) => {
-    // Box::new($x)
-   Rc::new(RefCell::new( $x) )
-}}
-
-#[macro_export]
-macro_rules! accitem_mut {
-($x:expr) => {
-  // (*$x)
-  (*$x).borrow_mut()
-}}
-
-#[macro_export]
-macro_rules! accitem {
-($x:expr) => {
-  // ($x)
-  $x.borrow()
-}}
-
-
-
-/// First try with the Rust specific thread handling.
-/// As the Fsm is not "Sync" or "Send", it can't be moved into the worker thread.
-/// Instead we create it inside the thread, only givening the external queue to the caller.
+/// Starts the FSM inside a worker thread.
 ///
-pub fn start_fsm(scxml: String) -> (JoinHandle<()>, Sender<Event>) {
-    let mut externalQueue: BlockingQueue<Event> = BlockingQueue::new();
-    let mut sender = externalQueue.sender.clone();
-
+pub fn start_fsm(mut sm: Box<Fsm>) -> (JoinHandle<()>, Sender<Event>) {
+    let externalQueue: BlockingQueue<Event> = BlockingQueue::new();
+    let sender = externalQueue.sender.clone();
     let thread = thread::spawn(
         move || {
-            println!("Creating The SM:");
-            let mut sm = reader::read_from_xml(&scxml);
-            println!("The SM: {}", sm);
             sm.externalQueue = externalQueue;
             sm.interpret();
         });
-
     (thread, sender)
 }
 
@@ -72,23 +40,23 @@ pub fn start_fsm(scxml: String) -> (JoinHandle<()>, Sender<Event>) {
 /// ## General Purpose Data types
 /// Structs and methods are designed to match the signatures in the W3c-Pseudo-code.
 
-pub struct List<T> {
-    data: LinkedList<ItemType<T>>,
+pub struct List<T: Clone> {
+    data: LinkedList<T>,
 }
 
-impl<T> List<T> {
+impl<T: Clone> List<T> {
     pub fn new() -> List<T> {
         List { data: Default::default() }
     }
 
-    pub fn push(&mut self, t: ItemType<T>) {
+    pub fn push(&mut self, t: T) {
         self.data.push_back(t);
     }
 
 
     /// #W3C says:
     /// Returns the head of the list
-    pub fn head(&self) -> &ItemType<T> {
+    pub fn head(&self) -> &T {
         self.data.front().unwrap()
     }
 
@@ -121,7 +89,7 @@ impl<T> List<T> {
         let mut t = List::new();
 
         for i in self.data.iter() {
-            if f(&(**i).borrow()) {
+            if f(&(*i)) {
                 t.data.push_back((*i).clone());
             }
         }
@@ -150,23 +118,23 @@ impl<T> List<T> {
 /// is the object t.
 #[derive(Debug)]
 pub struct OrderedSet<T> {
-    data: Vec<ItemType<T>>,
+    data: Vec<T>,
 }
 
-impl<T> OrderedSet<T> {
+impl<T: Clone> OrderedSet<T> {
     pub fn new() -> OrderedSet<T> {
         OrderedSet { data: Default::default() }
     }
 
     /// #W3C says:
     /// Adds e to the set if it is not already a member
-    pub fn add(&mut self, e: &ItemType<T>) {
+    pub fn add(&mut self, e: T) {
         self.data.push(e.clone());
     }
 
     /// #W3C says:
     /// Deletes e from the set
-    pub fn delete(&mut self, e: &ItemType<T>) { todo!() }
+    pub fn delete(&mut self, e: &T) { todo!() }
 
     /// #W3C says:
     /// Adds all members of s that are not already members of the set
@@ -175,7 +143,7 @@ impl<T> OrderedSet<T> {
 
     /// #W3C says:
     /// Is e a member of set?
-    pub fn isMember(e: &ItemType<T>) {
+    pub fn isMember(e: &T) {
         todo!()
     }
 
@@ -229,9 +197,8 @@ impl<T> OrderedSet<T> {
 
 #[derive(Debug)]
 pub struct Queue<T> {
-    data: VecDeque<ItemType<T>>,
+    data: VecDeque<T>,
 }
-
 
 impl<T> Queue<T> {
     fn new() -> Queue<T> {
@@ -247,13 +214,13 @@ impl<T> Queue<T> {
 
     /// #W3C says:
     /// Puts e last in the queue
-    pub fn enqueue(&mut self, e: ItemType<T>) {
+    pub fn enqueue(&mut self, e: T) {
         self.data.push_back(e);
     }
 
     /// #W3C says:
     /// Removes and returns first element in queue
-    pub fn dequeue(&mut self) -> ItemType<T> {
+    pub fn dequeue(&mut self) -> T {
         self.data.pop_front().unwrap()
     }
 
@@ -293,10 +260,9 @@ impl<T> BlockingQueue<T> {
     }
 }
 
-
 #[derive(Debug)]
 pub struct HashTable<K, T> {
-    data: HashMap<K, ItemType<T>>,
+    data: HashMap<K, T>,
 }
 
 impl<K, T> HashTable<K, T> {
@@ -313,9 +279,9 @@ impl<K, T> HashTable<K, T> {
 /////////////////////////////////////////////////////////////
 // FSM model (State etc, representing the XML-data-model)
 
-pub type Id = String;
-pub type StateRef = ItemType<State>;
-pub type StateMap = HashMap<Id, StateRef>;
+pub type Name = String;
+pub type StateMap = HashMap<StateId, State>;
+pub type StateNameMap = HashMap<Name, StateId>;
 
 #[derive(PartialEq)]
 #[derive(Debug)]
@@ -335,26 +301,26 @@ pub struct FsmControl {
     pub fsm_thread: JoinHandle<()>,
 }
 
-
 #[derive(Debug)]
 pub struct Fsm {
-    pub configuration: OrderedSet<State>,
-    pub statesToInvoke: OrderedSet<State>,
+    pub configuration: OrderedSet<StateId>,
+    pub statesToInvoke: OrderedSet<StateId>,
     pub datamodel: Box<dyn Datamodel>,
     pub internalQueue: Queue<Event>,
     pub externalQueue: BlockingQueue<Event>,
-    pub historyValue: HashTable<Id, State>,
+    pub historyValue: HashTable<Name, StateId>,
     pub running: bool,
     pub binding: BindingType,
 
     pub version: String,
-    pub initial: Option<Id>,
+    pub initial: StateId,
 
     /**
      * The only real storage to states, identified by the Id
      * If a state has no declared id, it needs a generated one.
      */
     pub states: StateMap,
+    pub statesNames: StateNameMap,
 }
 
 unsafe impl Sync for Fsm {}
@@ -369,26 +335,10 @@ fn display_state_map(sm: &StateMap, f: &mut Formatter<'_>) -> std::fmt::Result {
         } else {
             write!(f, ",")?;
         }
-        write!(f, "{}", (**e.1).borrow())?;
+        write!(f, "{}", *e.1)?;
     }
 
     write!(f, "}}")
-}
-
-fn display_ids(sm: &Vec<Id>, f: &mut Formatter<'_>) -> std::fmt::Result {
-    write!(f, "[")?;
-
-    let mut first = true;
-    for e in sm {
-        if first {
-            first = false;
-        } else {
-            write!(f, ",")?;
-        }
-        write!(f, "{}", e)?;
-    }
-
-    write!(f, "]")
 }
 
 impl Fsm {
@@ -396,7 +346,7 @@ impl Fsm {
         Fsm {
             configuration: OrderedSet::new(),
             version: "1.0".to_string(),
-            initial: None,
+            initial: 0,
             datamodel: createDatamodel(ECMA_SCRIPT),
             internalQueue: Queue::new(),
             externalQueue: BlockingQueue::new(),
@@ -405,28 +355,22 @@ impl Fsm {
             statesToInvoke: OrderedSet::new(),
             binding: BindingType::Early,
             states: Default::default(),
+            statesNames: Default::default(),
         }
     }
 
-    pub fn get_state(&self, id: &Id) -> Option<StateRef>
+    pub fn get_state_by_name(&mut self, name: &Name) -> Option<&mut State>
     {
-        self.states.get(id).cloned()
-    }
-
-
-    pub fn get_states(&self, ids: &[&Option<Id>]) -> List<State> {
-        let mut ls: List<State> = List::new();
-        for id in ids {
-            if id.is_some() {
-                let sr = self.get_state(id.as_ref().unwrap());
-                if sr.is_some() {
-                    ls.push(sr.unwrap());
-                }
-            }
+        match self.statesNames.get(name) {
+            None => None,
+            Some(id) => self.get_state_by_id(*id),
         }
-        ls
     }
 
+    pub fn get_state_by_id(&mut self, state_id: StateId) -> Option<&mut State>
+    {
+        self.states.get_mut(&state_id)
+    }
 
     /// #W3C says:
     /// The purpose of this procedure is to initialize the interpreter and to start processing.
@@ -480,7 +424,8 @@ impl Fsm {
         self.running = true;
         self.executeGlobalScriptElement();
 
-        let initalStates = self.get_states(&[&self.initial]);
+        let mut initalStates = List::new();
+        initalStates.push(self.initial);
         self.enterStates(&initalStates);
         self.mainEventLoop();
     }
@@ -706,7 +651,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn removeConflictingTransitions(&mut self, enabledTransitions: &List<Transition>) -> OrderedSet<Transition> {
+    fn removeConflictingTransitions(&mut self, enabledTransitions: &List<TransitionId>) -> OrderedSet<Transition> {
         todo!()
     }
 
@@ -724,7 +669,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn microstep(&mut self, enabledTransitions: &List<Transition>) {
+    fn microstep(&mut self, enabledTransitions: &List<TransitionId>) {
         todo!()
     }
 
@@ -757,7 +702,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn exitStates(&mut self, enabledTransitions: &List<Transition>) {
+    fn exitStates(&mut self, enabledTransitions: &List<TransitionId>) {
         todo!()
     }
 
@@ -808,7 +753,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn enterStates(&mut self, states: &List<State>) {
+    fn enterStates(&mut self, states: &List<StateId>) {
         todo!()
     }
 
@@ -828,7 +773,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn computeExitSet(&mut self, states: &List<Transition>) {
+    fn computeExitSet(&mut self, states: &List<TransitionId>) {
         todo!()
     }
 
@@ -842,7 +787,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn executeTransitionContent(&mut self, enabledTransitions: &List<Transition>) {
+    fn executeTransitionContent(&mut self, enabledTransitions: &List<TransitionId>) {
         todo!()
     }
 
@@ -866,8 +811,8 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn computeEntrySet(&mut self, transitions: &List<Transition>, statesToEnter: &List<State>,
-                       statesForDefaultEntry: &List<State>, defaultHistoryContent: &List<State>) {
+    fn computeEntrySet(&mut self, transitions: &List<TransitionId>, statesToEnter: &List<StateId>,
+                       statesForDefaultEntry: &List<StateId>, defaultHistoryContent: &List<StateId>) {
         todo!()
     }
 
@@ -908,8 +853,8 @@ impl Fsm {
     ///                         addDescendantStatesToEnter(child,statesToEnter,statesForDefaultEntry, defaultHistoryContent)
     /// ```
     ///  todo (check argument types!)
-    fn addDescendantStatesToEnter(&mut self, state: &StateRef, statesToEnter: &List<State>,
-                                  statesForDefaultEntry: &List<State>, defaultHistoryContent: &List<State>) {
+    fn addDescendantStatesToEnter(&mut self, state: &State, statesToEnter: &List<StateId>,
+                                  statesForDefaultEntry: &List<StateId>, defaultHistoryContent: &List<StateId>) {
         todo!()
     }
 
@@ -927,8 +872,8 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn addAncestorStatesToEnter(&mut self, state: &StateRef, ancestor: &StateRef, statesToEnter: &List<State>,
-                                statesForDefaultEntry: &List<State>, defaultHistoryContent: &List<State>) { todo!() }
+    fn addAncestorStatesToEnter(&mut self, state: &State, ancestor: &State, statesToEnter: &List<StateId>,
+                                statesForDefaultEntry: &List<StateId>, defaultHistoryContent: &List<StateId>) { todo!() }
 
     /// #W3C says:
     /// # procedure isInFinalState(s)
@@ -984,7 +929,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn findLCCA(stateList: &List<State>) -> Option<&State> { todo!() }
+    fn findLCCA(stateList: &List<StateId>) -> StateId { todo!() }
 
     /// #W3C says:
     /// # function getEffectiveTargetStates(transition)
@@ -1031,21 +976,88 @@ impl Fsm {
     /// Returns a list containing all \<state\>, \<final\>, and \<parallel\> children of state1.
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn getChildStates(state1: &State) -> List<State> {
+    fn getChildStates(state1: &State) -> List<StateId> {
         todo!()
     }
 }
 
+pub type StateId = u32;
+
+/// Stores all data for a State.
+/// In this model "State" is used for SCXML elements "State" and "Parallel".
+///
+/// ## W3C says:
+/// 3.3 \<state\>
+/// Holds the representation of a state.
+///
+/// 3.3.1 Attribute Details
+///  
+/// |Name| Required| Attribute Constraints|Type|Default Value|Valid Values|Description|
+/// |----|---------|----------------------|----|-------------|------------|-----------|
+/// |id|false|none|ID|none|A valid id as defined in [https://www.w3.org/TR/scxml/#Schema](XML Schema)|The identifier for this state. See 3.14 IDs for details.|
+/// |initial|false|MUST NOT be specified in conjunction with the \<initial\> element. MUST NOT occur in atomic states.|IDREFS|none|A legal state specification. See 3.11 Legal State Configurations and Specifications for details.|The id of the default initial state (or states) for this state.|
+///
+/// 3.3.2 Children
+/// - \<onentry\> Optional element holding executable content to be run upon entering this <state>.
+///   Occurs 0 or more times. See 3.8 \<onentry\>
+/// - \<onexit\> Optional element holding executable content to be run when exiting this <state>.
+///   Occurs 0 or more times. See 3.9 \<onexit\>
+/// - \<transition\> Defines an outgoing transition from this state. Occurs 0 or more times.
+///   See 3.5 <transition>
+/// - \<initial\> In states that have substates, an optional child which identifies the default
+///   initial state. Any transition which takes the parent state as its target will result in the
+///   state machine also taking the transition contained inside the <initial> element.
+///   See 3.6 \<initial\>
+/// - \<state\> Defines a sequential substate of the parent state. Occurs 0 or more times.
+/// - \<parallel\> Defines a parallel substate. Occurs 0 or more times. See 3.4 \<parallel\>
+/// - \<final\>. Defines a final substate. Occurs 0 or more times. See 3.7 \<final\>.
+/// - \<history\> A child pseudo-state which records the descendant state(s) that the parent state
+///   was in the last time the system transitioned from the parent.
+///   May occur 0 or more times. See 3.10 \<history\>.
+/// - \<datamodel\> Defines part or all of the data model. Occurs 0 or 1 times. See 5.2 \<datamodel\>
+/// - \<invoke> Invokes an external service. Occurs 0 or more times. See 6.4 \<invoke\> for details.
+///
+/// ##Definitions:
+/// - An atomic state is a \<state\> that has no \<state\>, \<parallel\> or \<final\> children.
+/// - A compound state is a \<state\> that has \<state\>, \<parallel\>, or \<final\> children
+///   (or a combination of these).
+/// - The default initial state(s) of a compound state are those specified by the 'initial' attribute
+///   or \<initial\> element, if either is present. Otherwise it is the state's first child state
+///   in document order.
+///
+/// In a conformant SCXML document, a compound state may specify either an "initial" attribute or an
+/// \<initial\> element, but not both. See 3.6 \<initial\> for a discussion of the difference between
+/// the two notations.
 #[derive(Debug)]
 pub struct State {
-    pub id: String,
-    pub initial: Option<Id>,
-    pub initial_transition: Option<Transition>,
-    pub states: Vec<Id>,
+    /// The internal Id (not W3C). Used to refence the state.
+    pub id: StateId,
+
+    /// The SCXML id.
+    pub name: String,
+
+    /// The initial state (if the state has sub-states).
+    pub initial: StateId,
+
+    /// The initial transition id (if the state has sub-states).
+    pub initial_transition: TransitionId,
+
+    /// The Ids of the sub-states of this state.
+    pub states: Vec<StateId>,
+
+    /// The script that is executed if the state is entered. See W3c comments for \<onentry\> above.
     pub on_entry: Option<ExecutableContent>,
+
+    /// The script that is executed if the state is left. See W3c comments for \<onexit\> above.
     pub on_exit: Option<ExecutableContent>,
-    pub transitions: Vec<Transition>,
-    pub parallel: Vec<Id>,
+
+    /// All transitions between sub-states.
+    pub transitions: Vec<TransitionId>,
+
+    /// Ids of all sub-states.
+    pub parallel: Vec<StateId>,
+
+    /// The local datamodel
     pub datamodel: Option<DataModel>,
 }
 
@@ -1060,11 +1072,13 @@ pub struct DataModel {
 }
 
 impl State {
-    pub fn new(id: &str) -> State {
+    pub fn new(name: &String) -> State {
+        idCounter.fetch_add(1, Ordering::Relaxed);
         State {
-            id: id.to_string(),
-            initial: None,
-            initial_transition: None,
+            id: idCounter.load(Ordering::Relaxed),
+            name: name.clone(),
+            initial: 0,
+            initial_transition: 0,
             states: vec![],
             on_entry: None,
             on_exit: None,
@@ -1092,19 +1106,26 @@ pub fn map_transition_type(ts: &String) -> Option<TransitionType> {
     t
 }
 
+static idCounter: AtomicU32 = AtomicU32::new(1);
+
+pub type TransitionId = u32;
 
 #[derive(Debug)]
 pub struct Transition {
+    pub id: TransitionId,
+
     // TODO: Possibly we need some type to express event ids
     pub events: Vec<String>,
     pub cond: Option<Box<dyn ConditionalExpression>>,
-    pub target: Option<Id>,
+    pub target: Option<Name>,
     pub transition_type: Option<TransitionType>,
 }
 
 impl Transition {
     pub fn new() -> Transition {
+        idCounter.fetch_add(1, Ordering::Relaxed);
         Transition {
+            id: idCounter.load(Ordering::Relaxed),
             events: vec![],
             cond: None,
             target: None,
@@ -1113,8 +1134,9 @@ impl Transition {
     }
 }
 
-pub trait Datamodel: Debug {
+pub trait Datamodel: Send + Debug {
     fn get_name(self: &Self) -> &str;
+
     fn clear(self: &mut Self);
 }
 
@@ -1217,7 +1239,6 @@ impl ConditionalExpression for ScriptConditionalExpression {
     }
 }
 
-
 #[derive(Debug)]
 pub struct ExecutableContent {}
 
@@ -1235,26 +1256,35 @@ fn optional_to_string<T: Display>(op: &Option<T>) -> String {
 
 impl Display for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fsm{{v:{} initial:{} states:", self.version, optional_to_string(&self.initial))?;
+        write!(f, "Fsm{{v:{} initial:{} states:", self.version, self.initial)?;
         display_state_map(&self.states, f)?;
         write!(f, "}}")
     }
 }
 
-
 impl Display for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{<{}> initial:", self.id)?;
-        if self.initial_transition.is_some() {
-            write!(f, "{}", optional_to_string(&self.initial_transition))?;
-        } else if self.initial.is_some() {
-            write!(f, "{}", optional_to_string(&self.initial))?;
+        if self.initial_transition > 0 {
+            write!(f, "{}", self.initial_transition)?;
+        } else if self.initial > 0 {
+            write!(f, "{}", self.initial)?;
         } else {
             write!(f, "none")?;
         }
         write!(f, " states:")?;
-        display_ids(&self.states, f)?;
-        write!(f, "}}")
+        write!(f, "[")?;
+        let mut first = true;
+        for i in &self.states
+        {
+            if first {
+                first = false;
+            } else {
+                write!(f, ",")?;
+            }
+            write!(f, "{}", i)?;
+        }
+        write!(f, "]}}")
     }
 }
 

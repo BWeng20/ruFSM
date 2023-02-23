@@ -1,8 +1,6 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::rc::Rc;
 use std::str;
 use std::sync::Arc;
 
@@ -10,8 +8,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::{accitem, accitem_mut, newitem};
-use crate::fsm::{Fsm, Id, map_transition_type, ScriptConditionalExpression, State, StateRef, Transition};
+use crate::fsm::{Fsm, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
 
@@ -40,7 +37,7 @@ pub const TAG_TARGET: &str = "target";
 pub const TAG_TYPE: &str = "type";
 
 struct ReaderStackItem {
-    current_state: Option<Id>,
+    current_state: StateId,
     current_tag: String,
 }
 
@@ -74,7 +71,7 @@ impl ReaderState {
             id_count: 0,
             stack: vec![],
             current: ReaderStackItem {
-                current_state: None,
+                current_state: 0,
                 current_tag: "".to_string(),
             },
             fsm: Box::new(Fsm::new()),
@@ -93,30 +90,32 @@ impl ReaderState {
         }
     }
 
-    pub fn generate_id(&mut self) -> String {
+    pub fn generate_name(&mut self) -> String {
         self.id_count += 1;
         format!("__id{}", self.id_count)
     }
 
-    fn get_state(&self, id: &Id) -> Option<StateRef> {
-        self.fsm.get_state(id)
+    fn get_state_by_name(&mut self, name: &Name) -> Option<&mut State> {
+        self.fsm.get_state_by_name(name)
     }
 
-    pub fn get_current_state(&self) -> StateRef {
-        {
-            if self.current.current_state.is_none() {
-                panic!("Internal error: Current State is unknown");
-            }
+    fn get_state_by_id(&mut self, id: StateId) -> Option<&mut State> {
+        self.fsm.get_state_by_id(id)
+    }
+
+    pub fn get_current_state<'a>(&mut self) -> &mut State {
+        let id = self.current.current_state;
+        if id <= 0 {
+            panic!("Internal error: Current State is unknown");
         }
-        let state = self.get_state(
-            &self.current.current_state.as_ref().unwrap());
+        let mut state = self.get_state_by_id(id);
         if state.is_none() {
-            panic!("Internal error: Current State {} is unknown", self.current.current_state.as_ref().unwrap());
+            panic!("Internal error: Current State {} is unknown", id);
         }
         state.unwrap()
     }
 
-    pub fn get_parent_tag(&self) -> &str {
+    pub fn get_parent_tag(&mut self) -> &str {
         let mut r = "";
         if !self.stack.is_empty() {
             r = self.stack.get(self.stack.len() - 1).as_ref().unwrap().current_tag.as_str();
@@ -124,61 +123,82 @@ impl ReaderState {
         r
     }
 
-    fn create_state(&mut self, attr: &AttributeMap) -> Id {
-        let mut id = attr.get("id").cloned();
-        if id.is_none() {
-            id = Some(self.generate_id());
+    fn get_or_create_state(&mut self, name: &String) -> StateId {
+        match self.fsm.statesNames.get(name) {
+            None => {
+                let s = State::new(name);
+                let sid = s.id;
+                self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
+                self.fsm.states.insert(s.id, s);
+                sid
+            }
+            Some(Id) => *Id
         }
-        let sid = id.unwrap();
-        let s = State::new(sid.as_str());
-        self.fsm.states.insert(s.id.clone(), newitem!(s)); // s.id, s);
+    }
+
+    fn create_state(&mut self, attr: &AttributeMap) -> StateId {
+        let sname: String;
+
+        match attr.get("id") {
+            None => sname = self.generate_name(),
+            Some(id) => sname = id.clone()
+        }
+
+        let s = State::new(&sname);
+        let sid = s.id;
+        self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
+        self.fsm.states.insert(s.id, s);
         sid
     }
 
 
     // A new "parallel" element started
-    fn start_parallel(&mut self, attr: &AttributeMap) -> Id {
+    fn start_parallel(&mut self, attr: &AttributeMap) -> StateId {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
         let state_id = self.create_state(attr);
 
-        if self.current.current_state.is_some() {
+        if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
-            accitem_mut!(parent_state).parallel.push(state_id.clone());
+            parent_state.parallel.push(state_id);
         }
         state_id
     }
 
     // A new "state" element started
-    fn start_state(&mut self, attr: &AttributeMap) -> Id {
+    fn start_state(&mut self, attr: &AttributeMap) -> StateId {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_STATE, TAG_SCXML);
         }
-        let mut id = attr.get(TAG_ID).cloned();
-        if id.is_none() {
-            id = Some(self.generate_id());
+        let name: String;
+        match attr.get(TAG_ID) {
+            None => name = self.generate_name(),
+            Some(id) => name = id.clone(),
         }
-        let mut s = State::new(id.unwrap().as_str());
+        let mut s = State::new(&name);
 
-        s.initial = attr.get(TAG_INITIAL).cloned();
-
-        let sr = s.id.clone();
-
-        if self.current.current_state.is_some() {
-            let parent_state = self.get_current_state();
-            accitem_mut!(parent_state).states.push(sr.clone());
+        match attr.get(TAG_INITIAL) {
+            None => s.initial = 0,
+            Some(state_name) => s.initial = self.get_or_create_state(state_name)
         }
-        self.current.current_state = Some(s.id.clone());
-        self.fsm.states.insert(s.id.clone(), newitem!(s)); // s.id, s);
+
+        let sr = s.id;
+
+        if self.current.current_state > 0 {
+            self.get_current_state().states.push(sr);
+        }
+        self.current.current_state = s.id.clone();
+        self.fsm.statesNames.insert(s.name.clone(), s.id.clone());
+        self.fsm.states.insert(s.id.clone(), s); // s.id, s);
 
         sr
     }
 
-    // A "initial" element startet (node not attribute)
+    // A "initial" element started (node, not attribute)
     fn start_initial(&mut self) {
         if [TAG_STATE, TAG_PARALLEL].contains(&self.get_parent_tag()) {
-            if accitem!(self.get_current_state()).initial.is_some() {
+            if self.get_current_state().initial > 0 {
                 panic!("<{}> must not be specified if initial-attribute was given", TAG_INITIAL)
             }
             // Next a "<transition>" must follow
@@ -188,8 +208,11 @@ impl ReaderState {
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
-        let parent_tag = self.get_parent_tag();
-        if ![TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(&parent_tag) {
+        let mut parent_tag =
+            {
+                self.get_parent_tag().to_string()
+            };
+        if ![TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(&parent_tag.as_str()) {
             panic!("<{}> inside <{}>. Only allowed inside <{}>, <{}> or <{}>", TAG_TRANSITION, parent_tag,
                    TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
         }
@@ -222,12 +245,12 @@ impl ReaderState {
         }
 
         if parent_tag.eq(TAG_INITIAL) {
-            if accitem!(state).initial.is_some() {
+            if state.initial > 0 {
                 panic!("<initial> must not be specified if initial-attribute was given")
             }
-            accitem_mut!(state).initial_transition = Some(t);
+            state.initial_transition = t.id;
         } else {
-            accitem_mut!(state).transitions.push(t);
+            state.transitions.push(t.id);
         }
     }
 
@@ -253,7 +276,7 @@ impl ReaderState {
                 }
                 let initial = map.get(TAG_INITIAL);
                 if initial.is_some() {
-                    self.fsm.initial = Some(initial.unwrap().clone());
+                    self.fsm.initial = 1 // TODO initial;
                 }
             }
             TAG_STATE => {
