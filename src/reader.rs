@@ -4,11 +4,13 @@ use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
 use std::str;
+use std::sync::Arc;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
+use crate::{accitem, accitem_mut, newitem};
 use crate::fsm::{Fsm, Id, map_transition_type, ScriptConditionalExpression, State, StateRef, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
@@ -129,7 +131,7 @@ impl ReaderState {
         }
         let sid = id.unwrap();
         let s = State::new(sid.as_str());
-        self.fsm.states.insert(s.id.clone(), Rc::new(RefCell::new(s))); // s.id, s);
+        self.fsm.states.insert(s.id.clone(), newitem!(s)); // s.id, s);
         sid
     }
 
@@ -143,7 +145,7 @@ impl ReaderState {
 
         if self.current.current_state.is_some() {
             let parent_state = self.get_current_state();
-            (*parent_state).borrow_mut().parallel.push(state_id.clone());
+            accitem_mut!(parent_state).parallel.push(state_id.clone());
         }
         state_id
     }
@@ -165,10 +167,10 @@ impl ReaderState {
 
         if self.current.current_state.is_some() {
             let parent_state = self.get_current_state();
-            (*parent_state).borrow_mut().states.push(sr.clone());
+            accitem_mut!(parent_state).states.push(sr.clone());
         }
         self.current.current_state = Some(s.id.clone());
-        self.fsm.states.insert(s.id.clone(), Rc::new(RefCell::new(s))); // s.id, s);
+        self.fsm.states.insert(s.id.clone(), newitem!(s)); // s.id, s);
 
         sr
     }
@@ -176,7 +178,7 @@ impl ReaderState {
     // A "initial" element startet (node not attribute)
     fn start_initial(&mut self) {
         if [TAG_STATE, TAG_PARALLEL].contains(&self.get_parent_tag()) {
-            if (self.get_current_state().borrow()).initial.is_some() {
+            if accitem!(self.get_current_state()).initial.is_some() {
                 panic!("<{}> must not be specified if initial-attribute was given", TAG_INITIAL)
             }
             // Next a "<transition>" must follow
@@ -220,12 +222,12 @@ impl ReaderState {
         }
 
         if parent_tag.eq(TAG_INITIAL) {
-            if (*state).borrow().initial.is_some() {
+            if accitem!(state).initial.is_some() {
                 panic!("<initial> must not be specified if initial-attribute was given")
             }
-            (*state).borrow_mut().initial_transition = Some(t);
+            accitem_mut!(state).initial_transition = Some(t);
         } else {
-            (*state).borrow_mut().transitions.push(t);
+            accitem_mut!(state).transitions.push(t);
         }
     }
 

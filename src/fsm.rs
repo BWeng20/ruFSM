@@ -4,12 +4,63 @@ use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+use std::thread::JoinHandle;
+
+use crate::reader;
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
+
+pub type ItemType<T> = Rc<RefCell<T>>;
+
+#[macro_export]
+macro_rules! newitem {
+($x:expr) => {
+    // Box::new($x)
+   Rc::new(RefCell::new( $x) )
+}}
+
+#[macro_export]
+macro_rules! accitem_mut {
+($x:expr) => {
+  // (*$x)
+  (*$x).borrow_mut()
+}}
+
+#[macro_export]
+macro_rules! accitem {
+($x:expr) => {
+  // ($x)
+  $x.borrow()
+}}
+
+
+
+/// First try with the Rust specific thread handling.
+/// As the Fsm is not "Sync" or "Send", it can't be moved into the worker thread.
+/// Instead we create it inside the thread, only givening the external queue to the caller.
+///
+pub fn start_fsm(scxml: String) -> (JoinHandle<()>, Sender<Event>) {
+    let mut externalQueue: BlockingQueue<Event> = BlockingQueue::new();
+    let mut sender = externalQueue.sender.clone();
+
+    let thread = thread::spawn(
+        move || {
+            println!("Creating The SM:");
+            let mut sm = reader::read_from_xml(&scxml);
+            println!("The SM: {}", sm);
+            sm.externalQueue = externalQueue;
+            sm.interpret();
+        });
+
+    (thread, sender)
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +73,7 @@ pub const NULL_DATAMODEL_LC: &str = "null";
 /// Structs and methods are designed to match the signatures in the W3c-Pseudo-code.
 
 pub struct List<T> {
-    data: LinkedList<Rc<RefCell<T>>>,
+    data: LinkedList<ItemType<T>>,
 }
 
 impl<T> List<T> {
@@ -30,14 +81,14 @@ impl<T> List<T> {
         List { data: Default::default() }
     }
 
-    pub fn push(&mut self, t: Rc<RefCell<T>>) {
+    pub fn push(&mut self, t: ItemType<T>) {
         self.data.push_back(t);
     }
 
 
     /// #W3C says:
     /// Returns the head of the list
-    pub fn head(&self) -> &Rc<RefCell<T>> {
+    pub fn head(&self) -> &ItemType<T> {
         self.data.front().unwrap()
     }
 
@@ -99,7 +150,7 @@ impl<T> List<T> {
 /// is the object t.
 #[derive(Debug)]
 pub struct OrderedSet<T> {
-    data: Vec<Rc<RefCell<T>>>,
+    data: Vec<ItemType<T>>,
 }
 
 impl<T> OrderedSet<T> {
@@ -109,13 +160,13 @@ impl<T> OrderedSet<T> {
 
     /// #W3C says:
     /// Adds e to the set if it is not already a member
-    pub fn add(&mut self, e: &Rc<RefCell<T>>) {
+    pub fn add(&mut self, e: &ItemType<T>) {
         self.data.push(e.clone());
     }
 
     /// #W3C says:
     /// Deletes e from the set
-    pub fn delete(&mut self, e: &Rc<RefCell<T>>) { todo!() }
+    pub fn delete(&mut self, e: &ItemType<T>) { todo!() }
 
     /// #W3C says:
     /// Adds all members of s that are not already members of the set
@@ -124,7 +175,7 @@ impl<T> OrderedSet<T> {
 
     /// #W3C says:
     /// Is e a member of set?
-    pub fn isMember(e: &Rc<RefCell<T>>) {
+    pub fn isMember(e: &ItemType<T>) {
         todo!()
     }
 
@@ -176,8 +227,6 @@ impl<T> OrderedSet<T> {
     }
 }
 
-pub type ItemType<T> = Rc<RefCell<T>>;
-
 #[derive(Debug)]
 pub struct Queue<T> {
     data: VecDeque<ItemType<T>>,
@@ -217,26 +266,37 @@ impl<T> Queue<T> {
 
 #[derive(Debug)]
 pub struct BlockingQueue<T> {
-    data: Vec<Rc<RefCell<T>>>,
+    sender: Sender<T>,
+    receiver: Arc<Mutex<Receiver<T>>>,
 }
 
 impl<T> BlockingQueue<T> {
     fn new() -> BlockingQueue<T> {
+        let (sender, receiver) = channel();
         BlockingQueue {
-            data: vec![]
+            receiver: Arc::new(Mutex::new(receiver)),
+            sender: sender,
         }
     }
 
-    /// Extension to re-use exiting instances.
-    pub fn clear(&mut self) {
-        self.data.clear();
+
+    /// #W3C says:
+    /// Puts e last in the queue
+    pub fn enqueue(&mut self, e: T) {
+        self.sender.send(e).unwrap()
+    }
+
+    /// #W3C says:
+    /// Removes and returns first element in queue, blocks if queue is empty
+    pub fn dequeue(&mut self) -> T {
+        self.receiver.lock().unwrap().recv().unwrap()
     }
 }
 
 
 #[derive(Debug)]
 pub struct HashTable<K, T> {
-    data: HashMap<K, Rc<RefCell<T>>>,
+    data: HashMap<K, ItemType<T>>,
 }
 
 impl<K, T> HashTable<K, T> {
@@ -254,7 +314,7 @@ impl<K, T> HashTable<K, T> {
 // FSM model (State etc, representing the XML-data-model)
 
 pub type Id = String;
-pub type StateRef = Rc<RefCell<State>>;
+pub type StateRef = ItemType<State>;
 pub type StateMap = HashMap<Id, StateRef>;
 
 #[derive(PartialEq)]
@@ -268,6 +328,13 @@ pub enum BindingType {
 pub struct Event {
     pub name: String,
 }
+
+#[derive(Debug)]
+pub struct FsmControl {
+    pub externalQueue: BlockingQueue<Event>,
+    pub fsm_thread: JoinHandle<()>,
+}
+
 
 #[derive(Debug)]
 pub struct Fsm {
@@ -289,6 +356,8 @@ pub struct Fsm {
      */
     pub states: StateMap,
 }
+
+unsafe impl Sync for Fsm {}
 
 fn display_state_map(sm: &StateMap, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "{{")?;
@@ -402,7 +471,7 @@ impl Fsm {
         self.configuration = OrderedSet::new();
         self.statesToInvoke.clear();
         self.internalQueue.clear();
-        self.externalQueue.clear();
+        self.externalQueue = BlockingQueue::new();
         self.historyValue.clear();
         self.datamodel.clear();
         if self.binding == BindingType::Early {
