@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-use std::borrow::BorrowMut;
 use std::collections::{HashMap, LinkedList, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
@@ -8,8 +7,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
-
-use crate::reader;
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
@@ -32,14 +29,16 @@ pub fn start_fsm(mut sm: Box<Fsm>) -> (JoinHandle<()>, Sender<Event>) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// ## Implementation of the data-structures and algorithms described in the W3C scxml proposal.
-/// As reference each type and method has the w3c description as documentation.
-/// See https://www.w3.org/TR/scxml/#AlgorithmforSCXMLInterpretation
+// ## Implementation of the data-structures and algorithms described in the W3C scxml proposal.
+// As reference each type and method has the w3c description as documentation.
+// See https://www.w3.org/TR/scxml/#AlgorithmforSCXMLInterpretation
 
 ////////////////////////////////////////////////////////////////////////////////
-/// ## General Purpose Data types
-/// Structs and methods are designed to match the signatures in the W3c-Pseudo-code.
+// ## General Purpose Data types
+// Structs and methods are designed to match the signatures in the W3c-Pseudo-code.
 
+
+/// ## General Purpose List type
 pub struct List<T: Clone> {
     data: LinkedList<T>,
 }
@@ -49,10 +48,13 @@ impl<T: Clone> List<T> {
         List { data: Default::default() }
     }
 
+    pub fn size(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn push(&mut self, t: T) {
         self.data.push_back(t);
     }
-
 
     /// #W3C says:
     /// Returns the head of the list
@@ -98,14 +100,24 @@ impl<T: Clone> List<T> {
 
     /// #W3C says:
     /// Returns true if some element in the list satisfies the predicate f.  Returns false for an empty list.
-    pub fn some(f: &dyn Fn(&T) -> bool) -> bool {
+    pub fn some(&self, f: &dyn Fn(&T) -> bool) -> bool {
+        for si in &self.data {
+            if f(si) {
+                return true;
+            }
+        }
         false
     }
 
     /// #W3C says:
     /// Returns true if every element in the list satisfies the predicate f.  Returns true for an empty list.
-    pub fn every(f: &dyn Fn(&T) -> bool) -> bool {
-        false
+    pub fn every(&self, f: &dyn Fn(&T) -> bool) -> bool {
+        for si in &self.data {
+            if !f(si) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -121,9 +133,14 @@ pub struct OrderedSet<T> {
     data: Vec<T>,
 }
 
-impl<T: Clone> OrderedSet<T> {
+impl<T: Clone + PartialEq> OrderedSet<T> {
     pub fn new() -> OrderedSet<T> {
         OrderedSet { data: Default::default() }
+    }
+
+    /// Extension: The size (only informational)
+    pub fn size(&self) -> usize {
+        self.data.len()
     }
 
     /// #W3C says:
@@ -134,51 +151,74 @@ impl<T: Clone> OrderedSet<T> {
 
     /// #W3C says:
     /// Deletes e from the set
-    pub fn delete(&mut self, e: &T) { todo!() }
+    pub fn delete(&mut self, e: &T) {
+        self.data.retain(|x| *x != *e);
+    }
 
     /// #W3C says:
     /// Adds all members of s that are not already members of the set
     /// (s must also be an OrderedSet)
-    pub fn union(s: &OrderedSet<T>) { todo!() }
+    pub fn union(&mut self, s: &OrderedSet<T>) {
+        for si in &s.data {
+            if !self.isMember(&si) {
+                self.add(si.clone());
+            }
+        }
+    }
 
     /// #W3C says:
     /// Is e a member of set?
-    pub fn isMember(e: &T) {
-        todo!()
+    pub fn isMember(&self, e: &T) -> bool {
+        self.data.contains(e)
     }
 
     /// #W3C says:
     /// Returns true if some element in the set satisfies the predicate f.
     ///
     /// Returns false for an empty set.
-    pub fn some(f: &dyn Fn(&T) -> bool) -> bool {
-        todo!()
+    pub fn some(&self, f: &dyn Fn(&T) -> bool) -> bool {
+        for si in &self.data {
+            if f(si) {
+                return true;
+            }
+        }
+        false
     }
 
     /// #W3C says:
     /// Returns true if every element in the set satisfies the predicate f.
     ///
     /// Returns true for an empty set.
-    pub fn every(f: &dyn Fn(&T) -> bool) -> bool {
-        todo!()
+    pub fn every(&self, f: &dyn Fn(&T) -> bool) -> bool {
+        for si in &self.data {
+            if !f(si) {
+                return false;
+            }
+        }
+        true
     }
 
     /// #W3C says:
     /// Returns true if this set and set s have at least one member in common
-    pub fn hasIntersection(s: &OrderedSet<T>) {
-        todo!()
+    pub fn hasIntersection(&self, s: &OrderedSet<T>) -> bool {
+        for si in &self.data {
+            if s.isMember(si) {
+                return true;
+            }
+        }
+        false
     }
 
     /// #W3C says:
     /// Is the set empty?
     pub fn isEmpty(&self) -> bool {
-        todo!()
+        self.size() == 0
     }
 
     /// #W3C says:
     /// Remove all elements from the set (make it empty)
     pub fn clear(&mut self) {
-        todo!()
+        self.data.clear();
     }
 
     /// #W3C says:
@@ -191,7 +231,12 @@ impl<T: Clone> OrderedSet<T> {
     /// was called) retain their original ordering while any members belonging to the second set only
     /// are placed after, retaining their ordering in their original set.
     pub fn toList(&self) -> List<T> {
-        todo!()
+        let mut l = List::new();
+        for e in self.data.iter()
+        {
+            l.push(e.clone());
+        }
+        l
     }
 }
 
@@ -406,9 +451,7 @@ impl Fsm {
     ///     mainEventLoop()
     /// ```
     /// #Actual implementation:
-    /// This method is called on the fsm model, after
-    /// the xml document was processed. In fact this module should not
-    /// know about the actual xml format or parser.
+    ///
     pub fn interpret(&mut self) {
         self.expandScxmlSource();
 
@@ -430,10 +473,11 @@ impl Fsm {
         self.mainEventLoop();
     }
 
-    /// Normalizes the _'initial'_  attributes.
-    fn expandScxmlSource(&mut self) {
-        todo!()
-    }
+    /// #Actual implementation:
+    /// This method is called on the fsm model, after
+    /// the xml document was processed. It should check if all References to states are fulfilled.
+    /// After this method all "StateId" or "TransactionId" shall be valid and have to lead to a panic.
+    fn expandScxmlSource(&mut self) {}
 
     fn initializeDatamodel(&mut self) {
         todo!()

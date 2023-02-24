@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::str;
-use std::sync::Arc;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
@@ -138,17 +137,12 @@ impl ReaderState {
 
     fn create_state(&mut self, attr: &AttributeMap) -> StateId {
         let sname: String;
-
         match attr.get("id") {
             None => sname = self.generate_name(),
             Some(id) => sname = id.clone()
         }
-
-        let s = State::new(&sname);
-        let sid = s.id;
-        self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
-        self.fsm.states.insert(s.id, s);
-        sid
+        let id = self.get_or_create_state(&sname);
+        id
     }
 
 
@@ -158,7 +152,6 @@ impl ReaderState {
             panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
         let state_id = self.create_state(attr);
-
         if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
             parent_state.parallel.push(state_id);
@@ -253,7 +246,6 @@ impl ReaderState {
             state.transitions.push(t.id);
         }
     }
-
 
     fn start_element(&mut self, reader: &Reader<&[u8]>, e: &BytesStart) {
         let n = e.name();

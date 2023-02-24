@@ -3,8 +3,9 @@ extern crate core;
 use crate::fsm::Event;
 
 mod reader;
-mod tests;
 mod fsm;
+
+mod tests;
 
 fn main() {
     println!("Creating The SM:");
