@@ -445,6 +445,9 @@ pub struct Fsm {
     pub binding: BindingType,
 
     pub version: String,
+
+    /// A FSM can have actual multiple initial-target-states, so this state may be artificial.
+    /// Reader have to generate a parent state if needed.
     pub initial: StateId,
 
     /**
@@ -1164,6 +1167,7 @@ impl Fsm {
     ///         return findLCCA([t.source].append(tstates))
     /// ```
     /// #Actual implementation:
+    /// No "Option" here, as "StateId" can be "0" to identify "none".
     fn getTransitionDomain(&self, t: &Transition) -> StateId {
         let tstates = self.getEffectiveTargetStates(t);
         if tstates.isEmpty() {
