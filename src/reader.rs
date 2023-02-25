@@ -235,7 +235,8 @@ impl ReaderState {
             let target = attr.get(TAG_TARGET);
             match target {
                 None => (),
-                Some(target_name) => t.target = self.get_or_create_state(target_name),
+                // TODO: Parse the state specification! (it can be a list)
+                Some(target_name) => t.target.push(self.get_or_create_state(target_name)),
             }
         }
         {

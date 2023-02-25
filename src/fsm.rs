@@ -3,7 +3,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
-use std::ops::{Add, DerefMut};
+use std::ops::DerefMut;
+use std::slice::Iter;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -62,14 +63,6 @@ pub fn start_fsm(mut sm: Box<Fsm>) -> (JoinHandle<()>, Sender<Event>) {
 /// ## General Purpose List type
 pub struct List<T: Clone> {
     data: Vec<T>,
-}
-
-impl<T: std::clone::Clone> Iterator for List<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<T> {
-        todo!()
-    }
 }
 
 impl<T: Clone> List<T> {
@@ -160,6 +153,10 @@ impl<T: Clone> List<T> {
         };
         t.data.sort_by(compare);
         t
+    }
+
+    pub fn iterator(&self) -> Iter<'_, T> {
+        self.data.iter()
     }
 }
 
@@ -280,6 +277,10 @@ impl<T: Clone + PartialEq> OrderedSet<T> {
             l.push(e.clone());
         }
         l
+    }
+
+    pub fn iterator(&self) -> Iter<'_, T> {
+        self.data.iter()
     }
 }
 
@@ -923,19 +924,19 @@ impl Fsm {
         // initialize the temporary table for default content in history states
         let defaultHistoryContent: HashTable<StateId, ExecutableContentId> = HashTable::new();
         self.computeEntrySet(enabledTransitions, &statesToEnter, &statesForDefaultEntry, &defaultHistoryContent);
-        for s in statesToEnter.toList().sort(&entryOrder) {
-            self.configuration.add(s);
-            self.statesToInvoke.add(s);
-            let stateS: &mut State = self.get_state_by_id_mut(s).unwrap();
+        for s in statesToEnter.toList().sort(&entryOrder).iterator() {
+            self.configuration.add(*s);
+            self.statesToInvoke.add(*s);
+            let stateS: &mut State = self.get_state_by_id_mut(*s).unwrap();
             if binding == BindingType::Late && stateS.isFirstEntry {
                 stateS.datamodel.initializeDataModel(&stateS.data);
                 stateS.isFirstEntry = false;
             }
-            for content in stateS.onentry.sort(&documentOrder) {
-                self.executeContent(content);
+            for content in stateS.onentry.sort(&documentOrder).iterator() {
+                self.executeContent(*content);
             }
             if statesForDefaultEntry.isMember(&s) {
-                let stateS: &State = self.get_state_by_id(s).unwrap();
+                let stateS: &State = self.get_state_by_id(*s).unwrap();
                 if stateS.initial > 0 {
                     self.executeContent(self.get_transition_by_id(stateS.initial).unwrap().content);
                 }
@@ -943,8 +944,8 @@ impl Fsm {
             if defaultHistoryContent.has(&s) {
                 self.executeContent(*defaultHistoryContent.get(&s));
             }
-            if self.isFinalState(s) {
-                let stateS = self.get_state_by_id(s).unwrap();
+            if self.isFinalState(*s) {
+                let stateS = self.get_state_by_id(*s).unwrap();
                 let parent: StateId = stateS.parent;
                 if self.isSCXMLElement(parent) {
                     self.running = false
@@ -1043,7 +1044,16 @@ impl Fsm {
     ///  todo (check argument types!)
     fn computeEntrySet(&mut self, transitions: &List<TransitionId>, statesToEnter: &OrderedSet<StateId>,
                        statesForDefaultEntry: &OrderedSet<StateId>, defaultHistoryContent: &HashTable<StateId, ExecutableContentId>) {
-        todo!()
+        for tid in transitions.iterator() {
+            let t = self.get_transition_by_id(*tid).unwrap();
+            for s in t.target.iter() {
+                self.addDescendantStatesToEnter(*s, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+            }
+            let ancestor = self.getTransitionDomain(t);
+            for s in self.getEffectiveTargetStates(t).iterator() {
+                self.addAncestorStatesToEnter(*s, ancestor, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+            }
+        }
     }
 
     /// #W3C says:
@@ -1082,9 +1092,8 @@ impl Fsm {
     ///                     if not statesToEnter.some(lambda s: isDescendant(s,child)):
     ///                         addDescendantStatesToEnter(child,statesToEnter,statesForDefaultEntry, defaultHistoryContent)
     /// ```
-    ///  todo (check argument types!)
-    fn addDescendantStatesToEnter(&mut self, state: &State, statesToEnter: &List<StateId>,
-                                  statesForDefaultEntry: &List<StateId>, defaultHistoryContent: &List<StateId>) {
+    fn addDescendantStatesToEnter(&self, state: StateId, statesToEnter: &OrderedSet<StateId>,
+                                  statesForDefaultEntry: &OrderedSet<StateId>, defaultHistoryContent: &HashTable<StateId, ExecutableContentId>) {
         todo!()
     }
 
@@ -1101,9 +1110,10 @@ impl Fsm {
     ///                     addDescendantStatesToEnter(child,statesToEnter,statesForDefaultEntry, defaultHistoryContent)
     /// ```
     /// #Actual implementation:
-    ///  todo (check argument types!)
-    fn addAncestorStatesToEnter(&mut self, state: &State, ancestor: &State, statesToEnter: &List<StateId>,
-                                statesForDefaultEntry: &List<StateId>, defaultHistoryContent: &List<StateId>) { todo!() }
+    fn addAncestorStatesToEnter(&self, state: StateId, ancestor: StateId, statesToEnter: &OrderedSet<StateId>,
+                                statesForDefaultEntry: &OrderedSet<StateId>, defaultHistoryContent: &HashTable<StateId, ExecutableContentId>) {
+        todo!()
+    }
 
     /// #W3C says:
     /// # procedure isInFinalState(s)
@@ -1142,7 +1152,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn getTransitionDomain(transition: &Transition) -> Option<&State> { todo!() }
+    fn getTransitionDomain(&self, transition: &Transition) -> StateId { todo!() }
 
     /// #W3C says:
     /// # function findLCCA(stateList)
@@ -1179,7 +1189,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn getEffectiveTargetStates(transition: &Transition) -> OrderedSet<State> {
+    fn getEffectiveTargetStates(&self, transition: &Transition) -> OrderedSet<StateId> {
         todo!()
     }
 
@@ -1217,6 +1227,29 @@ impl Fsm {
 }
 
 pub type StateId = u32;
+
+#[derive(Debug)]
+#[derive(Clone)]
+pub struct Data {
+    // TODO ???
+}
+
+#[derive(Debug)]
+pub struct DataStore {
+    pub values: HashMap<String, Data>,
+}
+
+impl DataStore {
+    fn new() -> DataStore {
+        DataStore {
+            values: HashMap::new()
+        }
+    }
+}
+
+#[derive(Clone)]
+#[derive(Debug)]
+pub struct DoneData {}
 
 /// Stores all data for a State.
 /// In this model "State" is used for SCXML elements "State" and "Parallel".
@@ -1298,29 +1331,6 @@ pub struct State {
     pub donedata: Option<DoneData>,
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-pub struct Data {
-    // TODO ???
-}
-
-#[derive(Debug)]
-pub struct DataStore {
-    pub values: HashMap<String, Data>,
-}
-
-impl DataStore {
-    fn new() -> DataStore {
-        DataStore {
-            values: HashMap::new()
-        }
-    }
-}
-
-#[derive(Clone)]
-#[derive(Debug)]
-pub struct DoneData {}
-
 impl State {
     pub fn new(name: &String) -> State {
         ID_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -1340,6 +1350,18 @@ impl State {
             parent: 0,
             donedata: None,
         }
+    }
+}
+
+impl Clone for State {
+    fn clone(&self) -> Self {
+        todo!()
+    }
+}
+
+impl PartialEq for State {
+    fn eq(&self, other: &Self) -> bool {
+        todo!()
     }
 }
 
@@ -1371,7 +1393,7 @@ pub struct Transition {
     // TODO: Possibly we need some type to express event ids
     pub events: Vec<String>,
     pub cond: Option<Box<dyn ConditionalExpression>>,
-    pub target: StateId,
+    pub target: Vec<StateId>,
     pub transition_type: Option<TransitionType>,
     pub content: ExecutableContentId,
 }
@@ -1383,7 +1405,7 @@ impl Transition {
             id: ID_COUNTER.load(Ordering::Relaxed),
             events: vec![],
             cond: None,
-            target: 0,
+            target: vec![],
             transition_type: None,
             content: 0,
         }
@@ -1549,7 +1571,7 @@ impl Display for State {
 
 impl Display for Transition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{type:{} events:{:?} cond:{:?} target:{} }}",
+        write!(f, "{{type:{} events:{:?} cond:{:?} target:{:?} }}",
                optional_to_string(&self.transition_type), &self.events, self.cond,
                self.target)
     }
