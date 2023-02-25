@@ -6,11 +6,11 @@ See https://www.w3.org/TR/scxml/
 
 To-Do:
 
-+ Implement XML-Reading
-+ Parallel implement the model (fsm, states etc.)
-+ Implement Datastructures needed (Queue etc.)
-+ Implement methods in the model
-+ Repair schema... (still some reds)
++ Implement XML-Reading _(ongoing)_
++ Parallel implement the model (fsm, states etc.) _(mostly finished)_
++ Implement Datastructures needed (Queue etc.) _(mostly finished)_
++ Implement methods in the model _(ongoing, much work to do)_
++ Repair schema... (still some reds) _(not started)_
 
 
 
