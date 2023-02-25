@@ -94,20 +94,28 @@ impl ReaderState {
         format!("__id{}", self.id_count)
     }
 
-    fn get_state_by_name(&mut self, name: &Name) -> Option<&mut State> {
+    fn get_state_by_name(&self, name: &Name) -> Option<&State> {
         self.fsm.get_state_by_name(name)
     }
 
-    fn get_state_by_id(&mut self, id: StateId) -> Option<&mut State> {
+    fn get_state_by_name_mut(&mut self, name: &Name) -> Option<&mut State> {
+        self.fsm.get_state_by_name_mut(name)
+    }
+
+    fn get_state_by_id(&self, id: StateId) -> Option<&State> {
         self.fsm.get_state_by_id(id)
     }
 
-    pub fn get_current_state<'a>(&mut self) -> &mut State {
+    fn get_state_by_id_mut(&mut self, id: StateId) -> Option<&mut State> {
+        self.fsm.get_state_by_id_mut(id)
+    }
+
+    pub fn get_current_state(&mut self) -> &mut State {
         let id = self.current.current_state;
         if id <= 0 {
             panic!("Internal error: Current State is unknown");
         }
-        let mut state = self.get_state_by_id(id);
+        let state = self.get_state_by_id_mut(id);
         if state.is_none() {
             panic!("Internal error: Current State {} is unknown", id);
         }
@@ -131,7 +139,7 @@ impl ReaderState {
                 self.fsm.states.insert(s.id, s);
                 sid
             }
-            Some(Id) => *Id
+            Some(id) => *id
         }
     }
 
@@ -201,7 +209,7 @@ impl ReaderState {
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
-        let mut parent_tag =
+        let parent_tag =
             {
                 self.get_parent_tag().to_string()
             };
@@ -209,7 +217,6 @@ impl ReaderState {
             panic!("<{}> inside <{}>. Only allowed inside <{}>, <{}> or <{}>", TAG_TRANSITION, parent_tag,
                    TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
         }
-        let state = self.get_current_state();
         let mut t = Transition::new();
 
         {
@@ -226,8 +233,9 @@ impl ReaderState {
         }
         {
             let target = attr.get(TAG_TARGET);
-            if target.is_some() {
-                t.target = Some(target.unwrap().clone());
+            match target {
+                None => (),
+                Some(target_name) => t.target = self.get_or_create_state(target_name),
             }
         }
         {
@@ -237,14 +245,17 @@ impl ReaderState {
             }
         }
 
+        let state = self.get_current_state();
+
         if parent_tag.eq(TAG_INITIAL) {
             if state.initial > 0 {
                 panic!("<initial> must not be specified if initial-attribute was given")
             }
-            state.initial_transition = t.id;
+            state.initial = t.id;
         } else {
             state.transitions.push(t.id);
         }
+        self.fsm.transitions.insert(t.id, t);
     }
 
     fn start_element(&mut self, reader: &Reader<&[u8]>, e: &BytesStart) {
@@ -268,7 +279,9 @@ impl ReaderState {
                 }
                 let initial = map.get(TAG_INITIAL);
                 if initial.is_some() {
-                    self.fsm.initial = 1 // TODO initial;
+                    let t = Transition::new();
+                    self.fsm.initial = t.id;
+                    self.fsm.transitions.insert(t.id, t);
                 }
             }
             TAG_STATE => {
