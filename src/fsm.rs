@@ -108,6 +108,19 @@ impl<T: Clone> List<T> {
     }
 
     /// #W3C says:
+    /// Returns the list appended with l
+    pub fn appendSet(&self, l: &OrderedSet<T>) -> List<T> {
+        let mut t = List {
+            data: self.data.clone()
+        };
+        for i in l.data.iter()
+        {
+            t.data.push((*i).clone());
+        }
+        t
+    }
+
+    /// #W3C says:
     /// Returns the list of elements that satisfy the predicate f
     /// # Actual Implementation:
     /// Can't name the function "filter" because this get in conflict with pre-defined "filter"
@@ -1151,8 +1164,21 @@ impl Fsm {
     ///         return findLCCA([t.source].append(tstates))
     /// ```
     /// #Actual implementation:
-    ///  todo (check argument types!)
-    fn getTransitionDomain(&self, transition: &Transition) -> StateId { todo!() }
+    fn getTransitionDomain(&self, t: &Transition) -> StateId {
+        let tstates = self.getEffectiveTargetStates(t);
+        if tstates.isEmpty() {
+            0
+        } else if t.transition_type == TransitionType::Internal &&
+            self.isCompoundState(t.source) && tstates.every(&|s| -> bool { self.isDescendant(*s, t.source) })
+        {
+            t.source
+        } else {
+            let mut l = List::new();
+            l.push(t.source);
+            l.appendSet(&tstates);
+            self.findLCCA(&l)
+        }
+    }
 
     /// #W3C says:
     /// # function findLCCA(stateList)
@@ -1169,7 +1195,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn findLCCA(stateList: &List<StateId>) -> StateId { todo!() }
+    fn findLCCA(&self, stateList: &List<StateId>) -> StateId { todo!() }
 
     /// #W3C says:
     /// # function getEffectiveTargetStates(transition)
@@ -1198,7 +1224,7 @@ impl Fsm {
     /// If state2 is null, returns the set of all ancestors of state1 in ancestry order (state1's parent followed by the parent's parent, etc. up to an including the <scxml> element). If state2 is non-null, returns in ancestry order the set of all ancestors of state1, up to but not including state2. (A "proper ancestor" of a state is its parent, or the parent's parent, or the parent's parent's parent, etc.))If state2 is state1's parent, or equal to state1, or a descendant of state1, this returns the empty set.
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn getProperAncestors(state1: &State, state2: &State) -> OrderedSet<State> {
+    fn getProperAncestors(&self, state1: &State, state2: &State) -> OrderedSet<State> {
         todo!()
     }
 
@@ -1207,7 +1233,12 @@ impl Fsm {
     /// Returns 'true' if state1 is a descendant of state2 (a child, or a child of a child, or a child of a child of a child, etc.) Otherwise returns 'false'.
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn isDescendant(state1: &State, state2: &State) -> bool {
+    fn isDescendant(&self, state1: StateId, state2: StateId) -> bool {
+        todo!()
+    }
+
+
+    fn isCompoundState(&self, state: StateId) -> bool {
         todo!()
     }
 
@@ -1366,20 +1397,19 @@ impl PartialEq for State {
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum TransitionType {
     Internal,
     External,
 }
 
-pub fn map_transition_type(ts: &String) -> Option<TransitionType> {
-    let mut t: Option<TransitionType> = None;
+pub fn map_transition_type(ts: &String) -> TransitionType {
     match ts.to_lowercase().as_str() {
-        "internal" => t = Some(TransitionType::Internal),
-        "external" => t = Some(TransitionType::External),
-        "" => {}
-        _ => panic!("Unknown transition type '{}'", ts)
+        "internal" => TransitionType::Internal,
+        "external" => TransitionType::External,
+        "" => TransitionType::External,
+        _ => panic!("Unknown transition type '{}'", ts),
     }
-    t
 }
 
 static ID_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -1393,8 +1423,9 @@ pub struct Transition {
     // TODO: Possibly we need some type to express event ids
     pub events: Vec<String>,
     pub cond: Option<Box<dyn ConditionalExpression>>,
+    pub source: StateId,
     pub target: Vec<StateId>,
-    pub transition_type: Option<TransitionType>,
+    pub transition_type: TransitionType,
     pub content: ExecutableContentId,
 }
 
@@ -1405,8 +1436,9 @@ impl Transition {
             id: ID_COUNTER.load(Ordering::Relaxed),
             events: vec![],
             cond: None,
+            source: 0,
             target: vec![],
-            transition_type: None,
+            transition_type: TransitionType::Internal,
             content: 0,
         }
     }
@@ -1572,7 +1604,7 @@ impl Display for State {
 impl Display for Transition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{type:{} events:{:?} cond:{:?} target:{:?} }}",
-               optional_to_string(&self.transition_type), &self.events, self.cond,
+               self.transition_type, &self.events, self.cond,
                self.target)
     }
 }
