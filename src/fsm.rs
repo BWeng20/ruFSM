@@ -182,6 +182,7 @@ impl<T: Clone> List<T> {
 /// The notation [...] is used as a list constructor, so that '[t]' denotes a list whose only member
 /// is the object t.
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct OrderedSet<T> {
     data: Vec<T>,
 }
@@ -381,17 +382,17 @@ impl<K: std::cmp::Eq + Hash + Clone, T: Clone> HashTable<K, T> {
         self.data.clear();
     }
 
-    pub fn put(&mut self, k: &K, v: &T) {
+    pub fn put(&mut self, k: K, v: &T) {
         self.data.insert(k.clone(), v.clone());
     }
 
-    pub fn has(&self, k: &K) -> bool {
-        self.data.contains_key(k)
+    pub fn has(&self, k: K) -> bool {
+        self.data.contains_key(&k)
     }
 
 
-    pub fn get(&self, k: &K) -> &T {
-        self.data.get(k).unwrap()
+    pub fn get(&self, k: K) -> &T {
+        self.data.get(&k).unwrap()
     }
 }
 
@@ -440,7 +441,7 @@ pub struct Fsm {
     pub datamodel: Box<dyn Datamodel>,
     pub internalQueue: Queue<Event>,
     pub externalQueue: BlockingQueue<Event>,
-    pub historyValue: HashTable<Name, StateId>,
+    pub historyValue: HashTable<StateId, OrderedSet<StateId>>,
     pub running: bool,
     pub binding: BindingType,
 
@@ -957,8 +958,8 @@ impl Fsm {
                     self.executeContent(self.get_transition_by_id(stateS.initial).unwrap().content);
                 }
             }
-            if defaultHistoryContent.has(&s) {
-                self.executeContent(*defaultHistoryContent.get(&s));
+            if defaultHistoryContent.has(*s) {
+                self.executeContent(*defaultHistoryContent.get(*s));
             }
             if self.isFinalState(*s) {
                 let stateS = self.get_state_by_id(*s).unwrap();
@@ -1220,7 +1221,21 @@ impl Fsm {
     /// #Actual implementation:
     ///  todo (check argument types!)
     fn getEffectiveTargetStates(&self, transition: &Transition) -> OrderedSet<StateId> {
-        todo!()
+        let mut targets = OrderedSet::new();
+        for sid in &transition.target {
+            if self.isHistoryState(*sid) {
+                if self.historyValue.has(*sid) {
+                    targets.union(self.historyValue.get(*sid));
+                } else {
+                    let s = self.get_state_by_id(*sid).unwrap();
+                    // History states have excatly one "transition"
+                    targets.union(&self.getEffectiveTargetStates(self.get_transition_by_id(*s.transitions.head()).unwrap()));
+                }
+            } else {
+                targets.add(*sid);
+            }
+        }
+        targets
     }
 
     /// #W3C says:
@@ -1245,6 +1260,11 @@ impl Fsm {
     fn isCompoundState(&self, state: StateId) -> bool {
         todo!()
     }
+
+    fn isHistoryState(&self, state: StateId) -> bool {
+        todo!()
+    }
+
 
     /// #W3C says:
     /// function getChildStates(state1)
@@ -1338,7 +1358,6 @@ pub struct State {
     /// The SCXML id.
     pub name: String,
 
-    /// The initial state (if the state has sub-states).
     /// The initial transition id (if the state has sub-states).
     pub initial: TransitionId,
 
