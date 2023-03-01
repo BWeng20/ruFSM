@@ -29,6 +29,7 @@ pub const TAG_VERSION: &str = "version";
 pub const TAG_INITIAL: &str = "initial";
 pub const TAG_STATE: &str = "state";
 pub const TAG_PARALLEL: &str = "parallel";
+pub const TAG_FINAL: &str = "final";
 pub const TAG_TRANSITION: &str = "transition";
 pub const TAG_COND: &str = "cond";
 pub const TAG_EVENT: &str = "event";
@@ -95,19 +96,31 @@ impl ReaderState {
     }
 
     fn get_state_by_name(&self, name: &Name) -> Option<&State> {
-        self.fsm.get_state_by_name(name)
+        if self.fsm.statesNames.contains_key(name) {
+            Some(self.fsm.get_state_by_name(name))
+        } else { None }
     }
 
     fn get_state_by_name_mut(&mut self, name: &Name) -> Option<&mut State> {
-        self.fsm.get_state_by_name_mut(name)
+        if self.fsm.statesNames.contains_key(name) {
+            Some(self.fsm.get_state_by_name_mut(name))
+        } else { None }
     }
 
     fn get_state_by_id(&self, id: StateId) -> Option<&State> {
-        self.fsm.get_state_by_id(id)
+        if self.fsm.states.contains_key(&id) {
+            Some(self.fsm.get_state_by_id(id))
+        } else {
+            None
+        }
     }
 
     fn get_state_by_id_mut(&mut self, id: StateId) -> Option<&mut State> {
-        self.fsm.get_state_by_id_mut(id)
+        if self.fsm.states.contains_key(&id) {
+            Some(self.fsm.get_state_by_id_mut(id))
+        } else {
+            None
+        }
     }
 
     pub fn get_current_state(&mut self) -> &mut State {
@@ -130,26 +143,32 @@ impl ReaderState {
         r
     }
 
-    fn get_or_create_state(&mut self, name: &String) -> StateId {
+    fn get_or_create_state(&mut self, name: &String, parallel: bool) -> StateId {
         match self.fsm.statesNames.get(name) {
             None => {
-                let s = State::new(name);
+                let mut s = State::new(name);
+                s.is_parallel = parallel;
                 let sid = s.id;
                 self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
                 self.fsm.states.insert(s.id, s);
                 sid
             }
-            Some(id) => *id
+            Some(id) => {
+                if parallel {
+                    self.fsm.states.get_mut(id).unwrap().is_parallel = true;
+                }
+                *id
+            }
         }
     }
 
-    fn create_state(&mut self, attr: &AttributeMap) -> StateId {
+    fn create_state(&mut self, attr: &AttributeMap, parallel: bool) -> StateId {
         let sname: String;
         match attr.get("id") {
             None => sname = self.generate_name(),
             Some(id) => sname = id.clone()
         }
-        let id = self.get_or_create_state(&sname);
+        let id = self.get_or_create_state(&sname, parallel);
         id
     }
 
@@ -159,13 +178,29 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
-        let state_id = self.create_state(attr);
+        let state_id = self.create_state(attr, true);
         if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
-            parent_state.parallel.push(state_id);
+            parent_state.states.push(state_id);
         }
+        self.fsm.get_state_by_id_mut(state_id).is_parallel = true;
         state_id
     }
+
+    // A new "final" element started
+    fn start_final(&mut self, attr: &AttributeMap) -> StateId {
+        if !self.in_scxml {
+            panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
+        }
+        let state_id = self.create_state(attr, true);
+        if self.current.current_state > 0 {
+            let parent_state = self.get_current_state();
+            parent_state.states.push(state_id);
+        }
+        self.fsm.get_state_by_id_mut(state_id).is_final = true;
+        state_id
+    }
+
 
     // A new "state" element started
     fn start_state(&mut self, attr: &AttributeMap) -> StateId {
@@ -181,7 +216,7 @@ impl ReaderState {
 
         match attr.get(TAG_INITIAL) {
             None => s.initial = 0,
-            Some(state_name) => s.initial = self.get_or_create_state(state_name)
+            Some(state_name) => s.initial = self.get_or_create_state(state_name, false)
         }
 
         let sr = s.id;
@@ -236,7 +271,7 @@ impl ReaderState {
             match target {
                 None => (),
                 // TODO: Parse the state specification! (it can be a list)
-                Some(target_name) => t.target.push(self.get_or_create_state(target_name)),
+                Some(target_name) => t.target.push(self.get_or_create_state(target_name, false)),
             }
         }
         {
@@ -278,10 +313,11 @@ impl ReaderState {
                 if version.is_some() {
                     self.fsm.version = version.unwrap().clone();
                 }
+                self.fsm.pseudo_root = self.create_state(&map, false);
                 let initial = map.get(TAG_INITIAL);
                 if initial.is_some() {
                     let t = Transition::new();
-                    self.fsm.initial = t.id;
+                    self.fsm.get_state_by_id_mut(self.fsm.pseudo_root).initial = t.id;
                     self.fsm.transitions.insert(t.id, t);
                 }
             }
@@ -290,6 +326,9 @@ impl ReaderState {
             }
             TAG_PARALLEL => {
                 self.start_parallel(&decode_attributes(&reader, &mut e.attributes()));
+            }
+            TAG_FINAL => {
+                self.start_final(&decode_attributes(&reader, &mut e.attributes()));
             }
             TAG_INITIAL => {
                 self.start_initial();

@@ -25,7 +25,7 @@ fn main() {
 
     let jh = fsm::start_fsm(sm);
 
-    jh.1.send(Event { name: "Name".to_string(), done_data: None });
+    jh.1.send(Event { name: "Name".to_string(), invokeid: 1, done_data: None });
     jh.0.join();
 }
 
