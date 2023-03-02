@@ -26,6 +26,16 @@ pub fn entryOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     } else { std::cmp::Ordering::Less }
 }
 
+pub fn exitOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
+    // Same as Document order
+    if s1 < s2 {
+        std::cmp::Ordering::Greater
+    } else if s1 == s2 {
+        std::cmp::Ordering::Equal
+    } else { std::cmp::Ordering::Less }
+}
+
+
 pub fn documentOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     // TODO: Ids are generated also the first time a state is references, NOT only defined.
     // For document order we need a separate field
@@ -74,11 +84,12 @@ pub fn start_fsm(mut sm: Box<Fsm>) -> (JoinHandle<()>, Sender<Event>) {
 
 
 /// ## General Purpose List type
+#[derive(Clone)]
 pub struct List<T: Clone> {
     data: Vec<T>,
 }
 
-impl<T: Clone> List<T> {
+impl<T: Clone + PartialEq> List<T> {
     pub fn new() -> List<T> {
         List { data: Default::default() }
     }
@@ -187,6 +198,15 @@ impl<T: Clone> List<T> {
 
     pub fn iterator(&self) -> Iter<'_, T> {
         self.data.iter()
+    }
+
+    pub fn toSet(&self) -> OrderedSet<T> {
+        let mut s = OrderedSet::new();
+        for e in self.data.iter()
+        {
+            s.add(e.clone());
+        }
+        s
     }
 }
 
@@ -418,6 +438,12 @@ impl<K: std::cmp::Eq + Hash + Clone, T: Clone> HashTable<K, T> {
         self.data.insert(k.clone(), v.clone());
     }
 
+    pub fn putAll(&mut self, t: &HashTable<K, T>) {
+        for (k, v) in &t.data {
+            self.data.insert(k.clone(), v.clone());
+        }
+    }
+
     pub fn has(&self, k: K) -> bool {
         self.data.contains_key(&k)
     }
@@ -473,6 +499,53 @@ impl Event {
     }
 }
 
+pub trait Tracer: Send + Debug {
+    fn trace(&self, msg: &str);
+
+    fn enterMethod(&self, what: &str) {
+        self.trace(format!(">>> {}", what).as_str());
+    }
+
+    fn exitMethod(&self, what: &str) {
+        self.trace(format!("<<< {}", what).as_str());
+    }
+
+    fn traceState(&self, what: &str, s: &State) {
+        if s.name.is_empty() {
+            self.trace(format!("{} #{}", what, s.id).as_str());
+        } else {
+            self.trace(format!("{} <{}>", what, &s.name).as_str());
+        }
+    }
+
+    fn traceEnterState(&self, s: &State) {
+        self.traceState("Enter", s);
+    }
+
+    fn traceExitState(&self, s: &State) {
+        self.traceState("Exit", s);
+    }
+
+    fn traceEvent(&self, e: &Event) {
+        self.trace(format!("Event <{}> #{}", &e.name, e.invokeid).as_str());
+    }
+}
+
+#[derive(Debug)]
+pub struct DefaultTracer {}
+
+impl Tracer for DefaultTracer {
+    fn trace(&self, msg: &str) {
+        println!("{}", msg)
+    }
+}
+
+impl DefaultTracer {
+    pub fn new() -> DefaultTracer {
+        DefaultTracer {}
+    }
+}
+
 pub struct Fsm {
     pub configuration: OrderedSet<StateId>,
     pub statesToInvoke: OrderedSet<StateId>,
@@ -482,16 +555,16 @@ pub struct Fsm {
     pub historyValue: HashTable<StateId, OrderedSet<StateId>>,
     pub running: bool,
     pub binding: BindingType,
-
     pub version: String,
+    pub tracer: Box<dyn Tracer>,
 
-    pub pseudo_root: StateId,
     /// A FSM can have actual multiple initial-target-states, so this state may be artificial.
     /// Reader have to generate a parent state if needed.
+    pub pseudo_root: StateId,
 
     /**
-     * The only real storage to states, identified by the Id
-     * If a state has no declared id, it needs a generated one.
+     * The only real storage of states, identified by the Id
+     * If a state has no declared id, one is generated.
      */
     pub states: StateMap,
     pub statesNames: StateNameMap,
@@ -542,6 +615,7 @@ impl Fsm {
             transitions: HashMap::new(),
             data: DataStore::new(),
             pseudo_root: 0,
+            tracer: Box::new(DefaultTracer::new()),
         }
     }
 
@@ -623,7 +697,6 @@ impl Fsm {
         self.configuration = OrderedSet::new();
         self.statesToInvoke.clear();
         self.internalQueue.clear();
-        self.externalQueue = BlockingQueue::new();
         self.historyValue.clear();
         self.datamodel.clear();
         if self.binding == BindingType::Early {
@@ -736,6 +809,7 @@ impl Fsm {
     /// #Actual implementation:
     ///  todo
     fn mainEventLoop(&mut self) {
+        self.tracer.enterMethod("mainEventLoop");
         while self.running {
             let mut enabledTransitions;
             let mut macrostepDone = false;
@@ -747,7 +821,9 @@ impl Fsm {
                     if self.internalQueue.isEmpty() {
                         macrostepDone = true;
                     } else {
+                        self.tracer.enterMethod("internalQueue.dequeue");
                         let internalEvent = self.internalQueue.dequeue();
+                        self.tracer.exitMethod("internalQueue.dequeue");
                         self.datamodel.set("_event", &internalEvent);
                         enabledTransitions = self.selectTransitions(&internalEvent);
                     }
@@ -776,7 +852,9 @@ impl Fsm {
             // A blocking wait for an external event.  Alternatively, if we have been invoked
             // our parent session also might cancel us.  The mechanism for this is platform specific,
             // but here we assume it’s a special event we receive
+            self.tracer.enterMethod("externalQueue.dequeue");
             let externalEvent = self.externalQueue.dequeue();
+            self.tracer.exitMethod("externalQueue.dequeue");
             if self.isCancelEvent(&externalEvent) {
                 self.running = false;
                 continue;
@@ -812,6 +890,7 @@ impl Fsm {
         }
         // End of outer while running loop.  If we get here, we have reached a top-level final state or have been cancelled
         self.exitInterpreter();
+        self.tracer.exitMethod("mainEventLoop");
     }
 
     /// #W3C says:
@@ -870,6 +949,8 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     fn selectEventlessTransitions(&mut self) -> OrderedSet<TransitionId> {
+        self.tracer.enterMethod("selectEventlessTransitions");
+
         let mut enabledTransitions: OrderedSet<TransitionId> = OrderedSet::new();
         let atomicStates = self.configuration.toList().filterBy(&|sid| -> bool { self.isAtomicState(*sid) }).sort(&documentOrder);
         for state in atomicStates.iterator() {
@@ -888,6 +969,7 @@ impl Fsm {
             }
             enabledTransitions = self.removeConflictingTransitions(&enabledTransitions);
         }
+        self.tracer.exitMethod("selectEventlessTransitions");
         enabledTransitions
     }
 
@@ -912,6 +994,9 @@ impl Fsm {
     /// #Actual implementation:
     ///  todo (check argument types!)
     fn selectTransitions(&mut self, event: &Event) -> OrderedSet<TransitionId> {
+        self.tracer.enterMethod("selectTransitions");
+
+        self.tracer.exitMethod("selectTransitions");
         todo!()
     }
 
@@ -971,7 +1056,7 @@ impl Fsm {
             for tid2 in filteredTransitionList.iterator()
             {
                 let t2 = self.get_transition_by_id(*tid2).unwrap();
-                if self.computeExitSet(&OrderedSet::from_array(&[*tid1])).hasIntersection(&self.computeExitSet(&OrderedSet::from_array(&[*tid2]))) {
+                if self.computeExitSet(&List::from_array(&[*tid1])).hasIntersection(&self.computeExitSet(&List::from_array(&[*tid2]))) {
                     let t2obj = self.get_transition_by_id(*tid2).unwrap();
                     if self.isDescendant(t1.source, t2.source) {
                         transitionsToRemove.add(tid2);
@@ -1004,9 +1089,12 @@ impl Fsm {
     ///     enterStates(enabledTransitions)
     /// ```
     /// #Actual implementation:
-    ///  todo (check argument types!)
     fn microstep(&mut self, enabledTransitions: &List<TransitionId>) {
-        todo!()
+        self.tracer.enterMethod("microstep");
+        self.exitStates(enabledTransitions);
+        self.executeTransitionContent(enabledTransitions);
+        self.enterStates(enabledTransitions);
+        self.tracer.exitMethod("microstep");
     }
 
 
@@ -1039,7 +1127,54 @@ impl Fsm {
     /// #Actual implementation:
     ///  todo (check argument types!)
     fn exitStates(&mut self, enabledTransitions: &List<TransitionId>) {
-        todo!()
+        self.tracer.enterMethod("exitStates");
+
+        let statesToExit = self.computeExitSet(enabledTransitions);
+        for s in statesToExit.iterator() {
+            self.statesToInvoke.delete(s);
+        }
+        let statesToExitSorted = statesToExit.toList().sort(&exitOrder);
+        let mut ahistory: HashTable<StateId, OrderedSet<StateId>> = HashTable::new();
+        for sid in statesToExitSorted.iterator() {
+            let s = self.get_state_by_id(*sid);
+            for h in s.history.iterator() {
+                if h.history_type == HistoryType::Deep
+                {
+                    ahistory.put(h.id, &self.configuration.toList().filterBy(
+                        &|s0| -> bool { self.isAtomicState(*s0) && self.isDescendant(*s0, *sid) }).toSet());
+                } else {
+                    ahistory.put(h.id, &self.configuration.toList().filterBy(
+                        &|s0| -> bool { self.get_state_by_id(*s0).parent == *sid }).toSet());
+                }
+            }
+        }
+        self.historyValue.putAll(&ahistory);
+        for sid in statesToExitSorted.iterator() {
+            let exe: List<ExecutableContentId> = List::new();
+            {
+                let s = self.get_state_by_id(*sid);
+                exe.append(&s.onexit.sort(&documentOrder));
+            }
+
+            for content in exe.iterator() {
+                self.executeContent(*content);
+            }
+
+            let mut invokeList: List<InvokeId> = List::new();
+            {
+                let s = self.get_state_by_id(*sid);
+                for inv in s.invoke.iterator() {
+                    invokeList.push(inv.invokeid);
+                }
+            }
+
+            for invokeId in invokeList.iterator() {
+                self.cancelInvoke(*invokeId);
+            }
+
+            self.configuration.delete(sid)
+        }
+        self.tracer.exitMethod("exitStates");
     }
 
 
@@ -1097,6 +1232,9 @@ impl Fsm {
         let defaultHistoryContent: HashTable<StateId, ExecutableContentId> = HashTable::new();
         self.computeEntrySet(enabledTransitions, &statesToEnter, &statesForDefaultEntry, &defaultHistoryContent);
         for s in statesToEnter.toList().sort(&entryOrder).iterator() {
+            {
+                self.tracer.traceEnterState(&self.get_state_by_id(*s));
+            }
             self.configuration.add(*s);
             self.statesToInvoke.add(*s);
             let stateS: &mut State = self.get_state_by_id_mut(*s);
@@ -1182,7 +1320,7 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn computeExitSet(&self, states: &OrderedSet<TransitionId>) -> OrderedSet<StateId> {
+    fn computeExitSet(&self, states: &List<TransitionId>) -> OrderedSet<StateId> {
         todo!()
     }
 
@@ -1382,7 +1520,7 @@ impl Fsm {
     /// #Actual implementation:
     ///  todo (check argument types!)
     fn getEffectiveTargetStates(&self, transition: &Transition) -> OrderedSet<StateId> {
-        let mut targets = OrderedSet::new();
+        let mut targets: OrderedSet<StateId> = OrderedSet::new();
         for sid in &transition.target {
             if self.isHistoryState(*sid) {
                 if self.historyValue.has(*sid) {
@@ -1445,6 +1583,10 @@ impl Fsm {
     }
 
     fn invoke(&mut self, inv: &Invoke) {
+        todo!()
+    }
+
+    fn cancelInvoke(&mut self, inv: InvokeId) {
         todo!()
     }
 
@@ -1563,13 +1705,14 @@ pub struct State {
     pub isFirstEntry: bool,
     pub parent: StateId,
     pub donedata: Option<DoneData>,
+    pub history: List<History>,
 }
 
 impl State {
     pub fn new(name: &String) -> State {
-        ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let idc = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
         State {
-            id: ID_COUNTER.load(Ordering::Relaxed),
+            id: idc,
             name: name.clone(),
             initial: 0,
             states: vec![],
@@ -1585,6 +1728,7 @@ impl State {
             parent: 0,
             donedata: None,
             invoke: List::new(),
+            history: List::new(),
         }
     }
 }
@@ -1600,6 +1744,39 @@ impl PartialEq for State {
         todo!()
     }
 }
+
+pub type HistoryId = u32;
+
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
+pub struct History {
+    pub id: HistoryId,
+    pub name: String,
+    pub history_type: HistoryType,
+}
+
+#[derive(Debug)]
+#[derive(PartialEq)]
+#[derive(Clone)]
+pub enum HistoryType {
+    Shallow,
+    Deep,
+}
+
+
+impl History {
+    pub fn new() -> History {
+        let idc = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+        History {
+            id: idc,
+            name: "".to_string(),
+            history_type: HistoryType::Shallow,
+        }
+    }
+}
+
 
 #[derive(Debug)]
 #[derive(PartialEq)]
@@ -1636,9 +1813,9 @@ pub struct Transition {
 
 impl Transition {
     pub fn new() -> Transition {
-        ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let idc = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
         Transition {
-            id: ID_COUNTER.load(Ordering::Relaxed),
+            id: idc,
             events: vec![],
             cond: None,
             source: 0,
@@ -1652,7 +1829,6 @@ impl Transition {
 pub trait Data: Send + Debug {
     fn get_copy(&self) -> Box<dyn Data>;
 }
-
 
 pub trait Datamodel: Send + Debug {
     fn get_name(self: &Self) -> &str;

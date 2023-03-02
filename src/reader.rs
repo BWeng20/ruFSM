@@ -244,41 +244,33 @@ impl ReaderState {
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
-        let parent_tag =
-            {
-                self.get_parent_tag().to_string()
-            };
+        let parent_tag = self.get_parent_tag().to_string();
+
         if ![TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(&parent_tag.as_str()) {
             panic!("<{}> inside <{}>. Only allowed inside <{}>, <{}> or <{}>", TAG_TRANSITION, parent_tag,
                    TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
         }
         let mut t = Transition::new();
+        let event = attr.get(TAG_EVENT);
+        if event.is_some() {
+            t.events = event.unwrap().split_whitespace().map(|s| { s.to_string() }).collect();
+        }
 
-        {
-            let event = attr.get(TAG_EVENT);
-            if event.is_some() {
-                t.events = event.unwrap().split_whitespace().map(|s| { s.to_string() }).collect();
-            }
+        let cond = attr.get(TAG_COND);
+        if cond.is_some() {
+            t.cond = Some(Box::new(ScriptConditionalExpression::new(cond.unwrap())));
         }
-        {
-            let cond = attr.get(TAG_COND);
-            if cond.is_some() {
-                t.cond = Some(Box::new(ScriptConditionalExpression::new(cond.unwrap())));
-            }
+
+        let target = attr.get(TAG_TARGET);
+        match target {
+            None => (),
+            // TODO: Parse the state specification! (it can be a list)
+            Some(target_name) => t.target.push(self.get_or_create_state(target_name, false)),
         }
-        {
-            let target = attr.get(TAG_TARGET);
-            match target {
-                None => (),
-                // TODO: Parse the state specification! (it can be a list)
-                Some(target_name) => t.target.push(self.get_or_create_state(target_name, false)),
-            }
-        }
-        {
-            let trans_type = attr.get(TAG_TYPE);
-            if trans_type.is_some() {
-                t.transition_type = map_transition_type(trans_type.unwrap())
-            }
+
+        let trans_type = attr.get(TAG_TYPE);
+        if trans_type.is_some() {
+            t.transition_type = map_transition_type(trans_type.unwrap())
         }
 
         let state = self.get_current_state();
@@ -298,6 +290,7 @@ impl ReaderState {
         let n = e.name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
+
         match name {
             TAG_SCXML => {
                 if self.in_scxml {
@@ -393,10 +386,15 @@ pub fn read_from_xml(xml: &str) -> Box<Fsm> {
             Ok(Event::End(e)) => {
                 rs.end_element(str::from_utf8(e.name().as_ref()).unwrap());
             }
+            Ok(Event::Empty(e)) => {
+                // Element without content.
+                rs.start_element(&mut reader, &e);
+                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap());
+            }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 
-            // There are several other `Event`s we do not consider here
-            _ => (),
+            // Ignore other
+            Ok(e) => println!("Ignored SAX Event {:?}", e),
         }
         // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
         buf.clear();

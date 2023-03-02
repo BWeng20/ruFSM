@@ -1,5 +1,7 @@
 extern crate core;
 
+use std::{thread, time};
+
 use crate::fsm::Event;
 
 mod reader;
@@ -13,19 +15,29 @@ fn main() {
         r"<scxml initial='Main' datamodel='ecmascript'>
       <state id='Main'>
         <initial>
-          <transition event='a ab abc' cond='true' type='internal'></transition>
+          <transition event='a ab abc' cond='true' type='internal' target='finalMe'/>
         </initial>
         <state id='MainA'>
         </state>
         <state id='MainB'>
         </state>
+        <final id='finalMe'>
+          <onentry>
+            <log label='info' expr='Date.now()'/>
+          </onentry>
+        </final>
       </state>
     </scxml>");
     println!("The SM: {}", sm);
 
     let jh = fsm::start_fsm(sm);
 
-    jh.1.send(Event { name: "Name".to_string(), invokeid: 1, done_data: None });
+    let ten_millis = time::Duration::from_millis(1000);
+    thread::sleep(ten_millis);
+
+    println!("Send Event");
+
+    jh.1.send(Event { name: "ab".to_string(), invokeid: 1, done_data: None });
     jh.0.join();
 }
 
