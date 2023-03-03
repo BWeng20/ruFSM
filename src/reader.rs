@@ -7,7 +7,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::fsm::{Fsm, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
+use crate::fsm::{ExecutableContent, Fsm, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
 
@@ -35,6 +35,21 @@ pub const TAG_COND: &str = "cond";
 pub const TAG_EVENT: &str = "event";
 pub const TAG_TARGET: &str = "target";
 pub const TAG_TYPE: &str = "type";
+pub const TAG_ON_ENTRY: &str = "onentry";
+pub const TAG_ON_EXIT: &str = "onexit";
+
+/// Executable content
+pub const TAG_RAISE: &str = "raise";
+pub const TAG_SEND: &str = "send";
+pub const TAG_LOG: &str = "log";
+pub const TAG_SCRIPT: &str = "script";
+pub const TAG_ASSIGN: &str = "assign";
+pub const TAG_IF: &str = "if";
+pub const TAG_FOR_EACH: &str = "foreach";
+pub const TAG_CANCEL: &str = "cancel";
+pub const TAG_ELSE: &str = "else";
+pub const TAG_ELSEIF: &str = "elseif";
+
 
 struct ReaderStackItem {
     current_state: StateId,
@@ -135,13 +150,37 @@ impl ReaderState {
         state.unwrap()
     }
 
-    pub fn get_parent_tag(&mut self) -> &str {
+    pub fn get_parent_tag(&self) -> &str {
         let mut r = "";
         if !self.stack.is_empty() {
             r = self.stack.get(self.stack.len() - 1).as_ref().unwrap().current_tag.as_str();
         }
         r
     }
+
+    pub fn verify_parent_tag(&self, name: &str, allowed_parents: &[&str]) -> &str {
+        let parent_tag = self.get_parent_tag();
+        if !allowed_parents.contains(&parent_tag) {
+            let mut allowed_parents_s = "".to_string();
+            let len = allowed_parents.len();
+            for i in 0..allowed_parents.len() {
+                allowed_parents_s += format!("{}<{}>",
+                                             if i > 0 {
+                                                 if i < (len - 1) {
+                                                     ", "
+                                                 } else {
+                                                     " or "
+                                                 }
+                                             } else {
+                                                 ""
+                                             }, allowed_parents[i]).as_str();
+            }
+            panic!("<{}> inside <{}>. Only allowed inside {}", name, parent_tag,
+                   allowed_parents_s);
+        }
+        parent_tag
+    }
+
 
     fn get_or_create_state(&mut self, name: &String, parallel: bool) -> StateId {
         match self.fsm.statesNames.get(name) {
@@ -233,23 +272,15 @@ impl ReaderState {
 
     // A "initial" element started (node, not attribute)
     fn start_initial(&mut self) {
-        if [TAG_STATE, TAG_PARALLEL].contains(&self.get_parent_tag()) {
-            if self.get_current_state().initial > 0 {
-                panic!("<{}> must not be specified if initial-attribute was given", TAG_INITIAL)
-            }
-            // Next a "<transition>" must follow
-        } else {
-            panic!("<{}> only allowed inside <{}> or <{}>", TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
+        self.verify_parent_tag(TAG_INITIAL, &[TAG_STATE, TAG_PARALLEL]);
+        if self.get_current_state().initial > 0 {
+            panic!("<{}> must not be specified if initial-attribute was given", TAG_INITIAL)
         }
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
-        let parent_tag = self.get_parent_tag().to_string();
+        let parent_tag = self.verify_parent_tag(TAG_TRANSITION, &[TAG_INITIAL, TAG_STATE, TAG_PARALLEL]).to_string();
 
-        if ![TAG_INITIAL, TAG_STATE, TAG_PARALLEL].contains(&parent_tag.as_str()) {
-            panic!("<{}> inside <{}>. Only allowed inside <{}>, <{}> or <{}>", TAG_TRANSITION, parent_tag,
-                   TAG_INITIAL, TAG_STATE, TAG_PARALLEL);
-        }
         let mut t = Transition::new();
         let event = attr.get(TAG_EVENT);
         if event.is_some() {
@@ -286,10 +317,20 @@ impl ReaderState {
         self.fsm.transitions.insert(t.id, t);
     }
 
+    fn start_executable_content(&mut self, name: &str, attr: &AttributeMap) {
+        let parent_tag = self.verify_parent_tag(name, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
+    }
+
+    fn start_else(&mut self, name: &str, attr: &AttributeMap) {
+        self.verify_parent_tag(name, &[TAG_IF]);
+    }
+
     fn start_element(&mut self, reader: &Reader<&[u8]>, e: &BytesStart) {
         let n = e.name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
+
+        let attr = &decode_attributes(&reader, &mut e.attributes());
 
         match name {
             TAG_SCXML => {
@@ -297,17 +338,16 @@ impl ReaderState {
                     panic!("Only one <{}> allowed", TAG_SCXML);
                 }
                 self.in_scxml = true;
-                let map = decode_attributes(&reader, &mut e.attributes());
-                let datamodel = map.get(TAG_DATAMODEL);
+                let datamodel = attr.get(TAG_DATAMODEL);
                 if datamodel.is_some() {
                     self.fsm.datamodel = crate::fsm::createDatamodel(datamodel.unwrap());
                 }
-                let version = map.get(TAG_VERSION);
+                let version = attr.get(TAG_VERSION);
                 if version.is_some() {
                     self.fsm.version = version.unwrap().clone();
                 }
-                self.fsm.pseudo_root = self.create_state(&map, false);
-                let initial = map.get(TAG_INITIAL);
+                self.fsm.pseudo_root = self.create_state(&attr, false);
+                let initial = attr.get(TAG_INITIAL);
                 if initial.is_some() {
                     let t = Transition::new();
                     self.fsm.get_state_by_id_mut(self.fsm.pseudo_root).initial = t.id;
@@ -315,21 +355,29 @@ impl ReaderState {
                 }
             }
             TAG_STATE => {
-                self.start_state(&decode_attributes(&reader, &mut e.attributes()));
+                self.start_state(attr);
             }
             TAG_PARALLEL => {
-                self.start_parallel(&decode_attributes(&reader, &mut e.attributes()));
+                self.start_parallel(attr);
             }
             TAG_FINAL => {
-                self.start_final(&decode_attributes(&reader, &mut e.attributes()));
+                self.start_final(attr);
             }
             TAG_INITIAL => {
                 self.start_initial();
             }
             TAG_TRANSITION => {
-                self.start_transition(&decode_attributes(&reader, &mut e.attributes()));
+                self.start_transition(attr);
             }
-            _ => (),
+            TAG_RAISE | TAG_SEND | TAG_LOG | TAG_SCRIPT | TAG_ASSIGN | TAG_IF | TAG_FOR_EACH | TAG_CANCEL => {
+                self.start_executable_content(&name, attr);
+            }
+            TAG_ELSE | TAG_ELSEIF => {
+                self.start_else(&name, attr);
+            }
+            _ => {
+                println!("Ignored tag {}", name)
+            }
         }
     }
 

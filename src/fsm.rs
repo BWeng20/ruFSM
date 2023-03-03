@@ -568,7 +568,7 @@ pub struct Fsm {
      */
     pub states: StateMap,
     pub statesNames: StateNameMap,
-    pub executableConent: HashMap<ExecutableContentId, ExecutableContent>,
+    pub executableContent: HashMap<ExecutableContentId, ExecutableContent>,
     pub transitions: TransitionMap,
 
     pub data: DataStore,
@@ -611,7 +611,7 @@ impl Fsm {
             binding: BindingType::Early,
             states: HashMap::new(),
             statesNames: HashMap::new(),
-            executableConent: HashMap::new(),
+            executableContent: HashMap::new(),
             transitions: HashMap::new(),
             data: DataStore::new(),
             pseudo_root: 0,
@@ -1564,7 +1564,10 @@ impl Fsm {
     }
 
     fn isCancelEvent(&self, ev: &Event) -> bool {
-        todo!()
+        // Cancel-Events (outer fsm cancels a fsm instance that was started by some invoke)
+        // are platform specific.
+        // TODO: we need a "invoke" concept!
+        ev.name.ends_with(".cancel")
     }
 
 
@@ -1583,11 +1586,13 @@ impl Fsm {
     }
 
     fn invoke(&mut self, inv: &Invoke) {
-        todo!()
+        // TODO: we need a "invoke" concept!
     }
 
     fn cancelInvoke(&mut self, inv: InvokeId) {
-        todo!()
+        // TODO: we need a "invoke" concept!
+        // Send a cancel event to the thread/pricess.
+        // see isCancelEvent
     }
 
     fn applyFinalize(&mut self, invokeId: InvokeId, event: &Event) {
