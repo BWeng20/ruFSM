@@ -37,7 +37,7 @@ fn main() {
 
     println!("Send Event");
 
-    jh.1.send(Event { name: "ab".to_string(), invokeid: 1, done_data: None });
+    jh.1.send(Box::new(Event { name: "ab".to_string(), invokeid: 1, done_data: None }));
     jh.0.join();
 }
 
