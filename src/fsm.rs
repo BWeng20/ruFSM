@@ -17,7 +17,7 @@ pub const ECMA_SCRIPT_LC: &str = "ecmascript";
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
 
-pub fn entryOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
+fn entryOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     // Same as Document order
     if s1 > s2 {
         std::cmp::Ordering::Greater
@@ -26,7 +26,7 @@ pub fn entryOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     } else { std::cmp::Ordering::Less }
 }
 
-pub fn exitOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
+fn exitOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     // Same as Document order
     if s1 < s2 {
         std::cmp::Ordering::Greater
@@ -35,8 +35,7 @@ pub fn exitOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     } else { std::cmp::Ordering::Less }
 }
 
-
-pub fn documentOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
+fn documentOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     // TODO: Ids are generated also the first time a state is references, NOT only defined.
     // For document order we need a separate field
     if s1 > s2 {
@@ -46,7 +45,7 @@ pub fn documentOrder(s1: &StateId, s2: &StateId) -> ::std::cmp::Ordering {
     } else { std::cmp::Ordering::Less }
 }
 
-pub fn transitionDocumentOrder(t1: &&Transition, t2: &&Transition) -> ::std::cmp::Ordering {
+fn transitionDocumentOrder(t1: &&Transition, t2: &&Transition) -> ::std::cmp::Ordering {
     // Ids are generated in reader-order
     if t1.id > t2.id {
         std::cmp::Ordering::Greater
@@ -55,7 +54,7 @@ pub fn transitionDocumentOrder(t1: &&Transition, t2: &&Transition) -> ::std::cmp
     } else { std::cmp::Ordering::Less }
 }
 
-pub fn invokeDocumentOrder(s1: &Invoke, s2: &Invoke) -> ::std::cmp::Ordering {
+fn invokeDocumentOrder(s1: &Invoke, s2: &Invoke) -> ::std::cmp::Ordering {
     // TODO: Ids are generated also the first time a state is references, NOT only defined.
     // For document order we need a separate field
     if s1.id > s2.id {
@@ -64,7 +63,6 @@ pub fn invokeDocumentOrder(s1: &Invoke, s2: &Invoke) -> ::std::cmp::Ordering {
         std::cmp::Ordering::Equal
     } else { std::cmp::Ordering::Less }
 }
-
 
 /// Starts the FSM inside a worker thread.
 ///
@@ -607,6 +605,23 @@ fn display_state_map(sm: &StateMap, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "}}")
 }
 
+fn display_transition_map(sm: &TransitionMap, f: &mut Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{{")?;
+
+    let mut first = true;
+    for e in sm {
+        if first {
+            first = false;
+        } else {
+            write!(f, ",")?;
+        }
+        write!(f, "{}", *e.1)?;
+    }
+
+    write!(f, "}}")
+}
+
+
 impl Fsm {
     pub fn new() -> Fsm {
         Fsm {
@@ -1006,6 +1021,7 @@ impl Fsm {
     ///  todo (check argument types!)
     fn selectTransitions(&mut self, event: &Event) -> OrderedSet<TransitionId> {
         self.tracer.enterMethod("selectTransitions");
+        self.tracer.trace(format!(" Event: {}", &event.name).as_str());
         let mut enabledTransitions: OrderedSet<TransitionId> = OrderedSet::new();
         let atomicStates = self.configuration.toList().filterBy(&|sid| -> bool { self.isAtomicState(*sid) }).sort(&documentOrder);
         for state in atomicStates.iterator() {
@@ -1021,6 +1037,7 @@ impl Fsm {
                 for t in transition {
                     if (!t.events.is_empty()) && self.nameMatch(&t.events, &event.name) && self.conditionMatch(t)
                     {
+                        self.tracer.trace(format!(" Matching Transition: {} -> {:?}", t.id, &t.target).as_str());
                         enabledTransitions.add(t.id);
                         break 'outer;
                     }
@@ -1169,7 +1186,8 @@ impl Fsm {
         let mut ahistory: HashTable<StateId, OrderedSet<StateId>> = HashTable::new();
         for sid in statesToExitSorted.iterator() {
             let s = self.get_state_by_id(*sid);
-            for h in s.history.iterator() {
+            for hid in s.history.iterator() {
+                let h = self.get_state_by_id(*hid);
                 if h.history_type == HistoryType::Deep
                 {
                     ahistory.put(h.id, &self.configuration.toList().filterBy(
@@ -1257,12 +1275,12 @@ impl Fsm {
     ///
     fn enterStates(&mut self, enabledTransitions: &List<StateId>) {
         let binding = self.binding;
-        let statesToEnter = OrderedSet::new();
-        let statesForDefaultEntry = OrderedSet::new();
+        let mut statesToEnter = OrderedSet::new();
+        let mut statesForDefaultEntry = OrderedSet::new();
 
         // initialize the temporary table for default content in history states
-        let defaultHistoryContent: HashTable<StateId, ExecutableContentId> = HashTable::new();
-        self.computeEntrySet(enabledTransitions, &statesToEnter, &statesForDefaultEntry, &defaultHistoryContent);
+        let mut defaultHistoryContent: HashTable<StateId, ExecutableContentId> = HashTable::new();
+        self.computeEntrySet(enabledTransitions, &mut statesToEnter, &mut statesForDefaultEntry, &mut defaultHistoryContent);
         for s in statesToEnter.toList().sort(&entryOrder).iterator() {
             {
                 self.tracer.traceEnterState(&self.get_state_by_id(*s));
@@ -1390,8 +1408,8 @@ impl Fsm {
     /// ```
     /// #Actual implementation:
     ///  todo (check argument types!)
-    fn computeEntrySet(&mut self, transitions: &List<TransitionId>, statesToEnter: &OrderedSet<StateId>,
-                       statesForDefaultEntry: &OrderedSet<StateId>, defaultHistoryContent: &HashTable<StateId, ExecutableContentId>) {
+    fn computeEntrySet(&mut self, transitions: &List<TransitionId>, statesToEnter: &mut OrderedSet<StateId>,
+                       statesForDefaultEntry: &mut OrderedSet<StateId>, defaultHistoryContent: &mut HashTable<StateId, ExecutableContentId>) {
         for tid in transitions.iterator() {
             let t = self.get_transition_by_id(*tid);
             for s in t.target.iter() {
@@ -1440,9 +1458,52 @@ impl Fsm {
     ///                     if not statesToEnter.some(lambda s: isDescendant(s,child)):
     ///                         addDescendantStatesToEnter(child,statesToEnter,statesForDefaultEntry, defaultHistoryContent)
     /// ```
-    fn addDescendantStatesToEnter(&self, state: StateId, statesToEnter: &OrderedSet<StateId>,
-                                  statesForDefaultEntry: &OrderedSet<StateId>, defaultHistoryContent: &HashTable<StateId, ExecutableContentId>) {
-        todo!()
+    fn addDescendantStatesToEnter(&self, sid: StateId, statesToEnter: &mut OrderedSet<StateId>,
+                                  statesForDefaultEntry: &mut OrderedSet<StateId>, defaultHistoryContent: &mut HashTable<StateId, ExecutableContentId>) {
+        let state = self.get_state_by_id(sid);
+        if self.isHistoryState(sid) {
+            if self.historyValue.has(sid) {
+                for s in self.historyValue.get(state.id).iterator()
+                {
+                    self.addDescendantStatesToEnter(sid, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                }
+                for s in self.historyValue.get(sid).iterator() {
+                    self.addAncestorStatesToEnter(sid, state.parent, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                }
+            } else {
+                // A history state have exactly one transition which specified the default history configuration.
+                let defaultTransition = self.get_transition_by_id(*state.transitions.head());
+                defaultHistoryContent.put(state.parent, &defaultTransition.content);
+                for s in &defaultTransition.target {
+                    self.addDescendantStatesToEnter(*s, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                }
+                for s in &defaultTransition.target {
+                    self.addAncestorStatesToEnter(*s, state.parent, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                }
+            }
+        } else {
+            statesToEnter.add(sid);
+            if self.isCompoundState(sid) {
+                statesForDefaultEntry.add(sid);
+                if state.initial != 0 {
+                    let initialTransition = self.get_transition_by_id(state.initial);
+                    for s in &initialTransition.target {
+                        self.addDescendantStatesToEnter(*s, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                    }
+                    for s in &initialTransition.target {
+                        self.addAncestorStatesToEnter(*s, sid, statesToEnter, statesForDefaultEntry, defaultHistoryContent)
+                    }
+                }
+            } else {
+                if self.isParallelState(sid) {
+                    for child in self.getChildStates(sid).iterator() {
+                        if !statesToEnter.some(&|s| { self.isDescendant(*s, *child) }) {
+                            self.addDescendantStatesToEnter(*child, statesToEnter, statesForDefaultEntry, defaultHistoryContent)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// #W3C says:
@@ -1530,8 +1591,15 @@ impl Fsm {
     ///             return anc
     /// ```
     /// #Actual implementation:
-    ///  todo (check argument types!)
-    fn findLCCA(&self, stateList: &List<StateId>) -> StateId { todo!() }
+    fn findLCCA(&self, stateList: &List<StateId>) -> StateId {
+        for anc in self.getProperAncestors(*stateList.head(), 0)
+            .toList().filterBy(&|s| { self.isCompoundStateOrScxmlElement(*s) }).iterator() {
+            if stateList.tail().every(&|s| { self.isDescendant(*s, *anc) }) {
+                return *anc;
+            }
+        }
+        0
+    }
 
     /// #W3C says:
     /// # function getEffectiveTargetStates(transition)
@@ -1611,8 +1679,12 @@ impl Fsm {
         }
     }
 
+    fn isCompoundStateOrScxmlElement(&self, sid: StateId) -> bool {
+        sid == self.pseudo_root || !self.get_state_by_id(sid).states.is_empty()
+    }
+
     fn isHistoryState(&self, state: StateId) -> bool {
-        todo!()
+        self.get_state_by_id(state).history_type != HistoryType::None
     }
 
     fn isCancelEvent(&self, ev: &Event) -> bool {
@@ -1662,6 +1734,7 @@ impl Fsm {
 
     fn nameMatch(&self, events: &Vec<String>, name: &String) -> bool
     {
+        println!("nameMatch {} in {:?}", name, events);
         events.contains(name)
     }
 }
@@ -1682,7 +1755,6 @@ impl Data for EmptyData {
         Box::new(EmptyData {})
     }
 }
-
 
 #[derive(Debug)]
 pub struct DataStore {
@@ -1780,6 +1852,8 @@ pub struct State {
     /// True for "final" states
     pub is_final: bool,
 
+    pub history_type: HistoryType,
+
     /// The script that is executed if the state is entered. See W3c comments for \<onentry\> above.
     pub onentry: List<ExecutableContentId>,
 
@@ -1790,6 +1864,7 @@ pub struct State {
     pub transitions: List<TransitionId>,
 
     pub invoke: List<Invoke>,
+    pub history: List<StateId>,
 
     /// The local datamodel
     pub datamodel: Box<dyn Datamodel>,
@@ -1798,7 +1873,6 @@ pub struct State {
     pub isFirstEntry: bool,
     pub parent: StateId,
     pub donedata: Option<DoneData>,
-    pub history: List<History>,
 }
 
 impl State {
@@ -1814,6 +1888,7 @@ impl State {
             transitions: List::new(),
             is_parallel: false,
             is_final: false,
+            history_type: HistoryType::None,
             /// True if the state was never entered before.
             datamodel: Box::new(NullDatamodel::new()),
             data: DataStore::new(),
@@ -1838,34 +1913,21 @@ impl PartialEq for State {
     }
 }
 
-pub type HistoryId = u32;
-
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq)]
-pub struct History {
-    pub id: HistoryId,
-    pub name: String,
-    pub history_type: HistoryType,
-}
-
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Clone)]
 pub enum HistoryType {
     Shallow,
     Deep,
+    None,
 }
 
-impl History {
-    pub fn new() -> History {
-        let idc = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-
-        History {
-            id: idc,
-            name: "".to_string(),
-            history_type: HistoryType::Shallow,
-        }
+pub fn map_history_type(ts: &String) -> HistoryType {
+    match ts.to_lowercase().as_str() {
+        "deep" => HistoryType::Deep,
+        "shallow" => HistoryType::Shallow,
+        "" => HistoryType::None,
+        _ => panic!("Unknown transition type '{}'", ts),
     }
 }
 
@@ -1911,7 +1973,6 @@ impl PartialEq for Transition {
         self.id != other.id
     }
 }
-
 
 impl Transition {
     pub fn new() -> Transition {
@@ -2106,32 +2167,23 @@ impl Display for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Fsm{{v:{} root:{} states:", self.version, self.pseudo_root)?;
         display_state_map(&self.states, f)?;
+        display_transition_map(&self.transitions, f)?;
         write!(f, "}}")
     }
 }
 
 impl Display for State {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{<{}> initial:", self.id)?;
-        write!(f, " states:")?;
-        write!(f, "[")?;
-        let mut first = true;
-        for i in &self.states
-        {
-            if first {
-                first = false;
-            } else {
-                write!(f, ",")?;
-            }
-            write!(f, "{}", i)?;
-        }
-        write!(f, "]}}")
+        write!(f, "{{#{} states:{} transitions: {}}}", self.id, idVecToString(&self.states),
+               idVecToString(&self.transitions.data)
+        )
     }
 }
 
 impl Display for Transition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{type:{} events:{:?} cond:{:?} target:{:?} }}",
+        write!(f, "{{#{} type:{} events:{:?} cond:{:?} target:{:?} }}",
+               self.id,
                self.transition_type, &self.events, self.cond,
                self.target)
     }
@@ -2146,4 +2198,18 @@ impl Display for TransitionType {
     }
 }
 
+fn idVecToString(v: &Vec<u32>) -> String {
+    let mut s = "[".to_string();
 
+    let len = v.len();
+    for i in 0..len {
+        s += format!("{}{}",
+                     if i > 0 {
+                         ","
+                     } else {
+                         ""
+                     }, v[i]).as_str();
+    }
+    s += "]";
+    s
+}

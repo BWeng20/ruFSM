@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::Pointer;
 use std::fs::File;
 use std::io::Read;
 use std::str;
@@ -7,7 +8,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::fsm::{ExecutableContent, Fsm, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
+use crate::fsm::{ExecutableContent, Fsm, HistoryType, map_history_type, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
 
@@ -28,6 +29,7 @@ pub const TAG_DATAMODEL: &str = "datamodel";
 pub const TAG_VERSION: &str = "version";
 pub const TAG_INITIAL: &str = "initial";
 pub const TAG_STATE: &str = "state";
+pub const TAG_HISTORY: &str = "history";
 pub const TAG_PARALLEL: &str = "parallel";
 pub const TAG_FINAL: &str = "final";
 pub const TAG_TRANSITION: &str = "transition";
@@ -93,22 +95,29 @@ impl ReaderState {
         }
     }
 
-    pub fn push(&mut self, tag: &str) {
+    fn push(&mut self, tag: &str) {
         self.stack.push(ReaderStackItem::new(&self.current));
         self.current.current_tag = tag.to_string();
     }
 
-    pub fn pop(&mut self) {
+    fn pop(&mut self) {
         let p = self.stack.pop();
         if p.is_some() {
             self.current = p.unwrap();
         }
     }
 
-    pub fn generate_name(&mut self) -> String {
+    fn generate_name(&mut self) -> String {
         self.id_count += 1;
         format!("__id{}", self.id_count)
     }
+
+    fn parseStateSpecification(&mut self, target_name: &str, targets: &mut Vec<StateId>) {
+        target_name.split_ascii_whitespace().for_each(|target| {
+            targets.push(self.get_or_create_state(&target.to_string(), false))
+        });
+    }
+
 
     fn get_state_by_name(&self, name: &Name) -> Option<&State> {
         if self.fsm.statesNames.contains_key(name) {
@@ -138,7 +147,7 @@ impl ReaderState {
         }
     }
 
-    pub fn get_current_state(&mut self) -> &mut State {
+    fn get_current_state(&mut self) -> &mut State {
         let id = self.current.current_state;
         if id <= 0 {
             panic!("Internal error: Current State is unknown");
@@ -150,7 +159,7 @@ impl ReaderState {
         state.unwrap()
     }
 
-    pub fn get_parent_tag(&self) -> &str {
+    fn get_parent_tag(&self) -> &str {
         let mut r = "";
         if !self.stack.is_empty() {
             r = self.stack.get(self.stack.len() - 1).as_ref().unwrap().current_tag.as_str();
@@ -240,6 +249,25 @@ impl ReaderState {
         state_id
     }
 
+    // A new "history" element started
+    fn start_history(&mut self, attr: &AttributeMap) -> StateId {
+        if !self.in_scxml {
+            panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
+        }
+        let state_id = self.create_state(attr, true);
+        if self.current.current_state > 0 {
+            let parent_state = self.get_current_state();
+            parent_state.states.push(state_id);
+            parent_state.history.push(state_id);
+        }
+        let mut hstate = self.fsm.get_state_by_id_mut(state_id);
+
+        match attr.get(TAG_TYPE) {
+            None => hstate.history_type = HistoryType::Shallow,
+            Some(type_name) => hstate.history_type = map_history_type(type_name)
+        }
+        state_id
+    }
 
     // A new "state" element started
     fn start_state(&mut self, attr: &AttributeMap) -> StateId {
@@ -279,7 +307,8 @@ impl ReaderState {
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
-        let parent_tag = self.verify_parent_tag(TAG_TRANSITION, &[TAG_INITIAL, TAG_STATE, TAG_PARALLEL]).to_string();
+        let parent_tag = self.verify_parent_tag(TAG_TRANSITION,
+                                                &[TAG_HISTORY, TAG_INITIAL, TAG_STATE, TAG_PARALLEL]).to_string();
 
         let mut t = Transition::new();
         let event = attr.get(TAG_EVENT);
@@ -292,11 +321,13 @@ impl ReaderState {
             t.cond = Some(Box::new(ScriptConditionalExpression::new(cond.unwrap())));
         }
 
-        let target = attr.get(TAG_TARGET);
+        let mut target = attr.get(TAG_TARGET);
         match target {
             None => (),
             // TODO: Parse the state specification! (it can be a list)
-            Some(target_name) => t.target.push(self.get_or_create_state(target_name, false)),
+            Some(target_name) => {
+                self.parseStateSpecification(target_name, &mut t.target);
+            }
         }
 
         let trans_type = attr.get(TAG_TYPE);
@@ -314,11 +345,13 @@ impl ReaderState {
         } else {
             state.transitions.push(t.id);
         }
+        t.source = state.id;
         self.fsm.transitions.insert(t.id, t);
     }
 
     fn start_executable_content(&mut self, name: &str, attr: &AttributeMap) {
         let parent_tag = self.verify_parent_tag(name, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
+        // TODO
     }
 
     fn start_else(&mut self, name: &str, attr: &AttributeMap) {
@@ -329,6 +362,8 @@ impl ReaderState {
         let n = e.name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
+
+        println!("Start Element {}", name);
 
         let attr = &decode_attributes(&reader, &mut e.attributes());
 
@@ -349,8 +384,10 @@ impl ReaderState {
                 self.fsm.pseudo_root = self.create_state(&attr, false);
                 let initial = attr.get(TAG_INITIAL);
                 if initial.is_some() {
-                    let t = Transition::new();
+                    let mut t = Transition::new();
+                    self.parseStateSpecification(initial.unwrap(), &mut t.target);
                     self.fsm.get_state_by_id_mut(self.fsm.pseudo_root).initial = t.id;
+                    t.source = self.fsm.pseudo_root;
                     self.fsm.transitions.insert(t.id, t);
                 }
             }
@@ -362,6 +399,9 @@ impl ReaderState {
             }
             TAG_FINAL => {
                 self.start_final(attr);
+            }
+            TAG_HISTORY => {
+                self.start_history(attr);
             }
             TAG_INITIAL => {
                 self.start_initial();

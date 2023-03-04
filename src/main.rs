@@ -15,9 +15,10 @@ fn main() {
         r"<scxml initial='Main' datamodel='ecmascript'>
       <state id='Main'>
         <initial>
-          <transition event='a ab abc' cond='true' type='internal' target='finalMe'/>
+          <transition target='MainA'/>
         </initial>
         <state id='MainA'>
+          <transition event='a ab abc' cond='true' type='internal' target='finalMe'/>
         </state>
         <state id='MainB'>
         </state>
