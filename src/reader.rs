@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::str;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
@@ -10,6 +11,8 @@ use quick_xml::Reader;
 use crate::fsm::{ExecutableContent, Fsm, HistoryType, map_history_type, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
+
+static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 pub fn read_from_xml_file(mut file: File) -> Box<Fsm> {
     let mut contents = String::new();
@@ -182,15 +185,16 @@ impl ReaderState {
         match self.fsm.statesNames.get(name) {
             None => {
                 let mut s = State::new(name);
+                s.id = (self.fsm.states.len() + 1) as StateId;
                 s.is_parallel = parallel;
                 let sid = s.id;
                 self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
-                self.fsm.states.insert(s.id, s);
+                self.fsm.states.push(s);
                 sid
             }
             Some(id) => {
                 if parallel {
-                    self.fsm.states.get_mut(id).unwrap().is_parallel = true;
+                    self.fsm.states.get_mut(((*id) - 1) as usize).unwrap().is_parallel = true;
                 }
                 *id
             }
@@ -204,8 +208,21 @@ impl ReaderState {
             Some(id) => sname = id.clone()
         }
         let id = self.get_or_create_state(&sname, parallel);
+
+        let initial;
+        match attr.get(TAG_INITIAL) {
+            None => initial = 0,
+            Some(state_name) => initial = self.get_or_create_state(state_name, false)
+        }
+
+        let state = self.get_state_by_id_mut(id);
+
+        state.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+        if initial != 0 {
+            state.initial = initial;
+        }
         if parent != 0 {
-            let state = self.get_state_by_id_mut(id);
             state.parent = parent;
             let parent_state = self.get_state_by_id_mut(parent);
             if !parent_state.states.contains(&id) {
@@ -226,7 +243,6 @@ impl ReaderState {
             let parent_state = self.get_current_state();
             parent_state.states.push(state_id);
         }
-        self.fsm.get_state_by_id_mut(state_id).is_parallel = true;
         state_id
     }
 
@@ -235,7 +251,7 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
         }
-        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
+        let state_id = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
 
         self.fsm.get_state_by_id_mut(state_id).is_final = true;
         state_id
@@ -246,7 +262,7 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
         }
-        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
+        let state_id = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
         if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
             parent_state.history.push(state_id);
@@ -265,28 +281,9 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_STATE, TAG_SCXML);
         }
-        let name: String;
-        match attr.get(TAG_ID) {
-            None => name = self.generate_name(),
-            Some(id) => name = id.clone(),
-        }
-        let sid = self.get_or_create_state(&name, false);
-
-        let initial;
-        match attr.get(TAG_INITIAL) {
-            None => initial = 0,
-            Some(state_name) => initial = self.get_or_create_state(state_name, false)
-        }
-
-        if self.current.current_state > 0 {
-            self.get_current_state().states.push(sid);
-        }
+        let sid = self.get_or_create_state_with_attributes(&attr, false, self.current.current_state);
         self.current.current_state = sid;
-
-        let s = self.get_state_by_id_mut(sid);
-        s.initial = initial;
-
-        s.id
+        sid
     }
 
     // A "initial" element started (node, not attribute)
@@ -302,6 +299,8 @@ impl ReaderState {
                                                 &[TAG_HISTORY, TAG_INITIAL, TAG_STATE, TAG_PARALLEL]).to_string();
 
         let mut t = Transition::new();
+        t.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
         let event = attr.get(TAG_EVENT);
         if event.is_some() {
             t.events = event.unwrap().split_whitespace().map(|s| { s.to_string() }).collect();

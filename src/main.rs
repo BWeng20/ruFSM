@@ -27,19 +27,24 @@ fn main() {
             <log label='info' expr='Date.now()'/>
           </onentry>
         </final>
+        <transition event='exit' cond='true' type='internal' target='OuterFinal'/>
       </state>
+      <final id='OuterFinal'>
+      </final>
     </scxml>");
     println!("The SM: {}", sm);
 
-    let jh = fsm::start_fsm(sm);
+    let (threadHandle, sender) = fsm::start_fsm(sm);
 
     let ten_millis = time::Duration::from_millis(1000);
     thread::sleep(ten_millis);
 
     println!("Send Event");
 
-    jh.1.send(Box::new(Event { name: "ab".to_string(), invokeid: 1, done_data: None }));
-    jh.0.join();
+    sender.send(Box::new(Event { name: "ab".to_string(), invokeid: 1, done_data: None }));
+    sender.send(Box::new(Event { name: "exit".to_string(), invokeid: 2, done_data: None }));
+
+    threadHandle.join();
 }
 
 
