@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 quick-xml = { version = "0.27.1", features = ["serialize"] }
+
+[profile.dev.package."*"]
+opt-level = "z"

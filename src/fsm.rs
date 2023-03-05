@@ -493,7 +493,7 @@ impl Event {
     pub fn new(prefix: &str, state: StateId, data: &Option<DoneData>) -> Event {
         Event {
             name: format!("{}{}", prefix, state),
-            done_data: data.clone(),
+            done_data: { data.clone() },
             invokeid: 0,
         }
     }
@@ -1021,7 +1021,7 @@ impl Fsm {
     ///  todo (check argument types!)
     fn selectTransitions(&mut self, event: &Event) -> OrderedSet<TransitionId> {
         self.tracer.enterMethod("selectTransitions");
-        self.tracer.trace(format!(" Event: {}", &event.name).as_str());
+        self.tracer.trace(format!("->Event: {}", &event.name).as_str());
         let mut enabledTransitions: OrderedSet<TransitionId> = OrderedSet::new();
         let atomicStates = self.configuration.toList().filterBy(&|sid| -> bool { self.isAtomicState(*sid) }).sort(&documentOrder);
         for state in atomicStates.iterator() {
@@ -1330,11 +1330,11 @@ impl Fsm {
     }
 
     pub fn executeContent(&self, contentId: ExecutableContentId) {
-        todo!()
+        // TODO
     }
 
     pub fn isParallelState(&self, state: StateId) -> bool {
-        self.get_state_by_id(state).is_parallel
+        state > 0 && self.get_state_by_id(state).is_parallel
     }
 
     pub fn isSCXMLElement(&self, state: StateId) -> bool {
@@ -1368,10 +1368,20 @@ impl Fsm {
     ///                     statesToExit.add(s)
     ///     return statesToExit
     /// ```
-    /// #Actual implementation:
-    ///  todo (check argument types!)
-    fn computeExitSet(&self, states: &List<TransitionId>) -> OrderedSet<StateId> {
-        todo!()
+    fn computeExitSet(&self, transitions: &List<TransitionId>) -> OrderedSet<StateId> {
+        let mut statesToExit: OrderedSet<StateId> = OrderedSet::new();
+        for tid in transitions.iterator() {
+            let t = self.get_transition_by_id(*tid);
+            if !t.target.is_empty() {
+                let domain = self.getTransitionDomain(t);
+                for s in self.configuration.iterator() {
+                    if self.isDescendant(*s, domain) {
+                        statesToExit.add(*s);
+                    }
+                }
+            }
+        }
+        statesToExit
     }
 
     /// #W3C says:
@@ -1382,10 +1392,11 @@ impl Fsm {
     ///     for t in enabledTransitions:
     ///         executeContent(t)
     /// ```
-    /// #Actual implementation:
-    ///  todo (check argument types!)
     fn executeTransitionContent(&mut self, enabledTransitions: &List<TransitionId>) {
-        todo!()
+        for tid in enabledTransitions.iterator() {
+            let t = self.get_transition_by_id(*tid);
+            self.executeContent(t.content);
+        }
     }
 
     /// #W3C says:
@@ -1519,9 +1530,20 @@ impl Fsm {
     ///                     addDescendantStatesToEnter(child,statesToEnter,statesForDefaultEntry, defaultHistoryContent)
     /// ```
     /// #Actual implementation:
-    fn addAncestorStatesToEnter(&self, state: StateId, ancestor: StateId, statesToEnter: &OrderedSet<StateId>,
-                                statesForDefaultEntry: &OrderedSet<StateId>, defaultHistoryContent: &HashTable<StateId, ExecutableContentId>) {
-        todo!()
+    fn addAncestorStatesToEnter(&self, state: StateId, ancestor: StateId, statesToEnter: &mut OrderedSet<StateId>,
+                                statesForDefaultEntry: &mut OrderedSet<StateId>, defaultHistoryContent: &mut HashTable<StateId, ExecutableContentId>) {
+        for anc in self.getProperAncestors(state, ancestor).iterator() {
+            statesToEnter.add(*anc);
+            if self.isParallelState(*anc) {
+                for child in self.getChildStates(*anc).iterator() {
+                    if !statesToEnter.some(&|s| {
+                        self.isDescendant(*s, *child)
+                    }) {
+                        self.addDescendantStatesToEnter(*child, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                    }
+                }
+            }
+        }
     }
 
     /// #W3C says:
@@ -1640,8 +1662,6 @@ impl Fsm {
     /// #W3C says:
     /// # function getProperAncestors(state1, state2)
     /// If state2 is null, returns the set of all ancestors of state1 in ancestry order (state1's parent followed by the parent's parent, etc. up to an including the <scxml> element). If state2 is non-null, returns in ancestry order the set of all ancestors of state1, up to but not including state2. (A "proper ancestor" of a state is its parent, or the parent's parent, or the parent's parent's parent, etc.))If state2 is state1's parent, or equal to state1, or a descendant of state1, this returns the empty set.
-    /// #Actual implementation:
-    ///  todo (check argument types!)
     fn getProperAncestors(&self, state1: StateId, state2: StateId) -> OrderedSet<StateId> {
         let mut properAncestors: OrderedSet<StateId> = OrderedSet::new();
         if !self.isDescendant(state2, state1) {
@@ -1657,8 +1677,6 @@ impl Fsm {
     /// #W3C says:
     /// function isDescendant(state1, state2)
     /// Returns 'true' if state1 is a descendant of state2 (a child, or a child of a child, or a child of a child of a child, etc.) Otherwise returns 'false'.
-    /// #Actual implementation:
-    ///  todo (check argument types!)
     fn isDescendant(&self, state1: StateId, state2: StateId) -> bool {
         if state1 == 0 || state2 == 0 || state1 == state2 {
             false
@@ -1729,7 +1747,10 @@ impl Fsm {
 
     fn conditionMatch(&self, t: &Transition) -> bool
     {
-        todo!()
+        if t.content != 0 {
+            todo!()
+        }
+        true
     }
 
     fn nameMatch(&self, events: &Vec<String>, name: &String) -> bool

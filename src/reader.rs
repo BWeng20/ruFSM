@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::Pointer;
 use std::fs::File;
 use std::io::Read;
 use std::str;
@@ -131,20 +130,12 @@ impl ReaderState {
         } else { None }
     }
 
-    fn get_state_by_id(&self, id: StateId) -> Option<&State> {
-        if self.fsm.states.contains_key(&id) {
-            Some(self.fsm.get_state_by_id(id))
-        } else {
-            None
-        }
+    fn get_state_by_id(&self, id: StateId) -> &State {
+        self.fsm.get_state_by_id(id)
     }
 
-    fn get_state_by_id_mut(&mut self, id: StateId) -> Option<&mut State> {
-        if self.fsm.states.contains_key(&id) {
-            Some(self.fsm.get_state_by_id_mut(id))
-        } else {
-            None
-        }
+    fn get_state_by_id_mut(&mut self, id: StateId) -> &mut State {
+        self.fsm.get_state_by_id_mut(id)
     }
 
     fn get_current_state(&mut self) -> &mut State {
@@ -152,11 +143,7 @@ impl ReaderState {
         if id <= 0 {
             panic!("Internal error: Current State is unknown");
         }
-        let state = self.get_state_by_id_mut(id);
-        if state.is_none() {
-            panic!("Internal error: Current State {} is unknown", id);
-        }
-        state.unwrap()
+        self.get_state_by_id_mut(id)
     }
 
     fn get_parent_tag(&self) -> &str {
@@ -210,13 +197,21 @@ impl ReaderState {
         }
     }
 
-    fn create_state(&mut self, attr: &AttributeMap, parallel: bool) -> StateId {
+    fn get_or_create_state_with_attributes(&mut self, attr: &AttributeMap, parallel: bool, parent: StateId) -> StateId {
         let sname: String;
         match attr.get("id") {
             None => sname = self.generate_name(),
             Some(id) => sname = id.clone()
         }
         let id = self.get_or_create_state(&sname, parallel);
+        if parent != 0 {
+            let state = self.get_state_by_id_mut(id);
+            state.parent = parent;
+            let parent_state = self.get_state_by_id_mut(parent);
+            if !parent_state.states.contains(&id) {
+                parent_state.states.push(id);
+            }
+        }
         id
     }
 
@@ -226,7 +221,7 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
-        let state_id = self.create_state(attr, true);
+        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
         if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
             parent_state.states.push(state_id);
@@ -240,11 +235,8 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
         }
-        let state_id = self.create_state(attr, true);
-        if self.current.current_state > 0 {
-            let parent_state = self.get_current_state();
-            parent_state.states.push(state_id);
-        }
+        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
+
         self.fsm.get_state_by_id_mut(state_id).is_final = true;
         state_id
     }
@@ -254,10 +246,9 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
         }
-        let state_id = self.create_state(attr, true);
+        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
         if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
-            parent_state.states.push(state_id);
             parent_state.history.push(state_id);
         }
         let mut hstate = self.fsm.get_state_by_id_mut(state_id);
@@ -279,23 +270,23 @@ impl ReaderState {
             None => name = self.generate_name(),
             Some(id) => name = id.clone(),
         }
-        let mut s = State::new(&name);
+        let sid = self.get_or_create_state(&name, false);
 
+        let initial;
         match attr.get(TAG_INITIAL) {
-            None => s.initial = 0,
-            Some(state_name) => s.initial = self.get_or_create_state(state_name, false)
+            None => initial = 0,
+            Some(state_name) => initial = self.get_or_create_state(state_name, false)
         }
-
-        let sr = s.id;
 
         if self.current.current_state > 0 {
-            self.get_current_state().states.push(sr);
+            self.get_current_state().states.push(sid);
         }
-        self.current.current_state = s.id.clone();
-        self.fsm.statesNames.insert(s.name.clone(), s.id.clone());
-        self.fsm.states.insert(s.id.clone(), s); // s.id, s);
+        self.current.current_state = sid;
 
-        sr
+        let s = self.get_state_by_id_mut(sid);
+        s.initial = initial;
+
+        s.id
     }
 
     // A "initial" element started (node, not attribute)
@@ -381,7 +372,8 @@ impl ReaderState {
                 if version.is_some() {
                     self.fsm.version = version.unwrap().clone();
                 }
-                self.fsm.pseudo_root = self.create_state(&attr, false);
+                self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
+                self.current.current_state = self.fsm.pseudo_root;
                 let initial = attr.get(TAG_INITIAL);
                 if initial.is_some() {
                     let mut t = Transition::new();
