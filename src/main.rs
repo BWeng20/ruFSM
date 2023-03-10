@@ -8,11 +8,16 @@ mod reader;
 mod fsm;
 
 mod tests;
+mod emca_script_datamodel;
 
 fn main() {
     println!("Creating The SM:");
     let sm = reader::read_from_xml(
         r"<scxml initial='Main' datamodel='ecmascript'>
+      <script>
+        print('Hello World');
+        print('Hello Again');
+      </script>
       <state id='Main'>
         <initial>
           <transition target='MainA'/>

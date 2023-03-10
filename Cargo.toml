@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 quick-xml = { version = "0.27.1", features = ["serialize"] }
+boa_engine = "0.16.0"
 
 [profile.dev.package."*"]
 opt-level = "z"

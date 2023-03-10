@@ -339,8 +339,14 @@ impl ReaderState {
         self.fsm.transitions.insert(t.id, t);
     }
 
+    fn end_script(&mut self, name: &str, txt: &mut Vec<String>) {
+        self.get_current_state().script = txt.concat();
+        txt.clear();
+    }
+
+
     fn start_executable_content(&mut self, name: &str, attr: &AttributeMap) {
-        let parent_tag = self.verify_parent_tag(name, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
+        let parent_tag = self.verify_parent_tag(name, &[TAG_SCXML, TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
         // TODO
     }
 
@@ -400,7 +406,7 @@ impl ReaderState {
             TAG_TRANSITION => {
                 self.start_transition(attr);
             }
-            TAG_RAISE | TAG_SEND | TAG_LOG | TAG_SCRIPT | TAG_ASSIGN | TAG_IF | TAG_FOR_EACH | TAG_CANCEL => {
+            TAG_SCRIPT | TAG_RAISE | TAG_SEND | TAG_LOG | TAG_ASSIGN | TAG_IF | TAG_FOR_EACH | TAG_CANCEL => {
                 self.start_executable_content(&name, attr);
             }
             TAG_ELSE | TAG_ELSEIF => {
@@ -412,9 +418,15 @@ impl ReaderState {
         }
     }
 
-    fn end_element(&mut self, name: &str) {
+    fn end_element(&mut self, name: &str, txt: &mut Vec<String>) {
         if !self.current.current_tag.eq(name) {
             panic!("Illegal end-tag {:?}, expected {:?}", &name, &self.current.current_tag);
+        }
+        match name {
+            TAG_SCRIPT => {
+                self.end_script(name, txt);
+            }
+            _ => {}
         }
         self.pop();
     }
@@ -463,12 +475,12 @@ pub fn read_from_xml(xml: &str) -> Box<Fsm> {
                 rs.start_element(&mut reader, &e);
             }
             Ok(Event::End(e)) => {
-                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap());
+                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Empty(e)) => {
                 // Element without content.
                 rs.start_element(&mut reader, &e);
-                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap());
+                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 

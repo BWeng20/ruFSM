@@ -11,8 +11,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 
-pub const ECMA_SCRIPT: &str = "ECMAScript";
-pub const ECMA_SCRIPT_LC: &str = "ecmascript";
+use crate::emca_script_datamodel::{ECMA_SCRIPT, ECMAScriptDatamodel};
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
@@ -763,6 +762,7 @@ impl Fsm {
     ///     mainEventLoop()
     /// ```
     pub fn interpret(&mut self) {
+        self.tracer.enterMethod("interpret");
         if !self.valid() {
             self.failWithError()
         }
@@ -782,12 +782,21 @@ impl Fsm {
         initalStates.push(self.get_state_by_id(self.pseudo_root).initial);
         self.enterStates(&initalStates);
         self.mainEventLoop();
+        self.tracer.exitMethod("interpret");
     }
 
 
     /// #Actual implementation:
-    /// This method should check if all state/transition references are correct.
+    /// TODO
+    /// * check if all state/transition references are correct (all states have a document-id)
+    /// * check if all special scxml conditions are satisfied.
     fn valid(&self) -> bool {
+        for state in &self.states {
+            if state.doc_id == 0 {
+                self.tracer.trace(&format!("Referenced state '{}' is not declared", state.name).as_str());
+                return false;
+            }
+        }
         true
     }
 
@@ -804,7 +813,14 @@ impl Fsm {
     /// After this method all "StateId" or "TransactionId" shall be valid and have to lead to a panic.
     fn expandScxmlSource(&mut self) {}
 
-    fn executeGlobalScriptElement(&mut self) {}
+    fn executeGlobalScriptElement(&mut self) {
+        self.tracer.enterMethod("executeGlobalScriptElement");
+        let script = self.get_state_by_id(self.pseudo_root).script.clone();
+        if !script.is_empty() {
+            self.datamodel.deref_mut().execute(&script);
+        }
+        self.tracer.exitMethod("executeGlobalScriptElement");
+    }
 
     /// #W3C says:
     /// ## procedure mainEventLoop()
@@ -1972,14 +1988,14 @@ pub struct DataStore {
 }
 
 impl DataStore {
-    fn new() -> DataStore {
+    pub fn new() -> DataStore {
         DataStore {
             values: HashMap::new(),
             nullValue: Box::new(EmptyData::new()),
         }
     }
 
-    fn get(&self, key: &String) -> &Box<dyn Data> {
+    pub fn get(&self, key: &String) -> &Box<dyn Data> {
         if self.values.contains_key(key) {
             self.values.get(key).unwrap()
         } else {
@@ -1987,7 +2003,7 @@ impl DataStore {
         }
     }
 
-    fn set(&mut self, key: &String, data: Box<dyn Data>) {
+    pub fn set(&mut self, key: &String, data: Box<dyn Data>) {
         self.values.insert(key.clone(), data);
     }
 }
@@ -2086,6 +2102,7 @@ pub struct State {
     pub isFirstEntry: bool,
     pub parent: StateId,
     pub donedata: Option<DoneData>,
+    pub script: String,
 }
 
 impl State {
@@ -2110,6 +2127,7 @@ impl State {
             donedata: None,
             invoke: List::new(),
             history: List::new(),
+            script: "".to_string(),
         }
     }
 }
@@ -2215,6 +2233,7 @@ pub trait Datamodel: Send + Debug {
     fn get(&self, name: &String) -> &dyn Data;
     fn clear(&mut self);
     fn log(&mut self, msg: &String);
+    fn execute(&mut self, script: &String) -> &str;
 }
 
 pub fn createDatamodel(name: &str) -> Box<dyn Datamodel> {
@@ -2238,47 +2257,6 @@ pub struct Invoke {
     // TODO
 }
 
-/**
- * ECMAScript data model
- */
-#[derive(Debug)]
-pub struct ECMAScriptDatamodel {
-    pub data: DataStore,
-
-}
-
-impl ECMAScriptDatamodel {
-    pub fn new() -> ECMAScriptDatamodel {
-        ECMAScriptDatamodel { data: DataStore::new() }
-    }
-}
-
-impl Datamodel for ECMAScriptDatamodel {
-    fn get_name(self: &Self) -> &str {
-        return ECMA_SCRIPT;
-    }
-
-    fn initializeDataModel(&mut self, data: &DataStore) {
-        for (name, data) in &data.values
-        {
-            self.data.values.insert(name.clone(), data.deref().get_copy());
-        }
-    }
-
-    fn set(self: &mut ECMAScriptDatamodel, name: &String, data: Box<dyn Data>) {
-        self.data.set(name, data);
-    }
-
-    fn get(self: &ECMAScriptDatamodel, name: &String) -> &dyn Data {
-        todo!()
-    }
-
-    fn clear(self: &mut ECMAScriptDatamodel) {}
-
-    fn log(&mut self, msg: &String) {
-        println!("Log: {}", msg);
-    }
-}
 
 /// ## W3C says:
 /// ###B.1 The Null Data Model
@@ -2335,12 +2313,16 @@ impl Datamodel for NullDatamodel {
     fn log(self: &mut NullDatamodel, msg: &String) {
         println!("Log: {}", msg);
     }
+
+    fn execute(&mut self, script: &String) -> &str {
+        ""
+    }
 }
 
 
 /// A boolean expression, interpreted by the used datamodel-language.
 pub trait ConditionalExpression: Send + Debug {
-    fn execute(self: &Self, data: &dyn Datamodel) -> bool { false }
+    fn execute(self: &Self, data: &mut dyn Datamodel) -> bool;
 }
 
 #[derive(Debug)]
@@ -2357,8 +2339,8 @@ impl ScriptConditionalExpression {
 }
 
 impl ConditionalExpression for ScriptConditionalExpression {
-    fn execute(self: &Self, data: &dyn Datamodel) -> bool {
-        return true;
+    fn execute(self: &Self, data: &mut dyn Datamodel) -> bool {
+        data.execute(&self.script).parse().unwrap()
     }
 }
 
