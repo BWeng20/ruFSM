@@ -1,9 +1,10 @@
 #![allow(non_snake_case)]
 
-use std::collections::{HashMap, VecDeque};
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::slice::Iter;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -11,7 +12,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 
-use crate::emca_script_datamodel::{ECMA_SCRIPT, ECMAScriptDatamodel};
+#[cfg(feature = "ECMAScript")]
+use crate::emca_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
@@ -428,8 +430,7 @@ pub type StateVec = Vec<State>;
 pub type StateNameMap = HashMap<Name, StateId>;
 pub type TransitionMap = HashMap<TransitionId, Transition>;
 
-#[derive(Debug)]
-#[derive(Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum BindingType {
     Early,
     Late,
@@ -440,6 +441,12 @@ pub struct Event {
     pub name: String,
     pub done_data: Option<DoneData>,
     pub invokeid: InvokeId,
+}
+
+impl ToString for Event {
+    fn to_string(&self) -> String {
+        self.name.to_string()
+    }
 }
 
 impl Data for Event {
@@ -465,27 +472,48 @@ impl Event {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Copy, Hash, Eq)]
+pub enum Trace {
+    METHODS,
+    STATES,
+    EVENTS,
+    ARGUMENTS,
+    RESULTS,
+    ALL,
+}
+
 pub trait Tracer: Send + Debug {
     fn trace(&self, msg: &str);
 
     fn enter(&self);
     fn leave(&self);
 
+    fn enableTrace(&mut self, flag: Trace);
+    fn disableTrace(&mut self, flag: Trace);
+    fn isTrace(&self, flag: Trace) -> bool;
+
+
     fn enterMethod(&self, what: &str) {
-        self.trace(format!(">>> {}", what).as_str());
-        self.enter();
+        if self.isTrace(Trace::METHODS) {
+            self.trace(format!(">>> {}", what).as_str());
+            self.enter();
+        }
     }
 
     fn exitMethod(&self, what: &str) {
-        self.leave();
-        self.trace(format!("<<< {}", what).as_str());
+        if self.isTrace(Trace::METHODS) {
+            self.leave();
+            self.trace(format!("<<< {}", what).as_str());
+        }
     }
 
     fn traceState(&self, what: &str, s: &State) {
-        if s.name.is_empty() {
-            self.trace(format!("{} #{}", what, s.id).as_str());
-        } else {
-            self.trace(format!("{} <{}>", what, &s.name).as_str());
+        if self.isTrace(Trace::STATES) {
+            if s.name.is_empty() {
+                self.trace(format!("{} #{}", what, s.id).as_str());
+            } else {
+                self.trace(format!("{} <{}>", what, &s.name).as_str());
+            }
         }
     }
 
@@ -498,14 +526,20 @@ pub trait Tracer: Send + Debug {
     }
 
     fn traceEvent(&self, e: &Event) {
-        self.trace(format!("Event <{}> #{}", &e.name, e.invokeid).as_str());
+        if self.isTrace(Trace::EVENTS) {
+            self.trace(format!("Event <{}> #{}", &e.name, e.invokeid).as_str());
+        }
     }
 
     fn traceArgument(&self, what: &str, d: &dyn Display) {
-        self.trace(format!("In:{}:{}", what, d).as_str());
+        if self.isTrace(Trace::ARGUMENTS) {
+            self.trace(format!("In:{}:{}", what, d).as_str());
+        }
     }
-    fn traceOutput(&self, what: &str, d: &dyn Display) {
-        self.trace(format!("Out:{}:{}", what, d).as_str());
+    fn traceResult(&self, what: &str, d: &dyn Display) {
+        if self.isTrace(Trace::RESULTS) {
+            self.trace(format!("Out:{}:{}", what, d).as_str());
+        }
     }
 
     fn traceIdVec(&self, what: &str, l: &Vec<u32>) {
@@ -517,37 +551,64 @@ pub trait Tracer: Send + Debug {
     }
 }
 
+thread_local! {
+    static trace_prefix: RefCell<String> = RefCell::new("".to_string());
+ }
+
+
 
 #[derive(Debug)]
-pub struct DefaultTracer {}
-
-static mut trace_prefix: String = String::new();
+pub struct DefaultTracer {
+    pub trace_flags: HashSet<Trace>,
+}
 
 impl Tracer for DefaultTracer {
     fn trace(&self, msg: &str) {
         unsafe {
-            println!("{}{}", trace_prefix, msg);
+            println!("{}{}", DefaultTracer::get_prefix(), msg);
         }
     }
 
     fn enter(&self) {
-        unsafe {
-            trace_prefix += " ";
+        let mut prefix = DefaultTracer::get_prefix();
+        prefix += " ";
+        DefaultTracer::set_prefix(prefix);
+    }
+
+    fn leave(&self) {
+        let mut prefix = DefaultTracer::get_prefix();
+        if prefix.len() > 0 {
+            prefix.remove(0);
+            DefaultTracer::set_prefix(prefix);
         }
     }
-    fn leave(&self) {
-        unsafe {
-            let mut len = trace_prefix.len();
-            if len > 0 {
-                trace_prefix.remove(0);
-            }
-        }
+
+    fn enableTrace(&mut self, flag: Trace) {
+        self.trace_flags.insert(flag);
+    }
+
+    fn disableTrace(&mut self, flag: Trace) {
+        self.trace_flags.remove(&flag);
+    }
+
+    fn isTrace(&self, flag: Trace) -> bool {
+        self.trace_flags.contains(&flag) || self.trace_flags.contains(&Trace::ALL)
     }
 }
 
 impl DefaultTracer {
     pub fn new() -> DefaultTracer {
-        DefaultTracer {}
+        DefaultTracer {
+            trace_flags: HashSet::new(),
+        }
+    }
+
+    fn get_prefix() -> String {
+        trace_prefix.with(|p| p.borrow().clone())
+    }
+
+    fn set_prefix(p: String) {
+        trace_prefix.with(|pfx: &RefCell<String>| { *pfx.borrow_mut().deref_mut() = p; });
     }
 }
 
@@ -586,7 +647,10 @@ pub struct Fsm {
 
 impl Debug for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        write!(f, "Fsm{{v:{} root:{} states:", self.version, self.pseudo_root)?;
+        display_state_map(&self.states, f)?;
+        display_transition_map(&self.transitions, f)?;
+        write!(f, "}}")
     }
 }
 
@@ -628,7 +692,7 @@ impl Fsm {
         Fsm {
             configuration: OrderedSet::new(),
             version: "1.0".to_string(),
-            datamodel: createDatamodel(ECMA_SCRIPT),
+            datamodel: createDatamodel(NULL_DATAMODEL),
             internalQueue: Queue::new(),
             externalQueue: BlockingQueue::new(),
             historyValue: HashTable::new(),
@@ -1099,7 +1163,7 @@ impl Fsm {
             }
             enabledTransitions = self.removeConflictingTransitions(&enabledTransitions);
         }
-        self.tracer.traceOutput("enabledTransitions", &enabledTransitions);
+        self.tracer.traceResult("enabledTransitions", &enabledTransitions);
         self.tracer.exitMethod("selectEventlessTransitions");
         enabledTransitions
     }
@@ -1143,7 +1207,6 @@ impl Fsm {
                 for t in transition {
                     if (!t.events.is_empty()) && self.nameMatch(&t.events, &event.name) && self.conditionMatch(t)
                     {
-                        self.tracer.trace(format!(" Matching Transition: {} -> {:?}", t.id, &t.target).as_str());
                         enabledTransitions.add(t.id);
                         break 'outer;
                     }
@@ -1151,6 +1214,7 @@ impl Fsm {
                 }
             }
         }
+        self.tracer.traceResult("enabledTransitions", &enabledTransitions);
         self.tracer.exitMethod("selectTransitions");
         enabledTransitions
     }
@@ -1502,7 +1566,7 @@ impl Fsm {
                 }
             }
         }
-        self.tracer.traceOutput("statesToExit", &statesToExit);
+        self.tracer.traceResult("statesToExit", &statesToExit);
         self.tracer.exitMethod("computeExitSet");
         statesToExit
     }
@@ -1547,7 +1611,6 @@ impl Fsm {
 
         for tid in transitions.iterator() {
             let t = self.get_transition_by_id(*tid);
-            self.tracer.traceIdVec("< t", &t.target);
             for s in t.target.iter() {
                 self.addDescendantStatesToEnter(*s, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
             }
@@ -1556,7 +1619,7 @@ impl Fsm {
                 self.addAncestorStatesToEnter(*s, ancestor, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
             }
         }
-        self.tracer.traceOutput("statesToEnter>", statesToEnter);
+        self.tracer.traceResult("statesToEnter>", statesToEnter);
         self.tracer.exitMethod("computeEntrySet");
     }
 
@@ -1626,8 +1689,6 @@ impl Fsm {
         } else {
             statesToEnter.add(sid);
             if self.isCompoundState(sid) {
-                self.tracer.trace("isCompoundState");
-
                 statesForDefaultEntry.add(sid);
                 if state.initial != 0 {
                     let initialTransition = self.get_transition_by_id(state.initial);
@@ -1640,7 +1701,6 @@ impl Fsm {
                 }
             } else {
                 if self.isParallelState(sid) {
-                    self.tracer.trace("isParallelState");
                     for child in self.getChildStates(sid).iterator() {
                         if !statesToEnter.some(&|s| { self.isDescendant(*s, *child) }) {
                             self.addDescendantStatesToEnter(*child, statesToEnter, statesForDefaultEntry, defaultHistoryContent)
@@ -1649,7 +1709,7 @@ impl Fsm {
                 }
             }
         }
-        self.tracer.traceOutput("statesToEnter", &statesToEnter);
+        self.tracer.traceResult("statesToEnter", &statesToEnter);
         self.tracer.exitMethod("addDescendantStatesToEnter");
     }
 
@@ -1734,7 +1794,7 @@ impl Fsm {
             l.push(t.source);
             domain = self.findLCCA(&l.appendSet(&tstates));
         }
-        self.tracer.traceOutput("domain", &domain);
+        self.tracer.traceResult("domain", &domain);
         self.tracer.exitMethod("getTransitionDomain");
         domain
     }
@@ -1763,7 +1823,7 @@ impl Fsm {
                 break;
             }
         }
-        self.tracer.traceOutput("lcca", &lcca);
+        self.tracer.traceResult("lcca", &lcca);
         self.tracer.exitMethod("findLCCA");
         lcca
     }
@@ -1801,7 +1861,7 @@ impl Fsm {
                 targets.add(*sid);
             }
         }
-        self.tracer.traceOutput("targets", &targets);
+        self.tracer.traceResult("targets", &targets);
         self.tracer.exitMethod("getEffectiveTargetStates");
         targets
     }
@@ -1828,7 +1888,7 @@ impl Fsm {
                 currState = self.get_state_by_id(currState).parent;
             }
         }
-        self.tracer.traceOutput("properAncestors", &properAncestors);
+        self.tracer.traceResult("properAncestors", &properAncestors);
         self.tracer.exitMethod("getProperAncestors");
         properAncestors
     }
@@ -1850,7 +1910,7 @@ impl Fsm {
             }
             result = currState == state2;
         }
-        self.tracer.traceOutput("", &result);
+        self.tracer.traceResult("", &result);
         self.tracer.exitMethod("isDescendant");
         result
     }
@@ -1971,6 +2031,12 @@ struct EmptyData {}
 impl EmptyData {
     pub fn new() -> EmptyData {
         EmptyData {}
+    }
+}
+
+impl ToString for EmptyData {
+    fn to_string(&self) -> String {
+        "".to_string()
     }
 }
 
@@ -2222,22 +2288,69 @@ impl Transition {
     }
 }
 
-pub trait Data: Send + Debug {
+pub trait Data: Send + Debug + ToString {
     fn get_copy(&self) -> Box<dyn Data>;
 }
 
-pub trait Datamodel: Send + Debug {
+pub struct IntegerData {
+    pub value: i64,
+}
+
+impl Debug for IntegerData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl ToString for IntegerData {
+    fn to_string(&self) -> String {
+        self.value.to_string()
+    }
+}
+
+impl Data for IntegerData {
+    fn get_copy(&self) -> Box<dyn Data> {
+        Box::new(IntegerData { value: self.value })
+    }
+}
+
+pub struct StringData {
+    pub value: String,
+}
+
+impl Debug for StringData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl ToString for StringData {
+    fn to_string(&self) -> String {
+        self.value.clone()
+    }
+}
+
+impl Data for StringData {
+    fn get_copy(&self) -> Box<dyn Data> {
+        Box::new(StringData {
+            value: self.value.clone(),
+        })
+    }
+}
+
+pub trait Datamodel: Debug + Send {
     fn get_name(self: &Self) -> &str;
     fn initializeDataModel(self: &mut Self, data: &DataStore);
     fn set(&mut self, name: &String, data: Box<dyn Data>);
     fn get(&self, name: &String) -> &dyn Data;
     fn clear(&mut self);
     fn log(&mut self, msg: &String);
-    fn execute(&mut self, script: &String) -> &str;
+    fn execute(&mut self, script: &String) -> String;
 }
 
 pub fn createDatamodel(name: &str) -> Box<dyn Datamodel> {
     match name.to_lowercase().as_str() {
+        #[cfg(feature = "ECMAScript")]
         ECMA_SCRIPT_LC => Box::new(ECMAScriptDatamodel::new()),
         NULL_DATAMODEL_LC => Box::new(NullDatamodel::new()),
         _ => panic!("Unsupported Datamodel '{}'", name)
@@ -2314,8 +2427,8 @@ impl Datamodel for NullDatamodel {
         println!("Log: {}", msg);
     }
 
-    fn execute(&mut self, script: &String) -> &str {
-        ""
+    fn execute(&mut self, script: &String) -> String {
+        "".to_string()
     }
 }
 

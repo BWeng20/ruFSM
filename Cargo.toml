@@ -3,11 +3,13 @@ name = "rfsm"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["ECMAScript"]
+ECMAScript = ["boa_engine"]
 
 [dependencies]
 quick-xml = { version = "0.27.1", features = ["serialize"] }
-boa_engine = "0.16.0"
+boa_engine = { version = "0.16.0", optional = true }
 
 [profile.dev.package."*"]
 opt-level = "z"

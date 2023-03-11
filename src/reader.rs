@@ -8,7 +8,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::fsm::{ExecutableContent, Fsm, HistoryType, map_history_type, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
+use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
 
@@ -339,18 +339,18 @@ impl ReaderState {
         self.fsm.transitions.insert(t.id, t);
     }
 
-    fn end_script(&mut self, name: &str, txt: &mut Vec<String>) {
+    fn end_script(&mut self, txt: &mut Vec<String>) {
         self.get_current_state().script = txt.concat();
         txt.clear();
     }
 
 
-    fn start_executable_content(&mut self, name: &str, attr: &AttributeMap) {
-        let parent_tag = self.verify_parent_tag(name, &[TAG_SCXML, TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
+    fn start_executable_content(&mut self, name: &str) {
+        self.verify_parent_tag(name, &[TAG_SCXML, TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
         // TODO
     }
 
-    fn start_else(&mut self, name: &str, attr: &AttributeMap) {
+    fn start_else(&mut self, name: &str) {
         self.verify_parent_tag(name, &[TAG_IF]);
     }
 
@@ -407,10 +407,10 @@ impl ReaderState {
                 self.start_transition(attr);
             }
             TAG_SCRIPT | TAG_RAISE | TAG_SEND | TAG_LOG | TAG_ASSIGN | TAG_IF | TAG_FOR_EACH | TAG_CANCEL => {
-                self.start_executable_content(&name, attr);
+                self.start_executable_content(&name);
             }
             TAG_ELSE | TAG_ELSEIF => {
-                self.start_else(&name, attr);
+                self.start_else(&name);
             }
             _ => {
                 println!("Ignored tag {}", name)
@@ -422,9 +422,10 @@ impl ReaderState {
         if !self.current.current_tag.eq(name) {
             panic!("Illegal end-tag {:?}, expected {:?}", &name, &self.current.current_tag);
         }
+        println!("End Element {}", name);
         match name {
             TAG_SCRIPT => {
-                self.end_script(name, txt);
+                self.end_script(txt);
             }
             _ => {}
         }

@@ -1,10 +1,9 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::Deref;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-use boa_engine::{
-    Context,
-    object::ObjectInitializer,
-    property::{Attribute, PropertyDescriptor},
-};
+use boa_engine::{Context, JsResult, JsValue, object::ObjectInitializer, property::Attribute};
 
 use crate::fsm::{Data, Datamodel, DataStore};
 
@@ -14,14 +13,33 @@ pub const ECMA_SCRIPT_LC: &str = "ecmascript";
 #[derive(Debug)]
 pub struct ECMAScriptDatamodel {
     pub data: DataStore,
-
+    pub context_id: u32,
 }
+
+fn logJS(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
+    for arg in args {
+        print!("{}", arg.to_string(ctx)?);
+    }
+    println!();
+    Ok(JsValue::undefined())
+}
+
 
 impl ECMAScriptDatamodel {
     pub fn new() -> ECMAScriptDatamodel {
-        ECMAScriptDatamodel { data: DataStore::new() }
+        ECMAScriptDatamodel
+        {
+            data: DataStore::new(),
+            context_id: CONTEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
+        }
     }
 }
+
+static CONTEXT_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+thread_local!(
+    static context_map: RefCell<HashMap<u32, Box<Context>>> = RefCell::new(HashMap::new());
+);
 
 /**
  * ECMAScript data model
@@ -31,10 +49,18 @@ impl Datamodel for ECMAScriptDatamodel {
         return ECMA_SCRIPT;
     }
 
+
     fn initializeDataModel(&mut self, data: &DataStore) {
+        context_map.with(|c|
+            {
+                let mut ctx_map = c.borrow_mut();
+                ctx_map.insert(self.context_id, Box::new(Context::default()));
+                let ctx = ctx_map.get_mut(&self.context_id).unwrap();
+                ctx.register_global_builtin_function("log", 1, logJS);
+            });
         for (name, data) in &data.values
         {
-            self.data.values.insert(name.clone(), data.deref().get_copy());
+            self.data.values.insert(name.clone(), data.get_copy());
         }
     }
 
@@ -52,8 +78,25 @@ impl Datamodel for ECMAScriptDatamodel {
         println!("Log: {}", msg);
     }
 
-    fn execute(&mut self, script: &String) -> &str {
+    fn execute(&mut self, script: &String) -> String {
         println!("Execute: {}", script);
-        ""
+        let mut r: String = "".to_string();
+        context_map.with(|c| {
+            let mut cb = c.borrow_mut();
+            let ctx: &mut Context = cb.get_mut(&self.context_id).unwrap();
+            for (name, value) in &self.data.values {
+                ctx.register_global_property(name.as_str(), value.to_string(), Attribute::all());
+            }
+            match ctx.eval(script) {
+                Ok(res) => {
+                    r = res.to_string(ctx).unwrap().to_string();
+                }
+                Err(e) => {
+                    // Pretty print the error
+                    eprintln!("Uncaught {}", e.display());
+                }
+            }
+        });
+        r
     }
 }

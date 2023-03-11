@@ -2,21 +2,22 @@ extern crate core;
 
 use std::{thread, time};
 
-use crate::fsm::Event;
+use crate::fsm::{Event, Trace};
 
 mod reader;
 mod fsm;
 
 mod tests;
+#[cfg(feature = "ECMAScript")]
 mod emca_script_datamodel;
 
 fn main() {
     println!("Creating The SM:");
-    let sm = reader::read_from_xml(
+    let mut sm = reader::read_from_xml(
         r"<scxml initial='Main' datamodel='ecmascript'>
       <script>
-        print('Hello World');
-        print('Hello Again');
+        log('Hello World', ' again ');
+        log('Hello Again');
       </script>
       <state id='Main'>
         <initial>
@@ -38,6 +39,8 @@ fn main() {
       </final>
     </scxml>");
     println!("The SM: {}", sm);
+
+    sm.tracer.enableTrace(Trace::METHODS);
 
     let (threadHandle, sender) = fsm::start_fsm(sm);
 

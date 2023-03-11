@@ -1,5 +1,3 @@
-use crate::fsm::List;
-
 #[test]
 fn list_can_can_push() {
     let mut l: List<String> = List::new();

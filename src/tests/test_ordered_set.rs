@@ -1,5 +1,3 @@
-use crate::fsm::OrderedSet;
-
 #[test]
 fn ordered_set_can_add_and_delete() {
     let mut os: OrderedSet<String> = OrderedSet::new();
