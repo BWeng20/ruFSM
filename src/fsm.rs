@@ -426,6 +426,7 @@ impl<K: std::cmp::Eq + Hash + Clone, T: Clone> HashTable<K, T> {
 pub type Name = String;
 pub type StateId = u32;
 pub type DocumentId = u32;
+pub type ExecutableContentId = u32;
 pub type StateVec = Vec<State>;
 pub type StateNameMap = HashMap<Name, StateId>;
 pub type TransitionMap = HashMap<TransitionId, Transition>;
@@ -482,17 +483,28 @@ pub enum Trace {
     ALL,
 }
 
+/// Trait used to trace methods and
+/// states inside the FSM. What is traced can be controlled by
+/// [Tracer::enableTrace] and [Tracer::disableTrace], see [Trace].
 pub trait Tracer: Send + Debug {
     fn trace(&self, msg: &str);
 
+    /// Enter a sub-scope, e.g. by increase the log indentation.
     fn enter(&self);
+
+    /// Leave the current sub-scope, e.g. by decrease the log indentation.
     fn leave(&self);
 
+    /// Enable traces for the specified scope.
     fn enableTrace(&mut self, flag: Trace);
+
+    /// Disable traces for the specified scope.
     fn disableTrace(&mut self, flag: Trace);
+
+    /// Return true if the given scape is enabled.
     fn isTrace(&self, flag: Trace) -> bool;
 
-
+    /// Called by FSM if a method is entered
     fn enterMethod(&self, what: &str) {
         if self.isTrace(Trace::METHODS) {
             self.trace(format!(">>> {}", what).as_str());
@@ -500,6 +512,7 @@ pub trait Tracer: Send + Debug {
         }
     }
 
+    /// Called by FSM if a method is exited
     fn exitMethod(&self, what: &str) {
         if self.isTrace(Trace::METHODS) {
             self.leave();
@@ -507,6 +520,7 @@ pub trait Tracer: Send + Debug {
         }
     }
 
+    /// Called by FSM if a state is entered or left.
     fn traceState(&self, what: &str, s: &State) {
         if self.isTrace(Trace::STATES) {
             if s.name.is_empty() {
@@ -517,45 +531,52 @@ pub trait Tracer: Send + Debug {
         }
     }
 
+    /// Called by FSM if a state is entered. Calls [traceState].
     fn traceEnterState(&self, s: &State) {
         self.traceState("Enter", s);
     }
 
+    /// Called by FSM if a state is left. Calls [traceState].
     fn traceExitState(&self, s: &State) {
         self.traceState("Exit", s);
     }
 
+    /// Called by FSM if a event is processed.
     fn traceEvent(&self, e: &Event) {
         if self.isTrace(Trace::EVENTS) {
             self.trace(format!("Event <{}> #{}", &e.name, e.invokeid).as_str());
         }
     }
 
+    /// Called by FSM for input arguments in methods.
     fn traceArgument(&self, what: &str, d: &dyn Display) {
         if self.isTrace(Trace::ARGUMENTS) {
             self.trace(format!("In:{}:{}", what, d).as_str());
         }
     }
+
+    /// Called by FSM for results in methods.
     fn traceResult(&self, what: &str, d: &dyn Display) {
         if self.isTrace(Trace::RESULTS) {
             self.trace(format!("Out:{}:{}", what, d).as_str());
         }
     }
 
+    /// Helper method to trace a vector of ids.
     fn traceIdVec(&self, what: &str, l: &Vec<u32>) {
         self.trace(format!("{}: {}", what, vecToString(&l)).as_str());
     }
 
+    /// Helper method to trace a OrderedSet of ids.
     fn traceIdSet(&self, what: &str, l: &OrderedSet<u32>) {
         self.trace(format!("{}: {}", what, vecToString(&l.data)).as_str());
     }
 }
 
 thread_local! {
+    /// Trasce prefix for [DefaultTracer]
     static trace_prefix: RefCell<String> = RefCell::new("".to_string());
  }
-
-
 
 #[derive(Debug)]
 pub struct DefaultTracer {
@@ -612,7 +633,12 @@ impl DefaultTracer {
     }
 }
 
+/// The FSM implementation, according to W3C proposal.
 pub struct Fsm {
+    /// #W3C says:
+    /// ##Global variables
+    /// The following variables are global from the point of view of the algorithm.
+    /// Their values will be set in the procedure interpret().
     pub configuration: OrderedSet<StateId>,
     pub statesToInvoke: OrderedSet<StateId>,
     pub datamodel: Box<dyn Datamodel>,
@@ -625,7 +651,7 @@ pub struct Fsm {
     pub tracer: Box<dyn Tracer>,
 
     /// A FSM can have actual multiple initial-target-states, so this state may be artificial.
-    /// Reader have to generate a parent state if needed.
+    /// Reader has to generate a parent state if needed.
     /// This state also serve as the "scxml" state element were mentioned.
     pub pseudo_root: StateId,
 
@@ -635,7 +661,7 @@ pub struct Fsm {
      */
     pub states: Vec<State>,
     pub statesNames: StateNameMap,
-    pub executableContent: HashMap<ExecutableContentId, ExecutableContent>,
+    pub executableContent: HashMap<ExecutableContentId, String>,
     pub transitions: TransitionMap,
 
     pub data: DataStore,
@@ -775,7 +801,7 @@ impl Fsm {
         } else { std::cmp::Ordering::Less }
     }
 
-    fn executableDocumentOrder(&self, t1: &ExecutableContentId, t2: &ExecutableContentId) -> ::std::cmp::Ordering {
+    fn executableDocumentOrder(t1: &ExecutableContentId, t2: &ExecutableContentId) -> ::std::cmp::Ordering {
         if t1 > t2 {
             std::cmp::Ordering::Greater
         } else if t1 == t2 {
@@ -784,7 +810,7 @@ impl Fsm {
     }
 
 
-    fn invokeDocumentOrder(&self, s1: &Invoke, s2: &Invoke) -> ::std::cmp::Ordering {
+    fn invokeDocumentOrder(s1: &Invoke, s2: &Invoke) -> ::std::cmp::Ordering {
         if s1.id > s2.id {
             std::cmp::Ordering::Greater
         } else if s1.id == s2.id {
@@ -993,7 +1019,7 @@ impl Fsm {
                 &|s1, s2| { self.stateEntryOrder(s1, s2) }).iterator()
             {
                 let state = self.get_state_by_id(*sid);
-                for inv in state.invoke.sort(&|i1, i2| { self.invokeDocumentOrder(i1, i2) }).iterator() {
+                for inv in state.invoke.sort(&|i1, i2| { Fsm::invokeDocumentOrder(i1, i2) }).iterator() {
                     self.invoke(inv);
                 }
             }
@@ -1072,15 +1098,19 @@ impl Fsm {
         let statesToExit = self.configuration.toList().sort(
             &|s1, s2| { self.stateExitOrder(s1, s2) });
         for sid in statesToExit.iterator() {
+            let mut content: Vec<ExecutableContentId> = Vec::new();
             let mut invokes: Vec<Invoke> = Vec::new();
             {
                 let s = self.get_state_by_id(*sid);
-                for content in s.onexit.sort(&|e1, e2| { self.executableDocumentOrder(e1, e2) }).iterator() {
-                    self.executeContent(*content);
+                for ct in s.onexit.sort(&|e1, e2| { Fsm::executableDocumentOrder(e1, e2) }).iterator() {
+                    content.push(*ct);
                 }
                 for inv in s.invoke.iterator() {
                     invokes.push(inv.clone());
                 }
+            }
+            for ct in content {
+                self.executeContent(ct);
             }
             for inv in invokes {
                 self.cancelInvoke(&inv)
@@ -1151,18 +1181,24 @@ impl Fsm {
             let mut states: List<StateId> = List::new();
             states.push(*sid);
             states.appendSet(&self.getProperAncestors(*sid, 0));
-            'outer: for s in states.iterator() {
+            let mut condT = Vec::new();
+            for s in states.iterator() {
                 let state = self.get_state_by_id(*s);
                 for t in self.to_transition_list(&state.transitions)
                     .sort(&|t1: &&Transition, t2: &&Transition| { self.transitionDocumentOrder(t1, t2) }).iterator() {
-                    if t.events.is_empty() && self.conditionMatch(t) {
-                        enabledTransitions.add(t.id);
-                        break 'outer;
+                    if t.events.is_empty() {
+                        condT.push(t.id);
                     }
                 }
             }
-            enabledTransitions = self.removeConflictingTransitions(&enabledTransitions);
+            for ct in condT {
+                if self.conditionMatch(ct) {
+                    enabledTransitions.add(ct);
+                    break;
+                }
+            }
         }
+        enabledTransitions = self.removeConflictingTransitions(&enabledTransitions);
         self.tracer.traceResult("enabledTransitions", &enabledTransitions);
         self.tracer.exitMethod("selectEventlessTransitions");
         enabledTransitions
@@ -1194,7 +1230,7 @@ impl Fsm {
             .filterBy(&|sid| -> bool { self.isAtomicStateId(sid) }).sort(
             &|s1, s2| { self.stateDocumentOrder(s1, s2) });
         for state in atomicStates.iterator() {
-            'outer:
+            let mut condT = Vec::new();
             for sid in List::from_array(&[*state])
                 .appendSet(&self.getProperAncestors(*state, 0)).iterator() {
                 let s = self.get_state_by_id(*sid);
@@ -1205,15 +1241,19 @@ impl Fsm {
 
                 transition.sort_by(&|t1: &&Transition, t2: &&Transition| { self.transitionDocumentOrder(t1, t2) });
                 for t in transition {
-                    if (!t.events.is_empty()) && self.nameMatch(&t.events, &event.name) && self.conditionMatch(t)
-                    {
-                        enabledTransitions.add(t.id);
-                        break 'outer;
+                    if (!t.events.is_empty()) && self.nameMatch(&t.events, &event.name) {
+                        condT.push(t.id);
                     }
-                    enabledTransitions = self.removeConflictingTransitions(&enabledTransitions);
+                }
+            }
+            for ct in condT {
+                if self.conditionMatch(ct) {
+                    enabledTransitions.add(ct);
+                    break;
                 }
             }
         }
+        enabledTransitions = self.removeConflictingTransitions(&enabledTransitions);
         self.tracer.traceResult("enabledTransitions", &enabledTransitions);
         self.tracer.exitMethod("selectTransitions");
         enabledTransitions
@@ -1371,11 +1411,11 @@ impl Fsm {
         }
         self.historyValue.putAll(&ahistory);
         for sid in statesToExitSorted.iterator() {
-            let s = self.get_state_by_id(*sid);
             let exe: List<ExecutableContentId> = List::new();
             {
+                let s = self.get_state_by_id(*sid);
                 self.tracer.traceExitState(s);
-                exe.append(&s.onexit.sort(&|e1, e2| { self.executableDocumentOrder(e1, e2) }));
+                exe.append(&s.onexit.sort(&|e1, e2| { Fsm::executableDocumentOrder(e1, e2) }));
             }
 
             for content in exe.iterator() {
@@ -1384,6 +1424,7 @@ impl Fsm {
 
             let mut invokeList: List<InvokeId> = List::new();
             {
+                let s = self.get_state_by_id(*sid);
                 for inv in s.invoke.iterator() {
                     invokeList.push(inv.invokeid);
                 }
@@ -1464,21 +1505,31 @@ impl Fsm {
                     stateS.isFirstEntry = false;
                 }
             }
-            let stateS: &State = self.get_state_by_id(*s);
-            for content in stateS.onentry
-                .sort(&|e1: &ExecutableContentId, e2: &ExecutableContentId| { self.executableDocumentOrder(e1, e2) }).iterator() {
-                self.executeContent(*content);
-            }
-            if statesForDefaultEntry.isMember(&s) {
+            let mut exe = Vec::new();
+            {
                 let stateS: &State = self.get_state_by_id(*s);
-                if stateS.initial > 0 {
-                    self.executeContent(self.get_transition_by_id(stateS.initial).content);
+                for content in stateS.onentry
+                    .sort(&|e1: &ExecutableContentId, e2: &ExecutableContentId| { Fsm::executableDocumentOrder(e1, e2) }).iterator() {
+                    exe.push(*content);
+                }
+                if statesForDefaultEntry.isMember(&s) {
+                    let stateS: &State = self.get_state_by_id(*s);
+                    if stateS.initial > 0 {
+                        exe.push(self.get_transition_by_id(stateS.initial).content);
+                    }
+                }
+                if defaultHistoryContent.has(*s) {
+                    exe.push(*defaultHistoryContent.get(*s));
                 }
             }
-            if defaultHistoryContent.has(*s) {
-                self.executeContent(*defaultHistoryContent.get(*s));
+
+            for ct in exe {
+                if ct > 0 {
+                    self.executeContent(ct);
+                }
             }
-            if self.isFinalState(stateS) {
+
+            if self.isFinalStateId(*s) {
                 let stateS = self.get_state_by_id(*s);
                 let parent: StateId = stateS.parent;
                 if self.isSCXMLElement(parent) {
@@ -1504,9 +1555,10 @@ impl Fsm {
         self.internalQueue.enqueue(event);
     }
 
-    pub fn executeContent(&self, contentId: ExecutableContentId) {
-        self.tracer.trace("TODO executeContent");
-        // TODO
+    pub fn executeContent(&mut self, contentId: ExecutableContentId) {
+        self.tracer.enterMethod("executeContent");
+        self.datamodel.execute(self.executableContent.get(&contentId).unwrap());
+        self.tracer.exitMethod("executeContent");
     }
 
     pub fn isParallelState(&self, state: StateId) -> bool {
@@ -1582,7 +1634,9 @@ impl Fsm {
     fn executeTransitionContent(&mut self, enabledTransitions: &List<TransitionId>) {
         for tid in enabledTransitions.iterator() {
             let t = self.get_transition_by_id(*tid);
-            self.executeContent(t.content);
+            if t.content > 0 {
+                self.executeContent(t.content);
+            }
         }
     }
 
@@ -1910,7 +1964,7 @@ impl Fsm {
             }
             result = currState == state2;
         }
-        self.tracer.traceResult("", &result);
+        self.tracer.traceResult("result", &result);
         self.tracer.exitMethod("isDescendant");
         result
     }
@@ -1976,12 +2030,33 @@ impl Fsm {
         todo!()
     }
 
-    fn conditionMatch(&self, t: &Transition) -> bool
+
+    /// #W3C says:
+    /// 5.9.1 Conditional Expressions
+    /// Conditional expressions are used inside the 'cond' attribute of \<transition\>, \<if\> and \<elseif\>.
+    /// If a conditional expression cannot be evaluated as a boolean value ('true' or 'false') or if
+    /// its evaluation causes an error, the SCXML Processor must treat the expression as if it evaluated to
+    /// 'false' and must place the error 'error.execution' in the internal event queue.
+    ///
+    /// See [Datamodel::executeCondition]
+    fn conditionMatch(&mut self, tid: TransitionId) -> bool
     {
+        let t = self.get_transition_by_id(tid);
         if t.content != 0 {
-            todo!()
+            match self.datamodel.executeCondition(self.executableContent.get(&t.content).unwrap()) {
+                Ok(v) => v,
+                Err(e) => {
+                    self.enqueue_internal(Event {
+                        name: "error.execution".to_string(),
+                        done_data: None,
+                        invokeid: 0,
+                    });
+                    false
+                }
+            }
+        } else {
+            true
         }
-        true
     }
 
     fn nameMatch(&self, events: &Vec<String>, name: &String) -> bool
@@ -2255,7 +2330,7 @@ pub struct Transition {
 
     // TODO: Possibly we need some type to express event ids
     pub events: Vec<String>,
-    pub cond: Option<Box<dyn ConditionalExpression>>,
+    pub cond: Option<String>,
     pub source: StateId,
     pub target: Vec<StateId>,
     pub transition_type: TransitionType,
@@ -2292,52 +2367,6 @@ pub trait Data: Send + Debug + ToString {
     fn get_copy(&self) -> Box<dyn Data>;
 }
 
-pub struct IntegerData {
-    pub value: i64,
-}
-
-impl Debug for IntegerData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl ToString for IntegerData {
-    fn to_string(&self) -> String {
-        self.value.to_string()
-    }
-}
-
-impl Data for IntegerData {
-    fn get_copy(&self) -> Box<dyn Data> {
-        Box::new(IntegerData { value: self.value })
-    }
-}
-
-pub struct StringData {
-    pub value: String,
-}
-
-impl Debug for StringData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl ToString for StringData {
-    fn to_string(&self) -> String {
-        self.value.clone()
-    }
-}
-
-impl Data for StringData {
-    fn get_copy(&self) -> Box<dyn Data> {
-        Box::new(StringData {
-            value: self.value.clone(),
-        })
-    }
-}
-
 pub trait Datamodel: Debug + Send {
     fn get_name(self: &Self) -> &str;
     fn initializeDataModel(self: &mut Self, data: &DataStore);
@@ -2346,6 +2375,13 @@ pub trait Datamodel: Debug + Send {
     fn clear(&mut self);
     fn log(&mut self, msg: &String);
     fn execute(&mut self, script: &String) -> String;
+
+    /// #W3C says:
+    /// The set of operators in conditional expressions varies depending on the data model,
+    /// but all data models must support the 'In()' predicate, which takes a state ID as its
+    /// argument and returns true if the state machine is in that state.
+    /// Conditional expressions in conformant SCXML documents should not have side effects.
+    fn executeCondition(&self, script: &String) -> Result<bool, String>;
 }
 
 pub fn createDatamodel(name: &str) -> Box<dyn Datamodel> {
@@ -2430,37 +2466,12 @@ impl Datamodel for NullDatamodel {
     fn execute(&mut self, script: &String) -> String {
         "".to_string()
     }
-}
 
-
-/// A boolean expression, interpreted by the used datamodel-language.
-pub trait ConditionalExpression: Send + Debug {
-    fn execute(self: &Self, data: &mut dyn Datamodel) -> bool;
-}
-
-#[derive(Debug)]
-pub struct ScriptConditionalExpression {
-    pub script: String,
-}
-
-impl ScriptConditionalExpression {
-    pub fn new(s: &String) -> ScriptConditionalExpression {
-        ScriptConditionalExpression {
-            script: s.clone()
-        }
+    fn executeCondition(&self, script: &String) -> Result<bool, String> {
+        Result::Ok(false)
     }
 }
 
-impl ConditionalExpression for ScriptConditionalExpression {
-    fn execute(self: &Self, data: &mut dyn Datamodel) -> bool {
-        data.execute(&self.script).parse().unwrap()
-    }
-}
-
-pub type ExecutableContentId = u32;
-
-#[derive(Debug)]
-pub struct ExecutableContent {}
 
 ////////////////////////////////////////
 //// Display support

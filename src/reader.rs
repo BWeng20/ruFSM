@@ -8,7 +8,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, ScriptConditionalExpression, State, StateId, Transition};
+use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition};
 
 pub type AttributeMap = HashMap<String, String>;
 
@@ -308,7 +308,7 @@ impl ReaderState {
 
         let cond = attr.get(TAG_COND);
         if cond.is_some() {
-            t.cond = Some(Box::new(ScriptConditionalExpression::new(cond.unwrap())));
+            t.cond = Some(cond.unwrap().clone());
         }
 
         let mut target = attr.get(TAG_TARGET);

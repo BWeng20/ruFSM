@@ -40,7 +40,7 @@ fn main() {
     </scxml>");
     println!("The SM: {}", sm);
 
-    sm.tracer.enableTrace(Trace::METHODS);
+    sm.tracer.enableTrace(Trace::ALL);
 
     let (threadHandle, sender) = fsm::start_fsm(sm);
 
