@@ -1,10 +1,12 @@
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::ops::DerefMut;
+use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -437,11 +439,40 @@ pub enum BindingType {
     Late,
 }
 
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum EventType {
+    /// for events raised by the platform itself, such as error events
+    platform,
+    /// for events raised by \<raise\> and \<send\> with target '_internal'
+    internal,
+    /// for all other events
+    external,
+
+}
+
+/// #W3c says:
+/// ##The Internal Structure of Events
+/// Events have an internal structure which is reflected in the _event variable. This variable can be accessed to condition transitions (via boolean expressions in the 'cond' attribute) or to update the data model (via <assign>), etc.
+///
+/// The SCXML Processor must ensure that the following fields are present in all events, whether internal or external.
+///
+/// - name. This is a character string giving the name of the event. The SCXML Processor must set the name field to the name of this event. It is what is matched against the 'event' attribute of \<transition\>. Note that transitions can do additional tests by using the value of this field inside boolean expressions in the 'cond' attribute.
+/// - type. This field describes the event type. The SCXML Processor must set it to: "platform" (for events raised by the platform itself, such as error events), "internal" (for events raised by \<raise\> and \<send\> with target '_internal') or "external" (for all other events).
+/// - sendid. If the sending entity has specified a value for this, the Processor must set this field to that value (see C Event I/O Processors for details). Otherwise, in the case of error events triggered by a failed attempt to send an event, the Processor must set this field to the send id of the triggering <send> element. Otherwise it must leave it blank.
+/// - origin. This is a URI, equivalent to the 'target' attribute on the \<send\> element. For external events, the SCXML Processor should set this field to a value which, when used as the value of 'target', will allow the receiver of the event to <send> a response back to the originating entity via the Event I/O Processor specified in 'origintype'. For internal and platform events, the Processor must leave this field blank.
+/// - origintype. This is equivalent to the 'type' field on the <send> element. For external events, the SCXML Processor should set this field to a value which, when used as the value of 'type', will allow the receiver of the event to <send> a response back to the originating entity at the URI specified by 'origin'. For internal and platform events, the Processor must leave this field blank.
+/// - invokeid. If this event is generated from an invoked child process, the SCXML Processor must set this field to the invoke id of the invocation that triggered the child process. Otherwise it must leave it blank.
+/// - data. This field contains whatever data the sending entity chose to include in this event. The receiving SCXML Processor should reformat this data to match its data model, but must not otherwise modify it. If the conversion is not possible, the Processor must leave the field blank and must place an error 'error.execution' in the internal event queue.
+///
 #[derive(Debug)]
 pub struct Event {
     pub name: String,
-    pub done_data: Option<DoneData>,
+    pub etype: EventType,
+    pub sendid: u32,
+    pub origin: String,
+    pub origintype: String,
     pub invokeid: InvokeId,
+    pub data: Option<DoneData>,
 }
 
 impl ToString for Event {
@@ -460,15 +491,36 @@ impl Event {
     pub fn new(prefix: &str, id: u32, ev_data: &Option<DoneData>) -> Event {
         Event {
             name: format!("{}{}", prefix, id),
-            done_data: ev_data.clone(),
+            etype: EventType::external,
+            sendid: 0,
+            origin: "".to_string(),
+            data: ev_data.clone(),
             invokeid: 0,
+            origintype: "".to_string(),
         }
     }
+
+    pub fn error(name: &str) -> Event {
+        Event {
+            name: format!("error.{}", name),
+            etype: EventType::external,
+            sendid: 0,
+            origin: "".to_string(),
+            data: None,
+            invokeid: 0,
+            origintype: "".to_string(),
+        }
+    }
+
     pub fn get_copy(&self) -> Box<Event> {
         Box::new(Event {
             invokeid: self.invokeid,
-            done_data: self.done_data.clone(),
+            data: self.data.clone(),
             name: self.name.clone(),
+            etype: self.etype,
+            sendid: self.sendid,
+            origin: self.origin.clone(),
+            origintype: self.origintype.clone(),
         })
     }
 }
@@ -520,6 +572,35 @@ pub trait Tracer: Send + Debug {
         }
     }
 
+    /// Called by FSM if an internal event is send
+    fn event_internal_send(&self, what: &Event) {
+        if self.isTrace(Trace::EVENTS) {
+            self.trace(format!("Int<- {} #{}", what.name, what.invokeid).as_str());
+        }
+    }
+
+    /// Called by FSM if an internal event is received
+    fn event_internal_received(&self, what: &Event) {
+        if self.isTrace(Trace::EVENTS) {
+            self.trace(format!("Int-> {} #{}", what.name, what.invokeid).as_str());
+        }
+    }
+
+    /// Called by FSM if an external event is send
+    fn event_external_send(&self, what: &Event) {
+        if self.isTrace(Trace::EVENTS) {
+            self.trace(format!("Ext<- {} #{}", what.name, what.invokeid).as_str());
+        }
+    }
+
+    /// Called by FSM if an external event is received
+    fn event_external_received(&self, what: &Event) {
+        if self.isTrace(Trace::EVENTS) {
+            self.trace(format!("Ext-> {} #{}", what.name, what.invokeid).as_str());
+        }
+    }
+
+
     /// Called by FSM if a state is entered or left.
     fn traceState(&self, what: &str, s: &State) {
         if self.isTrace(Trace::STATES) {
@@ -541,12 +622,6 @@ pub trait Tracer: Send + Debug {
         self.traceState("Exit", s);
     }
 
-    /// Called by FSM if a event is processed.
-    fn traceEvent(&self, e: &Event) {
-        if self.isTrace(Trace::EVENTS) {
-            self.trace(format!("Event <{}> #{}", &e.name, e.invokeid).as_str());
-        }
-    }
 
     /// Called by FSM for input arguments in methods.
     fn traceArgument(&self, what: &str, d: &dyn Display) {
@@ -585,9 +660,7 @@ pub struct DefaultTracer {
 
 impl Tracer for DefaultTracer {
     fn trace(&self, msg: &str) {
-        unsafe {
-            println!("{}{}", DefaultTracer::get_prefix(), msg);
-        }
+        println!("{}{}", DefaultTracer::get_prefix(), msg);
     }
 
     fn enter(&self) {
@@ -633,21 +706,47 @@ impl DefaultTracer {
     }
 }
 
-/// The FSM implementation, according to W3C proposal.
-pub struct Fsm {
-    /// #W3C says:
-    /// ##Global variables
-    /// The following variables are global from the point of view of the algorithm.
-    /// Their values will be set in the procedure interpret().
+/// #W3C says:
+/// ##Global variables
+/// The following variables are global from the point of view of the algorithm.
+/// Their values will be set in the procedure interpret().
+/// #Actual Implementation
+/// In the W3C algorithm the datamodel is simple a global variable.
+/// As the datamodel needs access to other global variables and rust doesn't like
+/// accessing data of parents from inside a member, most global data is moved this
+/// struct that is owned by the datamodel.
+#[derive(Debug)]
+pub struct GlobalData {
     pub configuration: OrderedSet<StateId>,
     pub statesToInvoke: OrderedSet<StateId>,
-    pub datamodel: Box<dyn Datamodel>,
-    pub internalQueue: Queue<Event>,
-    pub externalQueue: BlockingQueue<Box<Event>>,
     pub historyValue: HashTable<StateId, OrderedSet<StateId>>,
     pub running: bool,
     pub binding: BindingType,
     pub version: String,
+    pub statesNames: StateNameMap,
+}
+
+impl GlobalData {
+    pub fn new() -> GlobalData {
+        GlobalData {
+            configuration: OrderedSet::new(),
+            version: "1.0".to_string(),
+            historyValue: HashTable::new(),
+            running: false,
+            statesToInvoke: OrderedSet::new(),
+            binding: BindingType::Early,
+            statesNames: StateNameMap::new(),
+        }
+    }
+}
+
+
+/// The FSM implementation, according to W3C proposal.
+pub struct Fsm {
+    pub datamodel: Box<dyn Datamodel>,
+
+    pub internalQueue: Queue<Event>,
+    pub externalQueue: BlockingQueue<Box<Event>>,
     pub tracer: Box<dyn Tracer>,
 
     /// A FSM can have actual multiple initial-target-states, so this state may be artificial.
@@ -660,7 +759,6 @@ pub struct Fsm {
      * If a state has no declared id, one is generated.
      */
     pub states: Vec<State>,
-    pub statesNames: StateNameMap,
     pub executableContent: HashMap<ExecutableContentId, String>,
     pub transitions: TransitionMap,
 
@@ -673,7 +771,7 @@ pub struct Fsm {
 
 impl Debug for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fsm{{v:{} root:{} states:", self.version, self.pseudo_root)?;
+        write!(f, "Fsm{{v:{} root:{} states:", self.global().borrow().version, self.pseudo_root)?;
         display_state_map(&self.states, f)?;
         display_transition_map(&self.transitions, f)?;
         write!(f, "}}")
@@ -716,17 +814,10 @@ fn display_transition_map(sm: &TransitionMap, f: &mut Formatter<'_>) -> std::fmt
 impl Fsm {
     pub fn new() -> Fsm {
         Fsm {
-            configuration: OrderedSet::new(),
-            version: "1.0".to_string(),
             datamodel: createDatamodel(NULL_DATAMODEL),
             internalQueue: Queue::new(),
             externalQueue: BlockingQueue::new(),
-            historyValue: HashTable::new(),
-            running: false,
-            statesToInvoke: OrderedSet::new(),
-            binding: BindingType::Early,
             states: Vec::new(),
-            statesNames: HashMap::new(),
             executableContent: HashMap::new(),
             transitions: HashMap::new(),
             data: DataStore::new(),
@@ -737,14 +828,19 @@ impl Fsm {
         }
     }
 
+    /// Get global data
+    pub(crate) fn global(&self) -> Rc<RefCell<GlobalData>> {
+        self.datamodel.global()
+    }
+
     pub fn get_state_by_name(&self, name: &Name) -> &State
     {
-        self.get_state_by_id(*self.statesNames.get(name).unwrap())
+        self.get_state_by_id(*self.global().borrow().statesNames.get(name).unwrap())
     }
 
     pub fn get_state_by_name_mut(&mut self, name: &Name) -> &mut State
     {
-        self.get_state_by_id_mut(*self.statesNames.get(name).unwrap())
+        self.get_state_by_id_mut(*self.global().borrow().statesNames.get(name).unwrap())
     }
 
     /// Gets a state by id.
@@ -857,15 +953,13 @@ impl Fsm {
             self.failWithError()
         }
         self.expandScxmlSource();
-        self.configuration = OrderedSet::new();
-        self.statesToInvoke.clear();
         self.internalQueue.clear();
-        self.historyValue.clear();
+        self.global().borrow_mut().historyValue.clear();
         self.datamodel.clear();
-        if self.binding == BindingType::Early {
-            self.datamodel.deref_mut().initializeDataModel(&self.data);
+        if self.global().borrow().binding == BindingType::Early {
+            self.datamodel.initializeDataModel(&self.data);
         }
-        self.running = true;
+        self.global().borrow_mut().running = true;
         self.executeGlobalScriptElement();
 
         let mut initalStates = List::new();
@@ -987,12 +1081,12 @@ impl Fsm {
     /// ```
     fn mainEventLoop(&mut self) {
         self.tracer.enterMethod("mainEventLoop");
-        while self.running {
+        while self.global().borrow().running {
             let mut enabledTransitions;
             let mut macrostepDone = false;
             // Here we handle eventless transitions and transitions
             // triggered by internal events until macrostep is complete
-            while self.running && !macrostepDone {
+            while self.global().borrow().running && !macrostepDone {
                 enabledTransitions = self.selectEventlessTransitions();
                 if enabledTransitions.isEmpty() {
                     if self.internalQueue.isEmpty() {
@@ -1001,6 +1095,7 @@ impl Fsm {
                         self.tracer.enterMethod("internalQueue.dequeue");
                         let internalEvent = self.internalQueue.dequeue();
                         self.tracer.exitMethod("internalQueue.dequeue");
+                        self.tracer.event_internal_received(&internalEvent);
                         self.datamodel.set(&"_event".to_string(), internalEvent.get_copy());
                         enabledTransitions = self.selectTransitions(&internalEvent);
                     }
@@ -1010,12 +1105,12 @@ impl Fsm {
                 }
             }
             // either we're in a final state, and we break out of the loop
-            if !self.running {
+            if !self.global().borrow().running {
                 break;
             }
             // or we've completed a macrostep, so we start a new macrostep by waiting for an external event
             // Here we invoke whatever needs to be invoked. The implementation of 'invoke' is platform-specific
-            for sid in self.statesToInvoke.sort(
+            for sid in self.global().borrow().statesToInvoke.sort(
                 &|s1, s2| { self.stateEntryOrder(s1, s2) }).iterator()
             {
                 let state = self.get_state_by_id(*sid);
@@ -1023,7 +1118,7 @@ impl Fsm {
                     self.invoke(inv);
                 }
             }
-            self.statesToInvoke.clear();
+            self.global().borrow_mut().statesToInvoke.clear();
             // Invoking may have raised internal error events and we iterate to handle them
             if !self.internalQueue.isEmpty() {
                 continue;
@@ -1034,8 +1129,9 @@ impl Fsm {
             self.tracer.enterMethod("externalQueue.dequeue");
             let externalEvent = self.externalQueue.dequeue();
             self.tracer.exitMethod("externalQueue.dequeue");
+            self.tracer.event_external_received(&externalEvent);
             if self.isCancelEvent(&externalEvent) {
-                self.running = false;
+                self.global().borrow_mut().running = false;
                 continue;
             }
             let mut toFinalize: Vec<InvokeId> = Vec::new();
@@ -1043,10 +1139,9 @@ impl Fsm {
             {
                 let invokeId = externalEvent.invokeid;
                 self.datamodel.set(&"_event".to_string(), externalEvent.get_copy());
-                for sid in self.configuration.iterator() {
+                for sid in self.global().borrow().configuration.iterator() {
                     let state = self.get_state_by_id(*sid);
                     for inv in state.invoke.iterator() {
-                        let mut sendIt = false;
                         if inv.invokeid == invokeId {
                             toFinalize.push(inv.id);
                         }
@@ -1095,7 +1190,7 @@ impl Fsm {
     ///             returnDoneEvent(s.donedata)
     /// ```
     fn exitInterpreter(&mut self) {
-        let statesToExit = self.configuration.toList().sort(
+        let statesToExit = self.global().borrow().configuration.toList().sort(
             &|s1, s2| { self.stateExitOrder(s1, s2) });
         for sid in statesToExit.iterator() {
             let mut content: Vec<ExecutableContentId> = Vec::new();
@@ -1115,7 +1210,7 @@ impl Fsm {
             for inv in invokes {
                 self.cancelInvoke(&inv)
             }
-            self.configuration.delete(sid);
+            self.global().borrow_mut().configuration.delete(sid);
             {
                 let s = self.get_state_by_id(*sid);
                 if self.isFinalState(s) && self.isSCXMLElement(s.parent) {
@@ -1173,7 +1268,7 @@ impl Fsm {
         self.tracer.enterMethod("selectEventlessTransitions");
 
         let mut enabledTransitions: OrderedSet<TransitionId> = OrderedSet::new();
-        let atomicStates = self.configuration.toList()
+        let atomicStates = self.global().borrow().configuration.toList()
             .filterBy(&|sid| -> bool { self.isAtomicState(self.get_state_by_id(*sid)) })
             .sort(&|s1, s2| { self.stateDocumentOrder(s1, s2) });
         self.tracer.traceArgument("atomicStates", &atomicStates);
@@ -1224,9 +1319,8 @@ impl Fsm {
     /// ```
     fn selectTransitions(&mut self, event: &Event) -> OrderedSet<TransitionId> {
         self.tracer.enterMethod("selectTransitions");
-        self.tracer.trace(format!("->Event: {}", &event.name).as_str());
         let mut enabledTransitions: OrderedSet<TransitionId> = OrderedSet::new();
-        let atomicStates = self.configuration.toList()
+        let atomicStates = self.global().borrow().configuration.toList()
             .filterBy(&|sid| -> bool { self.isAtomicStateId(sid) }).sort(
             &|s1, s2| { self.stateDocumentOrder(s1, s2) });
         for state in atomicStates.iterator() {
@@ -1312,9 +1406,8 @@ impl Fsm {
             let filteredTransitionList = filteredTransitions.toList();
             for tid2 in filteredTransitionList.iterator()
             {
-                let t2 = self.get_transition_by_id(*tid2);
                 if self.computeExitSet(&List::from_array(&[*tid1])).hasIntersection(&self.computeExitSet(&List::from_array(&[*tid2]))) {
-                    let t2obj = self.get_transition_by_id(*tid2);
+                    let t2 = self.get_transition_by_id(*tid2);
                     if self.isDescendant(t1.source, t2.source) {
                         transitionsToRemove.add(tid2);
                     } else {
@@ -1385,13 +1478,13 @@ impl Fsm {
 
         let statesToExit = self.computeExitSet(enabledTransitions);
         for s in statesToExit.iterator() {
-            self.statesToInvoke.delete(s);
+            self.global().borrow_mut().statesToInvoke.delete(s);
         }
         let statesToExitSorted = statesToExit.sort(
             &|s1, s2| { self.stateExitOrder(s1, s2) });
         let mut ahistory: HashTable<StateId, OrderedSet<StateId>> = HashTable::new();
 
-        let configStateList = self.set_to_state_list(&self.configuration);
+        let configStateList = self.set_to_state_list(&self.global().borrow().configuration);
 
         for sid in statesToExitSorted.iterator() {
             let s = self.get_state_by_id(*sid);
@@ -1404,12 +1497,12 @@ impl Fsm {
                             &|s0| -> bool { self.isAtomicState(*s0) && self.isDescendant(s0.id, s.id) }));
                     ahistory.putMove(h.id, stateIdList);
                 } else {
-                    ahistory.put(h.id, &self.configuration.toList().filterBy(
+                    ahistory.put(h.id, &self.global().borrow().configuration.toList().filterBy(
                         &|s0| -> bool { self.get_state_by_id(*s0).parent == s.id }).toSet());
                 }
             }
         }
-        self.historyValue.putAll(&ahistory);
+        self.global().borrow_mut().historyValue.putAll(&ahistory);
         for sid in statesToExitSorted.iterator() {
             let exe: List<ExecutableContentId> = List::new();
             {
@@ -1434,7 +1527,7 @@ impl Fsm {
                 self.cancelInvokeId(*invokeId);
             }
 
-            self.configuration.delete(sid)
+            self.global().borrow_mut().configuration.delete(sid)
         }
         self.tracer.exitMethod("exitStates");
     }
@@ -1485,7 +1578,7 @@ impl Fsm {
     /// ```
     fn enterStates(&mut self, enabledTransitions: &List<StateId>) {
         self.tracer.enterMethod("enterStates");
-        let binding = self.binding;
+        let binding = self.global().borrow().binding;
         let mut statesToEnter = OrderedSet::new();
         let mut statesForDefaultEntry = OrderedSet::new();
 
@@ -1496,8 +1589,8 @@ impl Fsm {
             {
                 self.tracer.traceEnterState(&self.get_state_by_id(*s));
             }
-            self.configuration.add(*s);
-            self.statesToInvoke.add(*s);
+            self.global().borrow_mut().configuration.add(*s);
+            self.global().borrow_mut().statesToInvoke.add(*s);
             {
                 let stateS: &mut State = self.get_state_by_id_mut(*s);
                 if binding == BindingType::Late && stateS.isFirstEntry {
@@ -1533,7 +1626,7 @@ impl Fsm {
                 let stateS = self.get_state_by_id(*s);
                 let parent: StateId = stateS.parent;
                 if self.isSCXMLElement(parent) {
-                    self.running = false
+                    self.global().borrow_mut().running = false
                 } else {
                     self.enqueue_internal(Event::new("done.state.", parent, &stateS.donedata));
                     let stateParent = self.get_state_by_id(parent);
@@ -1552,6 +1645,7 @@ impl Fsm {
 
     /// Put an event into the internal queue.
     pub fn enqueue_internal(&mut self, event: Event) {
+        self.tracer.event_internal_send(&event);
         self.internalQueue.enqueue(event);
     }
 
@@ -1611,7 +1705,7 @@ impl Fsm {
             let t = self.get_transition_by_id(*tid);
             if !t.target.is_empty() {
                 let domain = self.getTransitionDomain(t);
-                for s in self.configuration.iterator() {
+                for s in self.global().borrow().configuration.iterator() {
                     if self.isDescendant(*s, domain) {
                         statesToExit.add(*s);
                     }
@@ -1720,14 +1814,13 @@ impl Fsm {
 
         let state = self.get_state_by_id(sid);
         if self.isHistoryState(sid) {
-            self.tracer.trace("isHistoryState");
-            if self.historyValue.has(sid) {
-                for s in self.historyValue.get(state.id).iterator()
+            if self.global().borrow().historyValue.has(sid) {
+                for s in self.global().borrow().historyValue.get(sid).iterator()
                 {
-                    self.addDescendantStatesToEnter(sid, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                    self.addDescendantStatesToEnter(*s, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
                 }
-                for s in self.historyValue.get(sid).iterator() {
-                    self.addAncestorStatesToEnter(sid, state.parent, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
+                for s in self.global().borrow().historyValue.get(sid).iterator() {
+                    self.addAncestorStatesToEnter(*s, state.parent, statesToEnter, statesForDefaultEntry, defaultHistoryContent);
                 }
             } else {
                 // A history state have exactly one transition which specified the default history configuration.
@@ -1835,7 +1928,7 @@ impl Fsm {
         self.tracer.enterMethod("getTransitionDomain");
         self.tracer.traceArgument("t", &t);
         let tstates = self.getEffectiveTargetStates(t);
-        let mut domain;
+        let domain;
         if tstates.isEmpty() {
             domain = 0;
         } else if t.transition_type == TransitionType::Internal &&
@@ -1904,8 +1997,8 @@ impl Fsm {
         let mut targets: OrderedSet<StateId> = OrderedSet::new();
         for sid in &transition.target {
             if self.isHistoryState(*sid) {
-                if self.historyValue.has(*sid) {
-                    targets.union(self.historyValue.get(*sid));
+                if self.global().borrow().historyValue.has(*sid) {
+                    targets.union(self.global().borrow().historyValue.get(*sid));
                 } else {
                     let s = self.get_state_by_id(*sid);
                     // History states have exactly one "transition"
@@ -1954,7 +2047,7 @@ impl Fsm {
         self.tracer.enterMethod("isDescendant");
         self.tracer.traceArgument("state1", &state1);
         self.tracer.traceArgument("state2", &state2);
-        let mut result;
+        let result;
         if state1 == 0 || state2 == 0 || state1 == state2 {
             result = false;
         } else {
@@ -2046,11 +2139,7 @@ impl Fsm {
             match self.datamodel.executeCondition(self.executableContent.get(&t.content).unwrap()) {
                 Ok(v) => v,
                 Err(e) => {
-                    self.enqueue_internal(Event {
-                        name: "error.execution".to_string(),
-                        done_data: None,
-                        invokeid: 0,
-                    });
+                    self.enqueue_internal(Event::error("execution"));
                     false
                 }
             }
@@ -2367,25 +2456,60 @@ pub trait Data: Send + Debug + ToString {
     fn get_copy(&self) -> Box<dyn Data>;
 }
 
+/// Datamodel interface trait.
+/// #W3C says:
+/// The Data Model offers the capability of storing, reading, and modifying a set of data that is internal to the state machine.
+/// This specification does not mandate any specific data model, but instead defines a set of abstract capabilities that can
+/// be realized by various languages, such as ECMAScript or XML/XPath. Implementations may choose the set of data models that
+/// they support. In addition to the underlying data structure, the data model defines a set of expressions as described in
+/// 5.9 Expressions. These expressions are used to refer to specific locations in the data model, to compute values to
+/// assign to those locations, and to evaluate boolean conditions.\
+/// Finally, the data model includes a set of system variables, as defined in 5.10 System Variables, which are automatically maintained
+/// by the SCXML processor.
 pub trait Datamodel: Debug + Send {
+    /// Returns the global data.\
+    /// As the datamodel needs access to other global variables and rust doesn't like
+    /// accessing data of parents (Fsm in this case) from inside a member (the actual Datmodel), most global data is
+    /// store in the "GlobalData" struct that is owned by the datamodel.    ///
+    fn global(&self) -> Rc<RefCell<GlobalData>>;
+
+
+    /// Get the name of the datamodel as defined by the \<scxml\> attribute "datamodel".
     fn get_name(self: &Self) -> &str;
+
+    /// Initialize the datamodel for one data-store.
+    /// This method is called for the global data and for the data of each state.
     fn initializeDataModel(self: &mut Self, data: &DataStore);
+
+    /// Sets a global variable.
     fn set(&mut self, name: &String, data: Box<dyn Data>);
+
+    /// Gets a global variable.
     fn get(&self, name: &String) -> &dyn Data;
+
+    /// Clear all.
     fn clear(&mut self);
+
+    /// "log" function, use for \<log\> content.
     fn log(&mut self, msg: &String);
+
+    /// Execute a script.
     fn execute(&mut self, script: &String) -> String;
 
     /// #W3C says:
     /// The set of operators in conditional expressions varies depending on the data model,
     /// but all data models must support the 'In()' predicate, which takes a state ID as its
-    /// argument and returns true if the state machine is in that state.
+    /// argument and returns true if the state machine is in that state.\
     /// Conditional expressions in conformant SCXML documents should not have side effects.
-    fn executeCondition(&self, script: &String) -> Result<bool, String>;
+    /// #Actual Implementation:
+    /// As no side-effects shall occur, this method should be "&self". But we assume that most script-engines have
+    /// no read-only "eval" function and such method may be hard to implement.
+    fn executeCondition(&mut self, script: &String) -> Result<bool, String>;
 }
 
 pub fn createDatamodel(name: &str) -> Box<dyn Datamodel> {
     match name.to_lowercase().as_str() {
+        // TODO: use some registration api to handle data-models
         #[cfg(feature = "ECMAScript")]
         ECMA_SCRIPT_LC => Box::new(ECMAScriptDatamodel::new()),
         NULL_DATAMODEL_LC => Box::new(NullDatamodel::new()),
@@ -2443,7 +2567,19 @@ impl NullDatamodel {
     }
 }
 
+thread_local!(
+    static null_data: Rc<RefCell<GlobalData>> = Rc::new(RefCell::new(GlobalData::new()));
+);
+
+
 impl Datamodel for NullDatamodel {
+    fn global(&self) -> Rc<RefCell<GlobalData>> {
+        null_data.with(|c| {
+            c.clone()
+        })
+    }
+
+
     fn get_name(self: &Self) -> &str {
         return NULL_DATAMODEL;
     }
@@ -2467,7 +2603,12 @@ impl Datamodel for NullDatamodel {
         "".to_string()
     }
 
-    fn executeCondition(&self, script: &String) -> Result<bool, String> {
+    /// #W3C says:
+    /// The boolean expression language consists of the In predicate only.
+    /// It has the form 'In(id)', where id is the id of a state in the enclosing state machine.
+    /// The predicate must return 'true' if and only if that state is in the current state configuration.
+    fn executeCondition(&mut self, script: &String) -> Result<bool, String> {
+        // TODO: Support for "In" predicate
         Result::Ok(false)
     }
 }
@@ -2487,7 +2628,7 @@ fn optional_to_string<T: Display>(op: &Option<T>) -> String {
 
 impl Display for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Fsm{{v:{} root:{} states:", self.version, self.pseudo_root)?;
+        write!(f, "Fsm{{v:{} root:{} states:", self.global().borrow().version, self.pseudo_root)?;
         display_state_map(&self.states, f)?;
         display_transition_map(&self.transitions, f)?;
         write!(f, "}}")

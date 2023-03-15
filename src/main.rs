@@ -2,7 +2,7 @@ extern crate core;
 
 use std::{thread, time};
 
-use crate::fsm::{Event, Trace};
+use crate::fsm::{Event, EventType, Trace};
 
 mod reader;
 mod fsm;
@@ -49,8 +49,8 @@ fn main() {
 
     println!("Send Event");
 
-    sender.send(Box::new(Event { name: "ab".to_string(), invokeid: 1, done_data: None }));
-    sender.send(Box::new(Event { name: "exit".to_string(), invokeid: 2, done_data: None }));
+    sender.send(Box::new(Event { name: "ab".to_string(), etype: EventType::platform, sendid: 0, origin: "".to_string(), origintype: "".to_string(), invokeid: 1, data: None }));
+    sender.send(Box::new(Event { name: "exit".to_string(), etype: EventType::platform, sendid: 0, origin: "".to_string(), origintype: "".to_string(), invokeid: 2, data: None }));
 
     threadHandle.join();
 }

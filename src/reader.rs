@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::rc::Rc;
 use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -122,13 +123,13 @@ impl ReaderState {
 
 
     fn get_state_by_name(&self, name: &Name) -> Option<&State> {
-        if self.fsm.statesNames.contains_key(name) {
+        if self.fsm.global().borrow().statesNames.contains_key(name) {
             Some(self.fsm.get_state_by_name(name))
         } else { None }
     }
 
     fn get_state_by_name_mut(&mut self, name: &Name) -> Option<&mut State> {
-        if self.fsm.statesNames.contains_key(name) {
+        if self.fsm.global().borrow().statesNames.contains_key(name) {
             Some(self.fsm.get_state_by_name_mut(name))
         } else { None }
     }
@@ -182,21 +183,23 @@ impl ReaderState {
 
 
     fn get_or_create_state(&mut self, name: &String, parallel: bool) -> StateId {
-        match self.fsm.statesNames.get(name) {
+        let m = self.fsm.global().borrow().statesNames.get(name).cloned();
+        match m {
             None => {
                 let mut s = State::new(name);
                 s.id = (self.fsm.states.len() + 1) as StateId;
                 s.is_parallel = parallel;
                 let sid = s.id;
-                self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
+                let gd = self.fsm.global();
+                gd.borrow_mut().statesNames.insert(s.name.clone(), s.id); // s.id, s);
                 self.fsm.states.push(s);
                 sid
             }
             Some(id) => {
                 if parallel {
-                    self.fsm.states.get_mut(((*id) - 1) as usize).unwrap().is_parallel = true;
+                    self.fsm.states.get_mut((id - 1) as usize).unwrap().is_parallel = true;
                 }
-                *id
+                id
             }
         }
     }
@@ -311,7 +314,7 @@ impl ReaderState {
             t.cond = Some(cond.unwrap().clone());
         }
 
-        let mut target = attr.get(TAG_TARGET);
+        let target = attr.get(TAG_TARGET);
         match target {
             None => (),
             // TODO: Parse the state specification! (it can be a list)
@@ -375,7 +378,7 @@ impl ReaderState {
                 }
                 let version = attr.get(TAG_VERSION);
                 if version.is_some() {
-                    self.fsm.version = version.unwrap().clone();
+                    self.fsm.global().borrow_mut().version = version.unwrap().clone();
                 }
                 self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
                 self.current.current_state = self.fsm.pseudo_root;
