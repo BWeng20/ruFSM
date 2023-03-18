@@ -20,6 +20,35 @@ To-Do:
 
 ## Architecture
 
+### Overview
+
+```mermaid
+erDiagram
+    Fsm {
+    }
+
+    reader {
+    }
+   
+
+    Datamodel {
+    }
+
+    XML }o--|| reader : parse
+    XML {
+    }
+
+    reader ||--o{ Fsm : creates   
+
+    Fsm ||--|| Datamodel : owns
+    
+    ECMAScript ||--|| Datamodel : implements
+    NullDatamodel ||--|| Datamodel : implements
+ 
+```
+
+### Basic class diagram
+
 ```mermaid
 classDiagram
     Fsm *-- Datamodel
@@ -87,15 +116,6 @@ classDiagram
       +ExecutableContent
     }
 
-    Fsm --> OtherSystemB: invoke session
-    OtherSystemA --> Fsm: invoke session
-
-    class OtherSystemA {
-    }
-    
-    class OtherSystemB {
-    }
-    
     <<Interface>> Datamodel
     class Datamodel{    
      +get_name() : String
@@ -103,7 +123,7 @@ classDiagram
 
      +initializeDataModel(Data)
 
-     +set(String, Data);
+     +set(name, Data);
      +get(name): Data;
 
      +execute(Script): String;
@@ -137,13 +157,21 @@ classDiagram
     NullDatamodel ..|> Datamodel
     
     class reader {
+     +read_from_xml(xml) Fsm
+     +read_from_xml_file(path) Fsm
     }
       
-    reader --> Fsm : Creates
-    
-    XML <-- reader : parse
-    
+    reader --> Fsm : Creates 
 ```
+
+The Fsm implements the methods described in the W3C Recommendation. The main loop is executed in a work-thread. The application sends events via a "BlockingQueue" (technical a
+Channel). All scripts and conditional expressions are executed by the Datamodel. W3C defines that implementations may freely choose the script language to support. The mandatory
+Null-Datamodel is a dummy implementation with minimal functionality.
+
+In this implementation ECMAScript is integrated (if feature "ECMAScript" is active). It uses [boa-engine](https://boajs.dev/). Boa claims to have a ~75% conformance to the
+Standard. So don't expect to have 100% JavaScript here.
+
+You can check the requirements for ECMA in SCXML [here](https://www.w3.org/TR/scxml/#ecma-profile)
 
 
 

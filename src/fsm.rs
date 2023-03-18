@@ -15,7 +15,7 @@ use std::thread;
 use std::thread::JoinHandle;
 
 #[cfg(feature = "ECMAScript")]
-use crate::emca_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
+use crate::ecma_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";

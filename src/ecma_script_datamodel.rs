@@ -93,7 +93,7 @@ impl ECMAScriptDatamodel {
             let mut ch = c.borrow_mut();
             if !ch.contains_key(&self.context_id) {
                 ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
-                println!("Added EMCAScriptContext context {}", self.context_id);
+                println!("Added ECMAScriptContext context {}", self.context_id);
             }
             ch.get(&self.context_id).unwrap().clone()
         })
@@ -134,7 +134,7 @@ impl Datamodel for ECMAScriptDatamodel {
             let mut ch = c.borrow_mut();
             if !ch.contains_key(&self.context_id) {
                 ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
-                println!("Added EMCAScriptContext context {}", self.context_id);
+                println!("Added ECMAScriptContext context {}", self.context_id);
             }
 
             let mut ext = ch.get(&self.context_id).unwrap().clone();

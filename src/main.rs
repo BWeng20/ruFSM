@@ -8,7 +8,7 @@ mod reader;
 mod fsm;
 
 #[cfg(feature = "ECMAScript")]
-mod emca_script_datamodel;
+mod ecma_script_datamodel;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
