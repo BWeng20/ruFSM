@@ -1,6 +1,6 @@
-# Finite State Machine Implementation in RUST
+# Finite State Machine (FSM) Implementation in Rust
 
-According to W3C Recommendations
+According to W3C Recommendations, reading State Chart XML (SCXML).
 
 See https://www.w3.org/TR/scxml/
 
