@@ -2694,3 +2694,360 @@ fn vecToString<T: Display>(v: &Vec<T>) -> String {
     s += "]";
     s
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{thread, time};
+
+    use crate::{Event, EventType, fsm, reader, Trace};
+    use crate::fsm::Fsm;
+    use crate::fsm::List;
+    use crate::fsm::OrderedSet;
+
+    #[test]
+    fn list_can_can_push() {
+        let mut l: List<String> = List::new();
+
+        l.push("Abc".to_string());
+        l.push("def".to_string());
+        l.push("ghi".to_string());
+        l.push("xyz".to_string());
+        assert_eq!(l.size(), 4);
+    }
+
+    #[test]
+    fn list_can_head() {
+        let mut l1: List<String> = List::new();
+
+        l1.push("Abc".to_string());
+        l1.push("def1".to_string());
+        l1.push("ghi1".to_string());
+
+        assert_eq!(l1.head(), &"Abc".to_string());
+    }
+
+    #[test]
+    fn list_can_tail() {
+        let mut l1: List<String> = List::new();
+
+        l1.push("Abc".to_string());
+        l1.push("def1".to_string());
+        l1.push("ghi1".to_string());
+
+        assert_eq!(l1.tail().size(), 2);
+        assert_eq!(l1.size(), 3);
+    }
+
+
+    #[test]
+    fn list_can_append() {
+        let mut l1: List<String> = List::new();
+
+        l1.push("Abc".to_string());
+        l1.push("def1".to_string());
+        l1.push("ghi1".to_string());
+        l1.push("xyz1".to_string());
+
+        let mut l2: List<String> = List::new();
+        l2.push("Abc".to_string());
+        l2.push("def2".to_string());
+        l2.push("ghi2".to_string());
+        l2.push("xyz2".to_string());
+
+        let l3 = l1.append(&l2);
+        assert_eq!(l3.size(), l1.size() + l2.size());
+
+        let l4 = l1.append(&l1);
+        assert_eq!(l3.size(), 2 * l1.size());
+    }
+
+    #[test]
+    fn list_can_some() {
+        let mut l: List<String> = List::new();
+        l.push("Abc".to_string());
+        l.push("def".to_string());
+        l.push("ghi".to_string());
+        l.push("xyz".to_string());
+
+        let m = l.some(&|s| -> bool {
+            *s == "Abc".to_string()
+        });
+
+        assert_eq!(m, true);
+    }
+
+    #[test]
+    fn list_can_every() {
+        let mut l: List<String> = List::new();
+        l.push("Abc".to_string());
+        l.push("def".to_string());
+        l.push("ghi".to_string());
+        l.push("xyz".to_string());
+
+        let mut m = l.every(&|_s| -> bool {
+            true
+        });
+        assert_eq!(m, true);
+
+        m = l.every(&|s| -> bool {
+            !s.eq(&"ghi".to_string())
+        });
+        assert_eq!(m, false);
+    }
+
+    #[test]
+    fn list_can_filter() {
+        let mut l: List<String> = List::new();
+        l.push("Abc".to_string());
+        l.push("def".to_string());
+        l.push("ghi".to_string());
+        l.push("xyz".to_string());
+
+        let l2: List<String> = l.filterBy(&|_s: &String| -> bool {
+            true
+        });
+        assert_eq!(l2.size(), l.size());
+
+        let l3 = l2.filterBy(&|_s: &String| -> bool {
+            false
+        });
+        assert_eq!(l3.size(), 0);
+    }
+
+    #[test]
+    fn list_can_sort() {
+        let mut l1: List<String> = List::new();
+        l1.push("Xyz".to_string());
+        l1.push("Bef".to_string());
+        l1.push("Ghi".to_string());
+        l1.push("Abc".to_string());
+
+        println!("Unsorted ====");
+        let mut l1V: Vec<String> = Vec::new();
+
+        let mut l2 = l1.sort(&|a, b| a.partial_cmp(b).unwrap());
+
+        while l1.size() > 0 {
+            let e = l1.head();
+            println!(" {}", e);
+            l1V.push(e.clone());
+            l1 = l1.tail();
+        }
+        l1V.sort_by(&|a: &String, b: &String| a.partial_cmp(b).unwrap());
+
+        assert_eq!(l1V.len(), l2.size());
+
+        println!("Sorted ======");
+        let mut i = 0;
+        while l2.size() > 0 {
+            let h = l2.head().clone();
+            l2 = l2.tail();
+            println!(" {}", h);
+            assert_eq!(h.eq(l1V.get(i).unwrap()), true);
+            i += 1;
+        }
+        println!("=============");
+    }
+
+    #[test]
+    fn ordered_set_can_add_and_delete() {
+        let mut os: OrderedSet<String> = OrderedSet::new();
+
+        os.add("Abc".to_string());
+        os.add("def".to_string());
+        os.add("ghi".to_string());
+        os.add("xyz".to_string());
+        assert_eq!(os.size(), 4);
+
+        os.delete(&"Abc".to_string());
+        os.delete(&"ghi".to_string());
+        os.delete(&"xxx".to_string());
+        os.delete(&"Abc".to_string()); // should be ignored.
+
+        assert_eq!(os.size(), 2);
+    }
+
+    #[test]
+    fn ordered_set_can_union() {
+        let mut os1: OrderedSet<String> = OrderedSet::new();
+
+        os1.add("Abc".to_string());
+        os1.add("def1".to_string());
+        os1.add("ghi1".to_string());
+        os1.add("xyz1".to_string());
+
+        let mut os2: OrderedSet<String> = OrderedSet::new();
+        os2.add("Abc".to_string());
+        os2.add("def2".to_string());
+        os2.add("ghi2".to_string());
+        os2.add("xyz2".to_string());
+
+        os1.union(&os2);
+
+        assert_eq!(os1.size(), 7);
+        assert_eq!(os1.isMember(&"def2".to_string()), true);
+        assert_eq!(os1.isMember(&"Abc".to_string()), true);
+    }
+
+    #[test]
+    fn ordered_set_can_toList() {
+        let mut os: OrderedSet<String> = OrderedSet::new();
+        os.add("Abc".to_string());
+        os.add("def".to_string());
+        os.add("ghi".to_string());
+        os.add("xyz".to_string());
+
+        let l = os.toList();
+
+        assert_eq!(l.size(), os.size());
+    }
+
+    #[test]
+    fn ordered_set_can_some() {
+        let mut os: OrderedSet<String> = OrderedSet::new();
+        os.add("Abc".to_string());
+        os.add("def".to_string());
+        os.add("ghi".to_string());
+        os.add("xyz".to_string());
+
+        let m = os.some(&|s| -> bool {
+            *s == "Abc".to_string()
+        });
+
+        assert_eq!(m, true);
+    }
+
+    #[test]
+    fn ordered_set_can_every() {
+        let mut os: OrderedSet<String> = OrderedSet::new();
+        os.add("Abc".to_string());
+        os.add("def".to_string());
+        os.add("ghi".to_string());
+        os.add("xyz".to_string());
+
+        let mut m = os.every(&|_s| -> bool {
+            true
+        });
+        assert_eq!(m, true);
+
+        m = os.every(&|s| -> bool {
+            !s.eq(&"ghi".to_string())
+        });
+        assert_eq!(m, false);
+    }
+
+    #[test]
+    fn ordered_set_can_hasIntersection() {
+        let mut os1: OrderedSet<String> = OrderedSet::new();
+        os1.add("Abc".to_string());
+        os1.add("def".to_string());
+        os1.add("ghi".to_string());
+        os1.add("xyz".to_string());
+
+        let mut os2: OrderedSet<String> = OrderedSet::new();
+
+        let mut m = os1.hasIntersection(&os2);
+        assert_eq!(m, false);
+
+        // One common elements
+        os2.add("Abc".to_string());
+        m = os1.hasIntersection(&os2);
+        assert_eq!(m, true);
+
+        // Same other un-common elements
+        os2.add("Def".to_string());
+        os2.add("Ghi".to_string());
+        os2.add("Xyz".to_string());
+        m = os1.hasIntersection(&os2);
+        assert_eq!(m, true);
+
+        // Same with TWO common elements
+        os2.add("def".to_string());
+        m = os1.hasIntersection(&os2);
+        assert_eq!(m, true);
+
+        // Remove common elements from first
+        os1.delete(&"Abc".to_string());
+        os1.delete(&"def".to_string());
+        m = os1.hasIntersection(&os2);
+        assert_eq!(m, false);
+
+        // Always common with itself
+        m = os1.hasIntersection(&os1);
+        assert_eq!(m, true);
+
+        // but not if empty
+        os1.clear();
+        m = os1.hasIntersection(&os1);
+        // Shall return false
+        assert_eq!(m, false);
+    }
+
+    #[test]
+    fn ordered_set_can_isEmpty() {
+        let mut os1: OrderedSet<String> = OrderedSet::new();
+        assert_eq!(os1.isEmpty(), true);
+
+        os1.add("Abc".to_string());
+        assert_eq!(os1.isEmpty(), false);
+    }
+
+    #[test]
+    fn ordered_set_can_clear() {
+        let mut os1: OrderedSet<String> = OrderedSet::new();
+        os1.add("Abc".to_string());
+        os1.clear();
+        assert_eq!(os1.isEmpty(), true);
+    }
+
+
+    #[test]
+    fn fsm_shall_exit() {
+        println!("Creating The SM:");
+        let mut sm = reader::read_from_xml(
+            r"<scxml initial='Main' datamodel='ecmascript'>
+      <script>
+        log('Hello World', ' again ');
+        log('Hello Again');
+      </script>
+      <state id='Main'>
+        <initial>
+          <transition target='MainA'/>
+        </initial>
+        <state id='MainA'>
+          <transition event='a ab abc' cond='true' type='internal' target='finalMe'/>
+        </state>
+        <state id='MainB'>
+        </state>
+        <final id='finalMe'>
+          <onentry>
+            <log label='info' expr='Date.now()'/>
+          </onentry>
+        </final>
+        <transition event='exit' cond='true' type='internal' target='OuterFinal'/>
+      </state>
+      <final id='OuterFinal'>
+      </final>
+    </scxml>".to_string());
+
+        assert!(!sm.is_err(), "FSM shall be parsed");
+
+        let mut fsm = sm.unwrap();
+        fsm.tracer.enableTrace(Trace::ALL);
+
+        let (threadHandle, sender) = fsm::start_fsm(fsm);
+
+        let t_millis = time::Duration::from_millis(1000);
+        thread::sleep(t_millis);
+
+        println!("Send Event");
+
+        let emptyStr = "".to_string();
+
+        sender.send(Box::new(Event { name: "ab".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 1, data: None }));
+        sender.send(Box::new(Event { name: "exit".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 2, data: None }));
+
+        // TODO: How to check for timeouts??
+        threadHandle.join();
+    }
+}

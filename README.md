@@ -23,7 +23,8 @@ To-Do:
 ```mermaid
 classDiagram
     Fsm *-- Datamodel
-    Fsm o-- BlockingQueue
+    Fsm *-- BlockingQueue: external queue
+    Fsm *-- Queue: internal queue
 
     class Fsm{
       +Datamodel datamodel

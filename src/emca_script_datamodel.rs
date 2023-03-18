@@ -69,7 +69,7 @@ fn str(js: &JsValue, ctx: &mut Context) -> String {
 }
 
 
-fn logJS(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
+fn log_js(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     for arg in args {
         print!("{}", arg.to_string(ctx)?);
     }
@@ -138,7 +138,7 @@ impl Datamodel for ECMAScriptDatamodel {
             }
 
             let mut ext = ch.get(&self.context_id).unwrap().clone();
-            let mut eeee = (ext.borrow() as &RefCell<ECMAScriptContext>);
+            let mut eeee = ext.borrow() as &RefCell<ECMAScriptContext>;
             let x = eeee.borrow().global_data.clone();
             x
         })
@@ -152,17 +152,17 @@ impl Datamodel for ECMAScriptDatamodel {
         context_map.with(|c|
             {
                 let mut ch = c.borrow_mut();
-                let mut ecmsCtx = (ch.get(&self.context_id).unwrap().borrow() as &RefCell<ECMAScriptContext>).borrow_mut();
+                let mut ecms_ctx = (ch.get(&self.context_id).unwrap().borrow() as &RefCell<ECMAScriptContext>).borrow_mut();
 
-                ecmsCtx.context.register_global_builtin_function("log", 1, logJS);
+                ecms_ctx.context.register_global_builtin_function("log", 1, log_js);
                 let cid = self.context_id;
-                ecmsCtx.context.register_global_closure("In", 1, move |_this: &JsValue, args: &[JsValue], ctx: &mut Context| -> JsResult<JsValue> {
+                ecms_ctx.context.register_global_closure("In", 1, move |_this: &JsValue, args: &[JsValue], ctx: &mut Context| -> JsResult<JsValue> {
                     if args.len() > 0 {
                         context_map.with(|c| {
                             let cid2 = cid;
                             let ch = c.borrow();
-                            let ecmsCtx = (**ch.get(&cid2).unwrap()).borrow();
-                            let gd_rc: Rc<RefCell<GlobalData>> = ecmsCtx.global_data.clone();
+                            let ecms_ctx = (**ch.get(&cid2).unwrap()).borrow();
+                            let gd_rc: Rc<RefCell<GlobalData>> = ecms_ctx.global_data.clone();
                             let m = (gd_rc.borrow() as &RefCell<GlobalData>).borrow().statesNames.get(&str(&args[0], ctx)).cloned();
                             match m
                             {
@@ -182,7 +182,7 @@ impl Datamodel for ECMAScriptDatamodel {
                 for (name, data) in &data.values
                 {
                     self.data.values.insert(name.clone(), data.get_copy());
-                    ecmsCtx.context.register_global_property(name.as_str(), data.to_string(), Attribute::all());
+                    ecms_ctx.context.register_global_property(name.as_str(), data.to_string(), Attribute::all());
                 }
             }
         )

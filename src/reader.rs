@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
-use std::rc::Rc;
+use std::io::{BufRead, BufReader, Cursor};
 use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -14,17 +13,6 @@ use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, 
 pub type AttributeMap = HashMap<String, String>;
 
 static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
-
-pub fn read_from_xml_file(mut file: File) -> Box<Fsm> {
-    let mut contents = String::new();
-
-    let r = file.read_to_string(&mut contents);
-    println!("Read {}", r.unwrap());
-
-    let fsm = read_from_xml(contents.as_str());
-
-    fsm
-}
 
 pub const TAG_SCXML: &str = "scxml";
 pub const TAG_ID: &str = "id";
@@ -115,7 +103,7 @@ impl ReaderState {
         format!("__id{}", self.id_count)
     }
 
-    fn parseStateSpecification(&mut self, target_name: &str, targets: &mut Vec<StateId>) {
+    fn parse_state_specification(&mut self, target_name: &str, targets: &mut Vec<StateId>) {
         target_name.split_ascii_whitespace().for_each(|target| {
             targets.push(self.get_or_create_state(&target.to_string(), false))
         });
@@ -319,7 +307,7 @@ impl ReaderState {
             None => (),
             // TODO: Parse the state specification! (it can be a list)
             Some(target_name) => {
-                self.parseStateSpecification(target_name, &mut t.target);
+                self.parse_state_specification(target_name, &mut t.target);
             }
         }
 
@@ -357,7 +345,7 @@ impl ReaderState {
         self.verify_parent_tag(name, &[TAG_IF]);
     }
 
-    fn start_element(&mut self, reader: &Reader<&[u8]>, e: &BytesStart) {
+    fn start_element(&mut self, reader: &Reader<Box<dyn BufRead>>, e: &BytesStart) {
         let n = e.name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
@@ -385,7 +373,7 @@ impl ReaderState {
                 let initial = attr.get(TAG_INITIAL);
                 if initial.is_some() {
                     let mut t = Transition::new();
-                    self.parseStateSpecification(initial.unwrap(), &mut t.target);
+                    self.parse_state_specification(initial.unwrap(), &mut t.target);
                     self.fsm.get_state_by_id_mut(self.fsm.pseudo_root).initial = t.id;
                     t.source = self.fsm.pseudo_root;
                     self.fsm.transitions.insert(t.id, t);
@@ -439,7 +427,7 @@ impl ReaderState {
 /**
  * Decode attributes into a hash-map
  */
-fn decode_attributes(reader: &Reader<&[u8]>, attr: &mut Attributes) -> AttributeMap {
+fn decode_attributes(reader: &Reader<Box<dyn BufRead>>, attr: &mut Attributes) -> AttributeMap {
     attr.map(|attr_result| {
         match attr_result {
             Ok(a) => {
@@ -460,8 +448,25 @@ fn decode_attributes(reader: &Reader<&[u8]>, attr: &mut Attributes) -> Attribute
     }).collect()
 }
 
-pub fn read_from_xml(xml: &str) -> Box<Fsm> {
-    let mut reader = Reader::from_str(xml);
+/// Reads the FSM from a XML file
+pub fn read_from_xml_file(file: String) -> Result<Box<Fsm>, String> {
+    match File::open(file.clone()) {
+        Ok(f) => {
+            read(Box::new(BufReader::new(f)))
+        }
+        Err(e) => {
+            Err(format!("Failed to read {}. {}", file, e))
+        }
+    }
+}
+
+/// Reads the FSM from a XML String
+pub fn read_from_xml(xml: String) -> Result<Box<Fsm>, String> {
+    read(Box::new(Cursor::new(xml)))
+}
+
+fn read(mut buf: Box<dyn BufRead>) -> Result<Box<Fsm>, String> {
+    let mut reader = Reader::from_reader(buf);
     reader.trim_text(true);
 
     let mut txt = Vec::new();
@@ -471,10 +476,9 @@ pub fn read_from_xml(xml: &str) -> Box<Fsm> {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
-            // exits the loop when reaching end of file
+            Err(e) => return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e)),
+// exits the loop when reaching end of file
             Ok(Event::Eof) => break,
-
             Ok(Event::Start(e)) => {
                 rs.start_element(&mut reader, &e);
             }
@@ -482,17 +486,57 @@ pub fn read_from_xml(xml: &str) -> Box<Fsm> {
                 rs.end_element(str::from_utf8(e.name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Empty(e)) => {
-                // Element without content.
+// Element without content.
                 rs.start_element(&mut reader, &e);
                 rs.end_element(str::from_utf8(e.name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 
-            // Ignore other
+// Ignore other
             Ok(e) => println!("Ignored SAX Event {:?}", e),
         }
-        // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
+// if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
         buf.clear();
     }
-    rs.fsm
+    Ok(rs.fsm)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[should_panic]
+    fn initial_attribute_should_panic() {
+        crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'>\
+    <initial><transition></transition></initial></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn initial_attribute() {
+        crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn wrong_end_tag_should_panic() {
+        let r = crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'></parallel></scxml>".to_string());
+        assert!(r.is_err(), "Shall result in error");
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_transition_type_should_panic() {
+        crate::reader::read_from_xml(
+            "<scxml><state><transition type='bla'></transition></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn transition_type_internal() {
+        crate::reader::read_from_xml(
+            "<scxml><state><transition type='internal'></transition></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn transition_type_external() {
+        crate::reader::read_from_xml(
+            "<scxml><state><transition type='external'></transition></state></scxml>".to_string());
+    }
 }
