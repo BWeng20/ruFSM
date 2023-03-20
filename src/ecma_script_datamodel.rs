@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::cell::{RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
@@ -137,7 +137,7 @@ impl Datamodel for ECMAScriptDatamodel {
                 println!("Added ECMAScriptContext context {}", self.context_id);
             }
 
-            let mut ext = ch.get(&self.context_id).unwrap().clone();
+            let ext = ch.get(&self.context_id).unwrap().clone();
             let mut eeee = ext.borrow() as &RefCell<ECMAScriptContext>;
             let x = eeee.borrow().global_data.clone();
             x

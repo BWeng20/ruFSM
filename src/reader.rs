@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor};
+use std::path::Path;
 use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -31,6 +32,10 @@ pub const TAG_TYPE: &str = "type";
 pub const TAG_ON_ENTRY: &str = "onentry";
 pub const TAG_ON_EXIT: &str = "onexit";
 
+pub const TAG_INCLUDE: &str = "include";
+pub const TAG_HREF: &str = "href";
+
+
 /// Executable content
 pub const TAG_RAISE: &str = "raise";
 pub const TAG_SEND: &str = "send";
@@ -43,6 +48,7 @@ pub const TAG_CANCEL: &str = "cancel";
 pub const TAG_ELSE: &str = "else";
 pub const TAG_ELSEIF: &str = "elseif";
 
+pub const NS_XINCLUDE: &str = "http://www.w3.org/2001/XInclude";
 
 struct ReaderStackItem {
     current_state: StateId,
@@ -63,6 +69,7 @@ struct ReaderState {
     // True if reader in inside an scxml element
     in_scxml: bool,
     id_count: i32,
+    file: String,
 
     // The resulting fsm
     fsm: Box<Fsm>,
@@ -73,7 +80,7 @@ struct ReaderState {
 
 
 impl ReaderState {
-    pub fn new() -> ReaderState {
+    pub fn new(f: &String) -> ReaderState {
         ReaderState {
             in_scxml: false,
             id_count: 0,
@@ -83,6 +90,7 @@ impl ReaderState {
                 current_tag: "".to_string(),
             },
             fsm: Box::new(Fsm::new()),
+            file: f.clone(),
         }
     }
 
@@ -346,7 +354,7 @@ impl ReaderState {
     }
 
     fn start_element(&mut self, reader: &Reader<Box<dyn BufRead>>, e: &BytesStart) {
-        let n = e.name();
+        let n = e.local_name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
 
@@ -379,6 +387,9 @@ impl ReaderState {
                     self.fsm.transitions.insert(t.id, t);
                 }
             }
+            TAG_INCLUDE => {
+                self.include(attr);
+            }
             TAG_STATE => {
                 self.start_state(attr);
             }
@@ -405,6 +416,35 @@ impl ReaderState {
             }
             _ => {
                 println!("Ignored tag {}", name)
+            }
+        }
+    }
+
+    fn include(&mut self, attr: &AttributeMap) {
+        let href = attr.get(TAG_HREF);
+        if href.is_none() {
+            panic!("{} in <{}> missing", TAG_HREF, TAG_INCLUDE);
+        }
+        let mut src = Path::new(href.unwrap()).clone().to_owned();
+
+        let parent = Path::new(&self.file).parent();
+        match parent {
+            Some(parent_path) => {
+                let pp = parent_path.join(src);
+                src = pp.to_owned();
+            }
+            None => {}
+        }
+
+        match File::open(src.clone()) {
+            Ok(f) => {
+                let org_file = self.file.clone();
+                self.file = src.to_str().unwrap().to_string();
+                read_all_events(self, Box::new(BufReader::new(f)));
+                self.file = org_file;
+            }
+            Err(e) => {
+                panic!("Can't read '{}' in <{}>. {}", src.to_str().unwrap(), TAG_INCLUDE, e);
             }
         }
     }
@@ -452,7 +492,7 @@ fn decode_attributes(reader: &Reader<Box<dyn BufRead>>, attr: &mut Attributes) -
 pub fn read_from_xml_file(file: String) -> Result<Box<Fsm>, String> {
     match File::open(file.clone()) {
         Ok(f) => {
-            read(Box::new(BufReader::new(f)))
+            read(Box::new(BufReader::new(f)), &file)
         }
         Err(e) => {
             Err(format!("Failed to read {}. {}", file, e))
@@ -462,33 +502,48 @@ pub fn read_from_xml_file(file: String) -> Result<Box<Fsm>, String> {
 
 /// Reads the FSM from a XML String
 pub fn read_from_xml(xml: String) -> Result<Box<Fsm>, String> {
-    read(Box::new(Cursor::new(xml)))
+    let fakeFile = "".to_string();
+    read(Box::new(Cursor::new(xml)), &fakeFile)
 }
 
-fn read(mut buf: Box<dyn BufRead>) -> Result<Box<Fsm>, String> {
+fn read(buf: Box<dyn BufRead>, f: &String) -> Result<Box<Fsm>, String> {
+    let mut rs = ReaderState::new(f);
+    let r = read_all_events(&mut rs, buf);
+    match r {
+        Ok(m) => {
+            Ok(rs.fsm)
+        }
+        Err(e) => {
+            Err(e)
+        }
+    }
+}
+
+fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, String> {
+    println!(">>> Reading {}", rs.file);
+
     let mut reader = Reader::from_reader(buf);
     reader.trim_text(true);
-
     let mut txt = Vec::new();
     let mut buf = Vec::new();
-
-    let mut rs = ReaderState::new();
-
     loop {
         match reader.read_event_into(&mut buf) {
-            Err(e) => return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e)),
+            Err(e) => {
+                println!("<<< {}", rs.file);
+                return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e));
+            }
 // exits the loop when reaching end of file
             Ok(Event::Eof) => break,
             Ok(Event::Start(e)) => {
                 rs.start_element(&mut reader, &e);
             }
             Ok(Event::End(e)) => {
-                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap(), &mut txt);
+                rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Empty(e)) => {
 // Element without content.
                 rs.start_element(&mut reader, &e);
-                rs.end_element(str::from_utf8(e.name().as_ref()).unwrap(), &mut txt);
+                rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
 
@@ -498,7 +553,8 @@ fn read(mut buf: Box<dyn BufRead>) -> Result<Box<Fsm>, String> {
 // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
         buf.clear();
     }
-    Ok(rs.fsm)
+    println!("<<< {}", rs.file);
+    Ok("ok")
 }
 
 #[cfg(test)]

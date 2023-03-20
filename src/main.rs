@@ -2,7 +2,7 @@ extern crate core;
 
 use std::{env, process};
 
-use crate::fsm::{Event, EventType, Trace};
+use crate::fsm::Trace;
 
 mod reader;
 mod fsm;
