@@ -14,6 +14,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 
+use log::info;
+
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
 
@@ -25,14 +27,15 @@ pub const NULL_DATAMODEL_LC: &str = "null";
 pub fn start_fsm(mut sm: Box<Fsm>) -> (JoinHandle<()>, Sender<Box<Event>>) {
     let externalQueue: BlockingQueue<Box<Event>> = BlockingQueue::new();
     let sender = externalQueue.sender.clone();
-    let thread = thread::spawn(
+    let thread = thread::Builder::new().name("fsm_interpret".to_string()).spawn(
         move || {
-            println!("SM starting...");
+            info!("SM starting...");
             sm.externalQueue = externalQueue;
             sm.interpret();
-            println!("SM finished");
+            info!("SM finished");
         });
-    (thread, sender)
+
+    (thread.unwrap(), sender)
 }
 
 
@@ -660,7 +663,7 @@ pub struct DefaultTracer {
 
 impl Tracer for DefaultTracer {
     fn trace(&self, msg: &str) {
-        println!("{}{}", DefaultTracer::get_prefix(), msg);
+        info!("{}{}", DefaultTracer::get_prefix(), msg);
     }
 
     fn enter(&self) {
@@ -2700,7 +2703,7 @@ mod tests {
     use std::{thread, time};
 
     use crate::{Event, EventType, fsm, reader, Trace};
-    use crate::fsm::Fsm;
+    use crate::fsm::{Event, Fsm};
     use crate::fsm::List;
     use crate::fsm::OrderedSet;
 

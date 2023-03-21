@@ -5,6 +5,7 @@ use std::path::Path;
 use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use log::debug;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
@@ -116,7 +117,6 @@ impl ReaderState {
             targets.push(self.get_or_create_state(&target.to_string(), false))
         });
     }
-
 
     fn get_state_by_name(&self, name: &Name) -> Option<&State> {
         if self.fsm.global().borrow().statesNames.contains_key(name) {
@@ -358,7 +358,7 @@ impl ReaderState {
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
 
-        println!("Start Element {}", name);
+        debug!("Start Element {}", name);
 
         let attr = &decode_attributes(&reader, &mut e.attributes());
 
@@ -415,7 +415,7 @@ impl ReaderState {
                 self.start_else(&name);
             }
             _ => {
-                println!("Ignored tag {}", name)
+                debug!("Ignored tag {}", name)
             }
         }
     }
@@ -453,7 +453,7 @@ impl ReaderState {
         if !self.current.current_tag.eq(name) {
             panic!("Illegal end-tag {:?}, expected {:?}", &name, &self.current.current_tag);
         }
-        println!("End Element {}", name);
+        debug!("End Element {}", name);
         match name {
             TAG_SCRIPT => {
                 self.end_script(txt);
@@ -520,7 +520,7 @@ fn read(buf: Box<dyn BufRead>, f: &String) -> Result<Box<Fsm>, String> {
 }
 
 fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, String> {
-    println!(">>> Reading {}", rs.file);
+    debug!(">>> Reading {}", rs.file);
 
     let mut reader = Reader::from_reader(buf);
     reader.trim_text(true);
@@ -529,7 +529,7 @@ fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, 
     loop {
         match reader.read_event_into(&mut buf) {
             Err(e) => {
-                println!("<<< {}", rs.file);
+                debug!("<<< {}", rs.file);
                 return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e));
             }
 // exits the loop when reaching end of file
@@ -546,14 +546,15 @@ fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, 
                 rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+            Ok(Event::Comment(e)) => debug!("Comment :{}", e.unescape().unwrap()),
 
 // Ignore other
-            Ok(e) => println!("Ignored SAX Event {:?}", e),
+            Ok(e) => debug!("Ignored SAX Event {:?}", e),
         }
 // if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
         buf.clear();
     }
-    println!("<<< {}", rs.file);
+    debug!("<<< {}", rs.file);
     Ok("ok")
 }
 
