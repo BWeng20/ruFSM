@@ -966,7 +966,10 @@ impl Fsm {
         self.executeGlobalScriptElement();
 
         let mut initalStates = List::new();
-        initalStates.push(self.get_state_by_id(self.pseudo_root).initial);
+        let itid = self.get_state_by_id(self.pseudo_root).initial;
+        if itid != 0 {
+            initalStates.push(itid);
+        }
         self.enterStates(&initalStates);
         self.mainEventLoop();
         self.tracer.exitMethod("interpret");
@@ -2228,11 +2231,11 @@ impl DataStore {
         }
     }
 
-    pub fn get(&self, key: &String) -> &Box<dyn Data> {
+    pub fn get(&self, key: &String) -> Option<&Box<dyn Data>> {
         if self.values.contains_key(key) {
-            self.values.get(key).unwrap()
+            self.values.get(key)
         } else {
-            &self.nullValue
+            None
         }
     }
 
@@ -2488,7 +2491,7 @@ pub trait Datamodel: Debug + Send {
     fn set(&mut self, name: &String, data: Box<dyn Data>);
 
     /// Gets a global variable.
-    fn get(&self, name: &String) -> &dyn Data;
+    fn get(&self, name: &String) -> Option<&dyn Data>;
 
     /// Clear all.
     fn clear(&mut self);
@@ -2589,11 +2592,11 @@ impl Datamodel for NullDatamodel {
     fn initializeDataModel(self: &mut Self, data: &DataStore) {}
 
     fn set(self: &mut NullDatamodel, name: &String, data: Box<dyn Data>) {
-        todo!()
+        // nothing to do
     }
 
-    fn get(self: &NullDatamodel, name: &String) -> &dyn Data {
-        todo!()
+    fn get(self: &NullDatamodel, name: &String) -> Option<&dyn Data> {
+        None
     }
 
     fn clear(self: &mut NullDatamodel) {}
@@ -2682,7 +2685,7 @@ impl Display for OrderedSet<u32> {
     }
 }
 
-fn vecToString<T: Display>(v: &Vec<T>) -> String {
+pub(crate) fn vecToString<T: Display>(v: &Vec<T>) -> String {
     let mut s = "[".to_string();
 
     let len = v.len();

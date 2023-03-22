@@ -4,7 +4,7 @@
 <scxml xmlns="http://www.w3.org/2005/07/scxml"
        xmlns:xi="http://www.w3.org/2001/XInclude"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xsi:schemaLocation="http://www.w3.org/2005/07/scxml ../scxml.xsd" version="1.0">
+       xsi:schemaLocation="http://www.w3.org/2005/07/scxml ../scxml.xsd"
        version="1.0"
        initial="Main"
        datamodel="ecmascript">
@@ -74,7 +74,7 @@
                 <onentry>
                     <log expr="'Inside Test3Sub1...'"/>
                     <!-- Send our self an event in 5s -->
-                    <send event="Timer"  delay="5s"/>
+                    <send event="Timer" delay="5s"/>
                 </onentry>
                 <!-- Transition on to Test4.
                      This will exit both us and our parent. -->

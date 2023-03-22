@@ -1,8 +1,8 @@
 extern crate core;
 
-use std::{env, process};
+use std::{env, io, process};
 
-use crate::fsm::Trace;
+use crate::fsm::{Event, EventType, Trace};
 
 mod reader;
 mod fsm;
@@ -25,6 +25,37 @@ fn main() {
         Ok(mut sm) => {
             sm.tracer.enableTrace(Trace::ALL);
             let (threadHandle, sender) = fsm::start_fsm(sm);
+
+            let mut line = String::new();
+            let stdin = io::stdin();
+            let emptyStr = "".to_string();
+            print!(">");
+            while true {
+                match stdin.read_line(&mut line) {
+                    Ok(S) => {
+                        if line.ends_with('\n') {
+                            line.pop();
+                            if line.ends_with('\r') {
+                                line.pop();
+                            }
+                        }
+                        sender.send(Box::new(Event {
+                            name: line.clone(),
+                            etype: EventType::platform,
+                            sendid: 0,
+                            origin: emptyStr.clone(),
+                            origintype: emptyStr.clone(),
+                            invokeid: 1,
+                            data: None,
+                        }));
+                    }
+
+                    Err(e) => {
+                        eprintln!("Error: {}. aborting...", e);
+                        process::exit(-1);
+                    }
+                }
+            }
             threadHandle.join();
         }
         Err(e) => {

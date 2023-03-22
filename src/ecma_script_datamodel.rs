@@ -93,7 +93,6 @@ impl ECMAScriptDatamodel {
             let mut ch = c.borrow_mut();
             if !ch.contains_key(&self.context_id) {
                 ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
-                println!("Added ECMAScriptContext context {}", self.context_id);
             }
             ch.get(&self.context_id).unwrap().clone()
         })
@@ -134,7 +133,6 @@ impl Datamodel for ECMAScriptDatamodel {
             let mut ch = c.borrow_mut();
             if !ch.contains_key(&self.context_id) {
                 ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
-                println!("Added ECMAScriptContext context {}", self.context_id);
             }
 
             let ext = ch.get(&self.context_id).unwrap().clone();
@@ -193,8 +191,15 @@ impl Datamodel for ECMAScriptDatamodel {
         // TODO: Set data also in the Context
     }
 
-    fn get(self: &ECMAScriptDatamodel, name: &String) -> &dyn Data {
-        self.data.get(name).deref()
+    fn get(self: &ECMAScriptDatamodel, name: &String) -> Option<&dyn Data> {
+        match self.data.get(name) {
+            Some(D) => {
+                Some(&**D)
+            }
+            None => {
+                None
+            }
+        }
     }
 
     fn clear(self: &mut ECMAScriptDatamodel) {}

@@ -10,7 +10,8 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition};
+use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionType};
+use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
 
@@ -208,19 +209,28 @@ impl ReaderState {
         }
         let id = self.get_or_create_state(&sname, parallel);
 
-        let initial;
+        let mut initial;
         match attr.get(TAG_INITIAL) {
             None => initial = 0,
-            Some(state_name) => initial = self.get_or_create_state(state_name, false)
+            Some(id_refs) => {
+                // Create initial-transition with the initial states
+                let mut t = Transition::new();
+                t.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+                t.transition_type = TransitionType::Internal;
+                t.source = id;
+                initial = t.id;
+                self.parse_state_specification(id_refs, &mut t.target);
+                debug!(" {}#{}.initial = {} -> {}", sname, id, initial, vecToString(&t.target));
+                self.fsm.transitions.insert(t.id, t);
+            }
         }
 
         let state = self.get_state_by_id_mut(id);
-
-        state.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-
         if initial != 0 {
             state.initial = initial;
         }
+        state.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+
         if parent != 0 {
             state.parent = parent;
             let parent_state = self.get_state_by_id_mut(parent);
@@ -330,6 +340,7 @@ impl ReaderState {
             if state.initial > 0 {
                 panic!("<initial> must not be specified if initial-attribute was given")
             }
+            debug!(" {}#{}.initial = {}", state.name, state.id, t.id);
             state.initial = t.id;
         } else {
             state.transitions.push(t.id);
@@ -363,6 +374,9 @@ impl ReaderState {
         let attr = &decode_attributes(&reader, &mut e.attributes());
 
         match name {
+            TAG_INCLUDE => {
+                self.include(attr);
+            }
             TAG_SCXML => {
                 if self.in_scxml {
                     panic!("Only one <{}> allowed", TAG_SCXML);
@@ -370,25 +384,16 @@ impl ReaderState {
                 self.in_scxml = true;
                 let datamodel = attr.get(TAG_DATAMODEL);
                 if datamodel.is_some() {
+                    debug!(" scxml.datamodel = {}", datamodel.unwrap());
                     self.fsm.datamodel = crate::fsm::createDatamodel(datamodel.unwrap());
                 }
                 let version = attr.get(TAG_VERSION);
                 if version.is_some() {
                     self.fsm.global().borrow_mut().version = version.unwrap().clone();
+                    debug!(" scxml.version = {}", version.unwrap());
                 }
                 self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
                 self.current.current_state = self.fsm.pseudo_root;
-                let initial = attr.get(TAG_INITIAL);
-                if initial.is_some() {
-                    let mut t = Transition::new();
-                    self.parse_state_specification(initial.unwrap(), &mut t.target);
-                    self.fsm.get_state_by_id_mut(self.fsm.pseudo_root).initial = t.id;
-                    t.source = self.fsm.pseudo_root;
-                    self.fsm.transitions.insert(t.id, t);
-                }
-            }
-            TAG_INCLUDE => {
-                self.include(attr);
             }
             TAG_STATE => {
                 self.start_state(attr);
