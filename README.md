@@ -177,9 +177,14 @@ You can check the requirements for ECMA in SCXML [here](https://www.w3.org/TR/sc
 
 The FSM has - conceptually - a lot of cross-references between states, transitions and other stuff. Such relationships are not easy to implement with Rust. The usual way is to NOT
 refer to the entities directly and use IDs instead. The IDs reference the entities in a common memory area (see structure "GlobalData"). With that Rust doesn't have any issues with
-the child/parent relationships in the model. 
+the child/parent relationships in the model.
 
+### Logging
 
+The project use crate "log" and if feature "EnvLog" is active, the crate "env_log" as implementation.
 
+The module reader prints the SAX-events to "log::debug".\
+FSM methods, state transitions and output are traces via a trait "fsm::Tracer" with a default implementation that prints to "info".\
+The Tracer can be replaced by the client by settings the instance to some other implementation or configured to print only specific information.
 
-
+The used log level of crate "log" can be controlled by environment variable "RUST_LOG", e.g. "RUST_LOG=debug".
