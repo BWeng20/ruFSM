@@ -53,21 +53,19 @@
             <initial>
                 <transition target="Test2Sub1"/>
             </initial>
-
             <!-- This time we reference a state
                  defined in an external file.   -->
             <xi:include href="Test2Sub1.xml" parse="text"/>
-
             <final id="Test2Sub2"/>
-
             <!-- Test2Sub2 is defined as final, so this
                  event is generated when we reach it -->
-            <transition event="done.state.Test2" next="Test3"/>
+            <transition event="done.state.Test2" target="Test3"/>
         </state>
 
         <state id="Test3">
             <initial>
-                <transition target="Test3Sub1"/>
+                <transition target="Test3Sub1">
+                </transition>
             </initial>
 
             <state id="Test3Sub1">

@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use boa_engine::{Context, JsResult, JsValue, property::Attribute};
 
-use crate::fsm::{Data, Datamodel, DataStore, GlobalData};
+use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, GlobalData};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
@@ -212,10 +212,21 @@ impl Datamodel for ECMAScriptDatamodel {
         self.execute_internal(script)
     }
 
+    fn executeForEach(&mut self, arrayExpression: &String, item: &String, index: &String, executeBody: &dyn FnOnce(&mut dyn Datamodel)) {
+        todo!()
+    }
+
     fn executeCondition(&mut self, script: &String) -> Result<bool, String> {
         match bool::from_str(self.execute_internal(script).as_str()) {
             Ok(v) => Result::Ok(v),
             Err(e) => Result::Err(e.to_string()),
         }
+    }
+
+    fn executeContent(&mut self, content_id: ExecutableContentId) {
+        let mut global = self.global();
+        let mut ex = global.deref().borrow_mut();
+
+        ex.executableContent.get_mut(&content_id).unwrap().execute(self);
     }
 }

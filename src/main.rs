@@ -1,15 +1,18 @@
 extern crate core;
 
-use std::{env, io, process};
+use std::{env, io, process, thread, time};
+use std::io::{stdout, Write};
 
 use crate::fsm::{Event, EventType, Trace};
 
 mod reader;
 mod fsm;
+mod executable_content;
 
 #[cfg(feature = "ECMAScript")]
 mod ecma_script_datamodel;
 
+/// Loads the specified FSM and prompts for Events.
 fn main() {
     env_logger::init();
 
@@ -29,8 +32,11 @@ fn main() {
             let mut line = String::new();
             let stdin = io::stdin();
             let emptyStr = "".to_string();
-            print!(">");
-            while true {
+
+            loop {
+                thread::sleep(time::Duration::from_millis(200));
+                print!("\nEnter Event >>");
+                stdout().flush();
                 match stdin.read_line(&mut line) {
                     Ok(S) => {
                         if line.ends_with('\n') {

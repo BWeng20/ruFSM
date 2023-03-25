@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::{Arc, Mutex};
@@ -18,6 +18,7 @@ use log::info;
 
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
+use crate::executable_content::ExecutableContent;
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
@@ -727,6 +728,8 @@ pub struct GlobalData {
     pub binding: BindingType,
     pub version: String,
     pub statesNames: StateNameMap,
+    pub executableContent: HashMap<ExecutableContentId, Box<dyn ExecutableContent>>,
+
 }
 
 impl GlobalData {
@@ -739,6 +742,7 @@ impl GlobalData {
             statesToInvoke: OrderedSet::new(),
             binding: BindingType::Early,
             statesNames: StateNameMap::new(),
+            executableContent: HashMap::new(),
         }
     }
 }
@@ -762,7 +766,6 @@ pub struct Fsm {
      * If a state has no declared id, one is generated.
      */
     pub states: Vec<State>,
-    pub executableContent: HashMap<ExecutableContentId, String>,
     pub transitions: TransitionMap,
 
     pub data: DataStore,
@@ -821,7 +824,6 @@ impl Fsm {
             internalQueue: Queue::new(),
             externalQueue: BlockingQueue::new(),
             states: Vec::new(),
-            executableContent: HashMap::new(),
             transitions: HashMap::new(),
             data: DataStore::new(),
             pseudo_root: 0,
@@ -1005,9 +1007,9 @@ impl Fsm {
 
     fn executeGlobalScriptElement(&mut self) {
         self.tracer.enterMethod("executeGlobalScriptElement");
-        let script = self.get_state_by_id(self.pseudo_root).script.clone();
-        if !script.is_empty() {
-            self.datamodel.deref_mut().execute(&script);
+        let script = self.get_state_by_id(self.pseudo_root).script;
+        if script != 0 {
+            self.datamodel.deref_mut().executeContent(script);
         }
         self.tracer.exitMethod("executeGlobalScriptElement");
     }
@@ -1203,8 +1205,8 @@ impl Fsm {
             let mut invokes: Vec<Invoke> = Vec::new();
             {
                 let s = self.get_state_by_id(*sid);
-                for ct in s.onexit.sort(&|e1, e2| { Fsm::executableDocumentOrder(e1, e2) }).iterator() {
-                    content.push(*ct);
+                if (s.onexit != 0) {
+                    content.push(s.onexit);
                 }
                 for inv in s.invoke.iterator() {
                     invokes.push(inv.clone());
@@ -1510,11 +1512,11 @@ impl Fsm {
         }
         self.global().borrow_mut().historyValue.putAll(&ahistory);
         for sid in statesToExitSorted.iterator() {
-            let exe: List<ExecutableContentId> = List::new();
+            let mut exe: List<ExecutableContentId> = List::new();
             {
                 let s = self.get_state_by_id(*sid);
                 self.tracer.traceExitState(s);
-                exe.append(&s.onexit.sort(&|e1, e2| { Fsm::executableDocumentOrder(e1, e2) }));
+                exe.push(s.onexit);
             }
 
             for content in exe.iterator() {
@@ -1607,9 +1609,8 @@ impl Fsm {
             let mut exe = Vec::new();
             {
                 let stateS: &State = self.get_state_by_id(*s);
-                for content in stateS.onentry
-                    .sort(&|e1: &ExecutableContentId, e2: &ExecutableContentId| { Fsm::executableDocumentOrder(e1, e2) }).iterator() {
-                    exe.push(*content);
+                if stateS.onentry != 0 {
+                    exe.push(stateS.onentry);
                 }
                 if statesForDefaultEntry.isMember(&s) {
                     let stateS: &State = self.get_state_by_id(*s);
@@ -1657,7 +1658,7 @@ impl Fsm {
 
     pub fn executeContent(&mut self, contentId: ExecutableContentId) {
         self.tracer.enterMethod("executeContent");
-        self.datamodel.execute(self.executableContent.get(&contentId).unwrap());
+        self.datamodel.executeContent(contentId);
         self.tracer.exitMethod("executeContent");
     }
 
@@ -2140,17 +2141,24 @@ impl Fsm {
     /// See [Datamodel::executeCondition]
     fn conditionMatch(&mut self, tid: TransitionId) -> bool
     {
-        let t = self.get_transition_by_id(tid);
-        if t.content != 0 {
-            match self.datamodel.executeCondition(self.executableContent.get(&t.content).unwrap()) {
-                Ok(v) => v,
-                Err(e) => {
-                    self.enqueue_internal(Event::error("execution"));
-                    false
+        let cond;
+        {
+            let t = self.get_transition_by_id_mut(tid);
+            cond = t.cond.clone();
+        }
+        match cond {
+            Some(c) => {
+                match self.datamodel.executeCondition(&c) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        self.enqueue_internal(Event::error("execution"));
+                        false
+                    }
                 }
             }
-        } else {
-            true
+            None => {
+                true
+            }
         }
     }
 
@@ -2320,10 +2328,10 @@ pub struct State {
     pub history_type: HistoryType,
 
     /// The script that is executed if the state is entered. See W3c comments for \<onentry\> above.
-    pub onentry: List<ExecutableContentId>,
+    pub onentry: ExecutableContentId,
 
     /// The script that is executed if the state is left. See W3c comments for \<onexit\> above.
-    pub onexit: List<ExecutableContentId>,
+    pub onexit: ExecutableContentId,
 
     /// All transitions between sub-states.
     pub transitions: List<TransitionId>,
@@ -2338,7 +2346,7 @@ pub struct State {
     pub isFirstEntry: bool,
     pub parent: StateId,
     pub donedata: Option<DoneData>,
-    pub script: String,
+    pub script: ExecutableContentId,
 }
 
 impl State {
@@ -2349,8 +2357,8 @@ impl State {
             name: name.clone(),
             initial: 0,
             states: vec![],
-            onentry: List::new(),
-            onexit: List::new(),
+            onentry: 0,
+            onexit: 0,
             transitions: List::new(),
             is_parallel: false,
             is_final: false,
@@ -2363,7 +2371,7 @@ impl State {
             donedata: None,
             invoke: List::new(),
             history: List::new(),
-            script: "".to_string(),
+            script: 0,
         }
     }
 }
@@ -2414,7 +2422,7 @@ pub fn map_transition_type(ts: &String) -> TransitionType {
     }
 }
 
-static ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+pub(crate) static ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 pub type TransitionId = u32;
 
@@ -2479,7 +2487,6 @@ pub trait Datamodel: Debug + Send {
     /// store in the "GlobalData" struct that is owned by the datamodel.    ///
     fn global(&self) -> Rc<RefCell<GlobalData>>;
 
-
     /// Get the name of the datamodel as defined by the \<scxml\> attribute "datamodel".
     fn get_name(self: &Self) -> &str;
 
@@ -2502,6 +2509,8 @@ pub trait Datamodel: Debug + Send {
     /// Execute a script.
     fn execute(&mut self, script: &String) -> String;
 
+    fn executeForEach(&mut self, arrayExpression: &String, item: &String, index: &String, executeBody: &dyn FnOnce(&mut dyn Datamodel));
+
     /// #W3C says:
     /// The set of operators in conditional expressions varies depending on the data model,
     /// but all data models must support the 'In()' predicate, which takes a state ID as its
@@ -2511,6 +2520,8 @@ pub trait Datamodel: Debug + Send {
     /// As no side-effects shall occur, this method should be "&self". But we assume that most script-engines have
     /// no read-only "eval" function and such method may be hard to implement.
     fn executeCondition(&mut self, script: &String) -> Result<bool, String>;
+
+    fn executeContent(&mut self, contentId: ExecutableContentId);
 }
 
 pub fn createDatamodel(name: &str) -> Box<dyn Datamodel> {
@@ -2609,6 +2620,10 @@ impl Datamodel for NullDatamodel {
         "".to_string()
     }
 
+    fn executeForEach(&mut self, arrayExpression: &String, item: &String, index: &String, executeBody: &dyn FnOnce(&mut dyn Datamodel)) {
+        // nothing to do
+    }
+
     /// #W3C says:
     /// The boolean expression language consists of the In predicate only.
     /// It has the form 'In(id)', where id is the id of a state in the enclosing state machine.
@@ -2616,6 +2631,10 @@ impl Datamodel for NullDatamodel {
     fn executeCondition(&mut self, script: &String) -> Result<bool, String> {
         // TODO: Support for "In" predicate
         Result::Ok(false)
+    }
+
+    fn executeContent(&mut self, contentId: ExecutableContentId) {
+        // Nothing
     }
 }
 
@@ -2706,7 +2725,6 @@ mod tests {
     use std::{thread, time};
 
     use crate::{Event, EventType, fsm, reader, Trace};
-    use crate::fsm::{Event, Fsm};
     use crate::fsm::List;
     use crate::fsm::OrderedSet;
 

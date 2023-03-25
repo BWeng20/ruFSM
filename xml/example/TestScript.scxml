@@ -1,0 +1,29 @@
+<scxml xmlns="http://www.w3.org/2005/07/scxml"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.w3.org/2005/07/scxml ../scxml.xsd" version="1.0"
+       initial="Main"
+       datamodel="ecmascript">
+    <script>
+        println();
+    </script>
+    <state id="Main">
+        <transition target="state2">
+
+            <log></log>
+            <foreach array="[1,2,3,4, 50, 100, 200]" item="i">
+                <log label="info" expr="i"/>
+                <if cond="i>=100">
+                    <log label="warn" expr="'to much'"/>
+                    <elseif cond="i>=50"/>
+                    <log label="warn" expr="'get higher'"/>
+                    <else/>
+                    <log label="info" expr="'all ok!'"/>
+                    <script src="script.js"/>
+                </if>
+            </foreach>
+        </transition>
+    </state>
+    <state id="state2">
+
+    </state>
+</scxml>

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor};
-use std::path::Path;
+use std::fs::{File, read_to_string};
+use std::io::{BufRead, BufReader, Cursor, Read};
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -10,7 +11,8 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::fsm::{Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionType};
+use crate::executable_content::{ExecutableContent, Expression, Log, Script};
+use crate::fsm::{ExecutableContentId, Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
@@ -43,25 +45,31 @@ pub const TAG_RAISE: &str = "raise";
 pub const TAG_SEND: &str = "send";
 pub const TAG_LOG: &str = "log";
 pub const TAG_SCRIPT: &str = "script";
+pub const TAG_SRC: &str = "src";
 pub const TAG_ASSIGN: &str = "assign";
 pub const TAG_IF: &str = "if";
 pub const TAG_FOR_EACH: &str = "foreach";
 pub const TAG_CANCEL: &str = "cancel";
 pub const TAG_ELSE: &str = "else";
 pub const TAG_ELSEIF: &str = "elseif";
+pub const TAG_EXPR: &str = "expr";
 
 pub const NS_XINCLUDE: &str = "http://www.w3.org/2001/XInclude";
 
 struct ReaderStackItem {
     current_state: StateId,
+    current_transition: TransitionId,
     current_tag: String,
+    current_executable_content: ExecutableContentId,
 }
 
 impl ReaderStackItem {
     pub fn new(o: &ReaderStackItem) -> ReaderStackItem {
         ReaderStackItem {
-            current_state: o.current_state.clone(),
+            current_state: o.current_state,
+            current_transition: o.current_transition,
             current_tag: o.current_tag.clone(),
+            current_executable_content: o.current_executable_content,
         }
     }
 }
@@ -89,7 +97,10 @@ impl ReaderState {
             stack: vec![],
             current: ReaderStackItem {
                 current_state: 0,
+                current_transition: 0,
                 current_tag: "".to_string(),
+                current_executable_content: 0,
+
             },
             fsm: Box::new(Fsm::new()),
             file: f.clone(),
@@ -145,6 +156,29 @@ impl ReaderState {
             panic!("Internal error: Current State is unknown");
         }
         self.get_state_by_id_mut(id)
+    }
+
+
+    fn get_current_transition(&mut self) -> &mut Transition {
+        let id = self.current.current_transition;
+        if id <= 0 {
+            panic!("Internal error: Current Transition is unknown");
+        }
+        self.fsm.get_transition_by_id_mut(id)
+    }
+
+    fn add_executable_content(&mut self, ec: Box<dyn ExecutableContent>) -> ExecutableContentId {
+        if self.current.current_executable_content == 0 {
+            self.current.current_executable_content = ec.deref().Id();
+        } else {
+            let global = self.fsm.datamodel.global();
+            let mut gb = global.borrow_mut();
+            let ex = gb.executableContent.get_mut(&self.current.current_executable_content).unwrap();
+
+            todo!()
+        }
+        self.fsm.global().borrow_mut().executableContent.insert(ec.deref().Id(), ec);
+        self.current.current_executable_content
     }
 
     fn get_parent_tag(&self) -> &str {
@@ -310,6 +344,9 @@ impl ReaderState {
         let mut t = Transition::new();
         t.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
 
+        // Start script.
+        self.current.current_executable_content = 0;
+
         let event = attr.get(TAG_EVENT);
         if event.is_some() {
             t.events = event.unwrap().split_whitespace().map(|s| { s.to_string() }).collect();
@@ -349,22 +386,112 @@ impl ReaderState {
         self.fsm.transitions.insert(t.id, t);
     }
 
+    fn end_transition(&mut self) {
+        let ctId = self.current.current_executable_content;
+        self.current.current_executable_content = 0;
+
+        let trans = self.get_current_transition();
+        // Assign the collected content to the transition.
+        trans.content = ctId;
+        self.current.current_transition = 0;
+    }
+
+    fn end_on_exit(&mut self) {
+        let ctId = self.current.current_executable_content;
+        self.current.current_executable_content = 0;
+
+        let state = self.get_current_state();
+        // Assign the collected content to the on-exirt.
+        state.onexit = ctId;
+    }
+
+
+    fn start_script(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_SCRIPT, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        let src = attr.get(TAG_SRC);
+        if src.is_some() {
+            let mut fileSrc = self.get_resolved_path(src.unwrap());
+            match File::open(fileSrc.clone()) {
+                Ok(mut F) => {
+                    let mut buf = String::with_capacity(F.metadata().unwrap().len() as usize);
+                    F.read_to_string(&mut buf);
+                    let mut s = Box::new(Expression::new(buf));
+                    self.get_current_state().script = self.add_executable_content(s);
+                    debug!("src='{}':\n{}", fileSrc.to_str().unwrap(), self.get_current_state().script );
+                }
+                Err(E) => {
+                    panic!("Can't open script '{}'. {}", fileSrc.to_str().unwrap(), E);
+                }
+            }
+        }
+    }
+
     fn end_script(&mut self, txt: &mut Vec<String>) {
-        self.get_current_state().script = txt.concat();
+        let scriptText = txt.concat();
+        let src = scriptText.trim();
+
+        if !src.is_empty() {
+            let ctId = self.add_executable_content(Box::new(Expression::new(scriptText)));
+            let state = self.get_current_state();
+            state.script = ctId;
+        } else {
+            panic!("<script> with 'src' attribute shall not have content.")
+        }
         txt.clear();
     }
 
-
-    fn start_executable_content(&mut self, name: &str) {
-        self.verify_parent_tag(name, &[TAG_SCXML, TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]).to_string();
-        // TODO
+    fn start_for_each(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_FOR_EACH, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]);
+        todo!()
     }
 
-    fn start_else(&mut self, name: &str) {
-        self.verify_parent_tag(name, &[TAG_IF]);
+    fn start_cancel(&mut self, attr: &AttributeMap) {
+        todo!()
     }
 
-    fn start_element(&mut self, reader: &Reader<Box<dyn BufRead>>, e: &BytesStart) {
+    fn start_if(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_IF, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]);
+        todo!()
+    }
+
+    fn end_if(&mut self) {
+        todo!()
+    }
+
+    fn start_else_if(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_ELSEIF, &[TAG_IF]);
+        todo!()
+    }
+
+    fn start_else(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_ELSE, &[TAG_IF]);
+        todo!()
+    }
+
+    fn start_raise(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_RAISE, &[]);
+        todo!()
+    }
+
+    fn start_send(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_SEND, &[]);
+        todo!()
+    }
+
+    fn start_log(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_LOG, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        let expr = attr.get(TAG_EXPR);
+        if expr.is_some() {
+            self.add_executable_content(Box::new(Log::new(expr.unwrap().as_str())));
+        }
+    }
+
+    fn start_assign(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_ASSIGN, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        todo!()
+    }
+
+    fn start_element(&mut self, reader: &Reader<Box<dyn BufRead>>, e: &BytesStart, txt: &mut Vec<String>) {
         let n = e.local_name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
@@ -413,14 +540,53 @@ impl ReaderState {
             TAG_TRANSITION => {
                 self.start_transition(attr);
             }
-            TAG_SCRIPT | TAG_RAISE | TAG_SEND | TAG_LOG | TAG_ASSIGN | TAG_IF | TAG_FOR_EACH | TAG_CANCEL => {
-                self.start_executable_content(&name);
+            TAG_SCRIPT => {
+                txt.clear();
+                self.start_script(attr);
             }
-            TAG_ELSE | TAG_ELSEIF => {
-                self.start_else(&name);
+            TAG_RAISE => {
+                self.start_raise(attr);
+            }
+            TAG_SEND => {
+                self.start_send(attr);
+            }
+            TAG_LOG => {
+                self.start_log(attr);
+            }
+            TAG_ASSIGN => {
+                self.start_assign(attr);
+            }
+            TAG_FOR_EACH => {
+                self.start_for_each(attr);
+            }
+            TAG_CANCEL => {
+                self.start_cancel(attr);
+            }
+            TAG_IF => {
+                self.start_if(attr);
+            }
+            TAG_ELSE => {
+                self.start_else(attr);
+            }
+            TAG_ELSEIF => {
+                self.start_else_if(attr);
             }
             _ => {
                 debug!("Ignored tag {}", name)
+            }
+        }
+    }
+
+    fn get_resolved_path(&mut self, ps: &String) -> PathBuf {
+        let src = Path::new(ps).clone().to_owned();
+        let parent = Path::new(&self.file).parent();
+        match parent {
+            Some(parent_path) => {
+                let pp = parent_path.join(src);
+                pp.to_owned()
+            }
+            None => {
+                src.to_owned()
             }
         }
     }
@@ -430,16 +596,7 @@ impl ReaderState {
         if href.is_none() {
             panic!("{} in <{}> missing", TAG_HREF, TAG_INCLUDE);
         }
-        let mut src = Path::new(href.unwrap()).clone().to_owned();
-
-        let parent = Path::new(&self.file).parent();
-        match parent {
-            Some(parent_path) => {
-                let pp = parent_path.join(src);
-                src = pp.to_owned();
-            }
-            None => {}
-        }
+        let mut src = self.get_resolved_path(href.unwrap());
 
         match File::open(src.clone()) {
             Ok(f) => {
@@ -462,6 +619,12 @@ impl ReaderState {
         match name {
             TAG_SCRIPT => {
                 self.end_script(txt);
+            }
+            TAG_IF => {
+                self.end_if();
+            }
+            TAG_TRANSITION => {
+                self.end_transition();
             }
             _ => {}
         }
@@ -540,14 +703,14 @@ fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, 
 // exits the loop when reaching end of file
             Ok(Event::Eof) => break,
             Ok(Event::Start(e)) => {
-                rs.start_element(&mut reader, &e);
+                rs.start_element(&mut reader, &e, &mut txt);
             }
             Ok(Event::End(e)) => {
                 rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Empty(e)) => {
 // Element without content.
-                rs.start_element(&mut reader, &e);
+                rs.start_element(&mut reader, &e, &mut txt);
                 rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
@@ -571,6 +734,24 @@ mod tests {
         crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'>\
     <initial><transition></transition></initial></state></scxml>".to_string());
     }
+
+    #[test]
+    #[should_panic]
+    fn script_with_src_and_content_should_panic() {
+        crate::reader::read_from_xml("<scxml initial='Main'><state id='Main'>\
+    <initial><transition><script src='xml/example/script.js'>println();</script></transition></initial></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn script_with_src_should_load_file() {
+        let r =
+            crate::reader::read_from_xml("<scxml initial='Main'><state id='Main'>\
+    <initial><transition><script src='xml/example/script.js'></script></transition></initial></state></scxml>".to_string());
+        assert_eq!(r.is_ok(), true);
+
+        let fsm = r.unwrap();
+    }
+
 
     #[test]
     fn initial_attribute() {
