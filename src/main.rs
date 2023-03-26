@@ -27,33 +27,45 @@ fn main() {
     match reader::read_from_xml_file(args[1].clone()) {
         Ok(mut sm) => {
             sm.tracer.enableTrace(Trace::ALL);
-            let (threadHandle, sender) = fsm::start_fsm(sm);
+            let (_thread_handle, sender) = fsm::start_fsm(sm);
 
             let mut line = String::new();
             let stdin = io::stdin();
-            let emptyStr = "".to_string();
+            let empty_str = "".to_string();
 
             loop {
                 thread::sleep(time::Duration::from_millis(200));
                 print!("\nEnter Event >>");
-                stdout().flush();
+                match stdout().flush() {
+                    _ => {}
+                }
                 match stdin.read_line(&mut line) {
-                    Ok(S) => {
+                    Ok(_s) => {
                         if line.ends_with('\n') {
                             line.pop();
                             if line.ends_with('\r') {
                                 line.pop();
                             }
                         }
-                        sender.send(Box::new(Event {
+                        let event = Box::new(Event {
                             name: line.clone(),
                             etype: EventType::platform,
                             sendid: 0,
-                            origin: emptyStr.clone(),
-                            origintype: emptyStr.clone(),
+                            origin: empty_str.clone(),
+                            origintype: empty_str.clone(),
                             invokeid: 1,
                             data: None,
-                        }));
+                        });
+                        match sender.send(event) {
+                            Ok(_r) => {
+                                // ok
+                            }
+                            Err(e) => {
+                                eprintln!("Error sending event: {}", e);
+                                eprintln!("Aborting...");
+                                process::exit(-2);
+                            }
+                        }
                     }
 
                     Err(e) => {
@@ -62,7 +74,6 @@ fn main() {
                     }
                 }
             }
-            threadHandle.join();
         }
         Err(e) => {
             eprintln!("Failed to open {} error {}", args[0], e);

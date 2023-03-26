@@ -1,15 +1,13 @@
-use std::borrow::BorrowMut;
 use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::sync::atomic::Ordering;
 
-use log::{info, warn};
+use log::warn;
 
-use crate::fsm::{Datamodel, ExecutableContentId, Fsm, ID_COUNTER};
-use crate::reader::TAG_LOG;
+use crate::fsm::{Datamodel, ExecutableContentId, ID_COUNTER};
 
 pub trait ExecutableContent: Debug + Send {
-    fn Id(&self) -> ExecutableContentId;
+    fn get_id(&self) -> ExecutableContentId;
     fn execute(&self, datamodel: &mut dyn Datamodel);
 }
 
@@ -59,13 +57,13 @@ impl Script {
 }
 
 impl ExecutableContent for Script {
-    fn Id(&self) -> ExecutableContentId {
+    fn get_id(&self) -> ExecutableContentId {
         self.id
     }
 
     fn execute(&self, datamodel: &mut dyn Datamodel) {
         for s in &self.content {
-            let l = datamodel.executeContent(*s);
+            let _l = datamodel.executeContent(*s);
         }
     }
 }
@@ -81,12 +79,12 @@ impl Expression {
 }
 
 impl ExecutableContent for Expression {
-    fn Id(&self) -> ExecutableContentId {
+    fn get_id(&self) -> ExecutableContentId {
         self.id
     }
 
     fn execute(&self, datamodel: &mut dyn Datamodel) {
-        let l = datamodel.execute(&self.content);
+        let _l = datamodel.execute(&self.content);
     }
 }
 
@@ -101,7 +99,7 @@ impl Log {
 }
 
 impl ExecutableContent for Log {
-    fn Id(&self) -> ExecutableContentId {
+    fn get_id(&self) -> ExecutableContentId {
         self.id
     }
 
@@ -124,13 +122,13 @@ impl If {
 }
 
 impl ExecutableContent for If {
-    fn Id(&self) -> ExecutableContentId {
+    fn get_id(&self) -> ExecutableContentId {
         self.id
     }
 
     fn execute(&self, datamodel: &mut dyn Datamodel) {
-        let mut global = datamodel.global();
-        let mut ex = global.deref().borrow_mut();
+        let global = datamodel.global();
+        let ex = global.deref().borrow_mut();
         match datamodel.executeCondition(&self.expression) {
             Ok(r) => {
                 if r {
@@ -166,15 +164,15 @@ impl ForEach {
 }
 
 impl ExecutableContent for ForEach {
-    fn Id(&self) -> ExecutableContentId {
+    fn get_id(&self) -> ExecutableContentId {
         self.id
     }
 
     fn execute(&self, datamodel: &mut dyn Datamodel) {
         let tmp = INDEX_TEMP.to_string();
         let idx = self.index.as_ref().unwrap_or_else(|| { &tmp });
-        let mut global = datamodel.global();
-        let mut ex = global.deref().borrow_mut();
+        let global = datamodel.global();
+        let ex = global.deref().borrow_mut();
         datamodel.executeForEach(&self.array, &self.item, &idx, &|md: &mut dyn Datamodel| {
             if self.content != 0 {
                 ex.executableContent.get(&self.content).unwrap().execute(md);

@@ -55,7 +55,7 @@ impl ECMAScriptContext {
 }
 
 thread_local!(
-    static context_map: RefCell<HashMap<u32, Rc<RefCell<ECMAScriptContext>>>> = RefCell::new(HashMap::new());
+    static CONTEXT_MAP: RefCell<HashMap<u32, Rc<RefCell<ECMAScriptContext>>>> = RefCell::new(HashMap::new());
 );
 
 #[derive(Debug)]
@@ -89,7 +89,7 @@ impl ECMAScriptDatamodel {
     }
 
     fn get_context(&self) -> Rc<RefCell<ECMAScriptContext>> {
-        context_map.with(|c| {
+        CONTEXT_MAP.with(|c| {
             let mut ch = c.borrow_mut();
             if !ch.contains_key(&self.context_id) {
                 ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
@@ -101,7 +101,7 @@ impl ECMAScriptDatamodel {
     fn execute_internal(&mut self, script: &String) -> String {
         println!("Execute: {}", script);
         let mut r: String = "".to_string();
-        context_map.with(|c| {
+        CONTEXT_MAP.with(|c| {
             let ctx: Rc<RefCell<ECMAScriptContext>> = c.borrow().get(&self.context_id).unwrap().clone();
 
 
@@ -129,14 +129,14 @@ impl ECMAScriptDatamodel {
  */
 impl Datamodel for ECMAScriptDatamodel {
     fn global(&self) -> Rc<RefCell<GlobalData>> {
-        context_map.with(|c| {
+        CONTEXT_MAP.with(|c| {
             let mut ch = c.borrow_mut();
             if !ch.contains_key(&self.context_id) {
                 ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
             }
 
             let ext = ch.get(&self.context_id).unwrap().clone();
-            let mut eeee = ext.borrow() as &RefCell<ECMAScriptContext>;
+            let eeee = ext.borrow() as &RefCell<ECMAScriptContext>;
             let x = eeee.borrow().global_data.clone();
             x
         })
@@ -147,16 +147,16 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn initializeDataModel(&mut self, data: &DataStore) {
-        context_map.with(|c|
+        CONTEXT_MAP.with(|c|
             {
-                let mut ch = c.borrow_mut();
+                let ch = c.borrow_mut();
                 let mut ecms_ctx = (ch.get(&self.context_id).unwrap().borrow() as &RefCell<ECMAScriptContext>).borrow_mut();
 
                 ecms_ctx.context.register_global_builtin_function("log", 1, log_js);
                 let cid = self.context_id;
-                ecms_ctx.context.register_global_closure("In", 1, move |_this: &JsValue, args: &[JsValue], ctx: &mut Context| -> JsResult<JsValue> {
+                match ecms_ctx.context.register_global_closure("In", 1, move |_this: &JsValue, args: &[JsValue], ctx: &mut Context| -> JsResult<JsValue> {
                     if args.len() > 0 {
-                        context_map.with(|c| {
+                        CONTEXT_MAP.with(|c| {
                             let cid2 = cid;
                             let ch = c.borrow();
                             let ecms_ctx = (**ch.get(&cid2).unwrap()).borrow();
@@ -164,8 +164,8 @@ impl Datamodel for ECMAScriptDatamodel {
                             let m = (gd_rc.borrow() as &RefCell<GlobalData>).borrow().statesNames.get(&str(&args[0], ctx)).cloned();
                             match m
                             {
-                                Some(sid) => {
-                                    Ok(JsValue::from(false))
+                                Some(_sid) => {
+                                    Ok(JsValue::from(true))
                                 }
                                 None => {
                                     Ok(JsValue::from(false))
@@ -175,7 +175,12 @@ impl Datamodel for ECMAScriptDatamodel {
                     } else {
                         Err(JsValue::from("Missing argument"))
                     }
-                });
+                }) {
+                    Err(e) => {
+                        panic!("Failed to register 'log' function. {}", e.display());
+                    }
+                    _ => {}
+                };
 
                 for (name, data) in &data.values
                 {
@@ -193,8 +198,8 @@ impl Datamodel for ECMAScriptDatamodel {
 
     fn get(self: &ECMAScriptDatamodel, name: &String) -> Option<&dyn Data> {
         match self.data.get(name) {
-            Some(D) => {
-                Some(&**D)
+            Some(data) => {
+                Some(&**data)
             }
             None => {
                 None
@@ -212,7 +217,7 @@ impl Datamodel for ECMAScriptDatamodel {
         self.execute_internal(script)
     }
 
-    fn executeForEach(&mut self, arrayExpression: &String, item: &String, index: &String, executeBody: &dyn FnOnce(&mut dyn Datamodel)) {
+    fn executeForEach(&mut self, array_expression: &String, item: &String, index: &String, execute_body: &dyn FnOnce(&mut dyn Datamodel)) {
         todo!()
     }
 
@@ -224,7 +229,7 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn executeContent(&mut self, content_id: ExecutableContentId) {
-        let mut global = self.global();
+        let global = self.global();
         let mut ex = global.deref().borrow_mut();
 
         ex.executableContent.get_mut(&content_id).unwrap().execute(self);

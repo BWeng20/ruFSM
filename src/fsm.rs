@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::rc::Rc;
 use std::slice::Iter;
 use std::sync::{Arc, Mutex};
@@ -654,7 +654,7 @@ pub trait Tracer: Send + Debug {
 
 thread_local! {
     /// Trasce prefix for [DefaultTracer]
-    static trace_prefix: RefCell<String> = RefCell::new("".to_string());
+    static TRACE_PREFIX: RefCell<String> = RefCell::new("".to_string());
  }
 
 #[derive(Debug)]
@@ -702,11 +702,11 @@ impl DefaultTracer {
     }
 
     fn get_prefix() -> String {
-        trace_prefix.with(|p| p.borrow().clone())
+        TRACE_PREFIX.with(|p| p.borrow().clone())
     }
 
     fn set_prefix(p: String) {
-        trace_prefix.with(|pfx: &RefCell<String>| { *pfx.borrow_mut().deref_mut() = p; });
+        TRACE_PREFIX.with(|pfx: &RefCell<String>| { *pfx.borrow_mut().deref_mut() = p; });
     }
 }
 
@@ -1205,7 +1205,7 @@ impl Fsm {
             let mut invokes: Vec<Invoke> = Vec::new();
             {
                 let s = self.get_state_by_id(*sid);
-                if (s.onexit != 0) {
+                if s.onexit != 0 {
                     content.push(s.onexit);
                 }
                 for inv in s.invoke.iterator() {
@@ -1239,7 +1239,12 @@ impl Fsm {
             match &self.caller_sender {
                 None => panic!("caller-sender not available but caller-invoke-id is set."),
                 Some(sender) => {
-                    sender.send(Box::new(Event::new("done.invoke.", self.caller_invoke_id, done_data)));
+                    match sender.send(Box::new(Event::new("done.invoke.", self.caller_invoke_id, done_data))) {
+                        Err(e) => {
+                            self.tracer.trace(format!("Failed to send 'done.invoke'. {}", e).as_str());
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
@@ -2347,6 +2352,7 @@ pub struct State {
     pub parent: StateId,
     pub donedata: Option<DoneData>,
     pub script: ExecutableContentId,
+    pub script_src: String,
 }
 
 impl State {
@@ -2372,6 +2378,7 @@ impl State {
             invoke: List::new(),
             history: List::new(),
             script: 0,
+            script_src: "".to_string()
         }
     }
 }
@@ -2585,13 +2592,13 @@ impl NullDatamodel {
 }
 
 thread_local!(
-    static null_data: Rc<RefCell<GlobalData>> = Rc::new(RefCell::new(GlobalData::new()));
+    static NULL_DATA: Rc<RefCell<GlobalData>> = Rc::new(RefCell::new(GlobalData::new()));
 );
 
 
 impl Datamodel for NullDatamodel {
     fn global(&self) -> Rc<RefCell<GlobalData>> {
-        null_data.with(|c| {
+        NULL_DATA.with(|c| {
             c.clone()
         })
     }
@@ -2620,7 +2627,7 @@ impl Datamodel for NullDatamodel {
         "".to_string()
     }
 
-    fn executeForEach(&mut self, arrayExpression: &String, item: &String, index: &String, executeBody: &dyn FnOnce(&mut dyn Datamodel)) {
+    fn executeForEach(&mut self, _array_expression: &String, _item: &String, _index: &String, _executeBody: &dyn FnOnce(&mut dyn Datamodel)) {
         // nothing to do
     }
 
@@ -2633,7 +2640,7 @@ impl Datamodel for NullDatamodel {
         Result::Ok(false)
     }
 
-    fn executeContent(&mut self, contentId: ExecutableContentId) {
+    fn executeContent(&mut self, _content_id: ExecutableContentId) {
         // Nothing
     }
 }
@@ -2723,10 +2730,16 @@ pub(crate) fn vecToString<T: Display>(v: &Vec<T>) -> String {
 #[cfg(test)]
 mod tests {
     use std::{thread, time};
+    use std::sync::mpsc::Sender;
 
     use crate::{Event, EventType, fsm, reader, Trace};
     use crate::fsm::List;
     use crate::fsm::OrderedSet;
+
+    fn test_send(sender: &Sender<Box<Event>>, e: Event)
+    {
+        sender.send(Box::new(e));
+    }
 
     #[test]
     fn list_can_can_push() {
@@ -3028,7 +3041,7 @@ mod tests {
     #[test]
     fn fsm_shall_exit() {
         println!("Creating The SM:");
-        let mut sm = reader::read_from_xml(
+        let sm = reader::read_from_xml(
             r"<scxml initial='Main' datamodel='ecmascript'>
       <script>
         log('Hello World', ' again ');
@@ -3068,8 +3081,8 @@ mod tests {
 
         let emptyStr = "".to_string();
 
-        sender.send(Box::new(Event { name: "ab".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 1, data: None }));
-        sender.send(Box::new(Event { name: "exit".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 2, data: None }));
+        test_send(&sender, Event { name: "ab".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 1, data: None });
+        test_send(&sender, Event { name: "exit".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 2, data: None });
 
         // TODO: How to check for timeouts??
         threadHandle.join();
