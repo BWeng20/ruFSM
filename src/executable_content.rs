@@ -49,7 +49,7 @@ pub struct ForEach {
 #[derive(Debug)]
 pub struct SendParameters {
     pub id: ExecutableContentId,
-    pub idlocation: String,
+    pub namelocation: String,
     /// The SCXML id.
     pub name: String,
 
@@ -61,7 +61,7 @@ pub struct SendParameters {
     pub typeexpr: String,
 
     pub delay: String,
-    pub delayExrp: String,
+    pub delayexrp: String,
 
     pub nameList: String,
 
@@ -208,7 +208,7 @@ impl SendParameters {
     pub fn new() -> SendParameters {
         SendParameters {
             id: 0,
-            idlocation: "".to_string(),
+            namelocation: "".to_string(),
             name: "".to_string(),
             event: "".to_string(),
             eventexpr: "".to_string(),
@@ -217,7 +217,7 @@ impl SendParameters {
             typeS: "".to_string(),
             typeexpr: "".to_string(),
             delay: "".to_string(),
-            delayExrp: "".to_string(),
+            delayexrp: "".to_string(),
             nameList: "".to_string(),
             content: 0,
         }

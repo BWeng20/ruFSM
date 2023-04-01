@@ -39,6 +39,7 @@ fn main() {
                 match stdout().flush() {
                     _ => {}
                 }
+                line.clear();
                 match stdin.read_line(&mut line) {
                     Ok(_s) => {
                         if line.ends_with('\n') {

@@ -41,7 +41,7 @@
             <final id="Test1Sub2"/>
 
             <!-- We get this event when we reach Test1Sub2. -->
-            <transition event="Test1.done" target="Test2"/>
+            <transition event="done.state.Test1" target="Test2"/>
 
             <!-- We run this on the way out of Test1 -->
             <onexit>

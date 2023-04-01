@@ -19,13 +19,62 @@ pub type AttributeMap = HashMap<String, String>;
 
 static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
+
+/// #W3C says:
+/// The top-level wrapper element, which carries version information. The actual state machine consists of its children.
+/// Note that only one of the children is active at any one time. See 3.11 Legal State Configurations and Specifications for details.\
+/// *Attributes:*
+/// + __initial__ A legal state specification. See 3.11 Legal State Configurations and Specifications for details. If not specified, the default initial state is the first child state in document order.
+/// + __name__ Any valid NMTOKEN. The name of this state machine. It is for purely informational purposes.
+/// + __xmlns__   The value MUST be "http://www.w3.org/2005/07/scxml".
+/// + __version__   Decimal, The value MUST be "1.0".
+/// + __datamodel__ NMTOKEN, platform-specific, "null", "ecmascript", "xpath" or other platform-defined values.
+/// + __binding__  "early" or "late", default is "early". See 5.3.3 Data Binding for details.
+///
+/// *Children:*
+/// + __state__ A compound or atomic state. Occurs zero or more times. See 3.3 \<state\> for details.
+/// + __parallel__  A parallel state. Occurs zero or more times. See 3.4 \<parallel\> for details.
+/// + __final__  A top-level final state in the state machine. Occurs zero or more times. The SCXML processor must terminate processing when the state machine reaches this state. See 3.7 \<final\> for details.
+/// + __datamodel__  Defines part or all of the data model. Occurs 0 or 1 times. See 5.2 \<datamodel\>
+/// + __script__ Provides scripting capability. Occurs 0 or 1 times. 5.8 \<script\>
 pub const TAG_SCXML: &str = "scxml";
-pub const ATTR_ID: &str = "id";
+
+pub const ATTR_DATAMODEL: &str = "datamodel";
+
 pub const TAG_DATAMODEL: &str = "datamodel";
 pub const TAG_DATA: &str = "data";
-pub const ATTR_DATAMODEL: &str = "datamodel";
 pub const TAG_VERSION: &str = "version";
 pub const TAG_INITIAL: &str = "initial";
+pub const ATTR_ID: &str = "id";
+
+/// #W3C says:
+/// Holds the representation of a state.
+///
+/// *Attributes*:
+/// + __id__  valid id as defined in [XML Schema].The identifier for this state. See 3.14 IDs for details.
+/// + __initial__	The id of the default initial state (or states) for this state. MUST NOT be specified in conjunction with the \<initial\> element. MUST NOT occur in atomic states.
+///
+/// *Children*:
+/// + __onentry__ Optional element holding executable content to be run upon entering this state. Occurs 0 or more times.
+/// + __onexit__ Optional element holding executable content to be run when exiting this state. Occurs 0 or more times.
+/// + __transition__ Defines an outgoing transition from this state. Occurs 0 or more times.
+/// + __initial__ In states that have substates, an optional child which identifies the default initial state.
+///   Any transition which takes the parent state as its target will result in the state machine also taking the transition
+///   contained inside the \<initial\> element.
+/// + __state__ Defines a sequential substate of the parent state. Occurs 0 or more times.
+/// + __parallel__ Defines a parallel substate. Occurs 0 or more times.
+/// + __final__  Defines a final substate. Occurs 0 or more times.
+/// + __history__ A child pseudo-state which records the descendant state(s) that the parent state was in the last time the system transitioned from the parent.
+///   May occur 0 or more times.
+/// + __datamodel__ Defines part or all of the data model. Occurs 0 or 1 times.
+/// + __invoke__ Invokes an external service. Occurs 0 or more times.
+///
+/// [__Definition__: An atomic state is a <state> that has no <state>, <parallel> or <final> children.]\
+/// [__Definition__: A compound state is a <state> that has <state>, <parallel>, or <final> children (or a combination of these).]\
+/// [__Definition__: The default initial state(s) of a compound state are those specified by the 'initial' attribute or <initial> element, if either is present. Otherwise it is the state's first child state in document order. ]\
+/// In a conformant SCXML document, a compound state may specify either an "initial" attribute or an <initial> element, but not both.
+/// See 3.6 \<initial\> for a discussion of the difference between the two notations.
+///
 pub const TAG_STATE: &str = "state";
 pub const ATTR_INITIAL: &str = "initial";
 pub const TAG_HISTORY: &str = "history";
@@ -49,7 +98,52 @@ pub const ATTR_XPOINTER: &str = "xpointer";
 /// Executable content
 pub const TAG_RAISE: &str = "raise";
 
+/// #W3C says:
+/// __\<send\>__ is used to send events and data to external systems, including external SCXML Interpreters, or to raise events in the current SCXML session.
+///
+/// *Attributes*:
+/// + __event__	A string indicating the name of message being generated. Must not occur with 'eventexpr'. If the type is *http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*, either
+///             this attribute or 'eventexpr' must be present.
+/// + __eventexpr__	A dynamic alternative to 'event'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat
+///                 the result as if it had been entered as the value of 'event'. 
+///                 If the type is "*http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*", either this attribute or 'event' must be present. Must not occur with 'event'.
+/// + __target__	A valid target URI. The unique identifier of the message target that the platform should send the event to. Must not occur with 'targetexpr'.
+///                 See [6.2.4 The Target of Send](https://www.w3.org/TR/scxml/#SendTargets) for details.
+///                 See [SCXMLEventProcessor](https://www.w3.org/TR/scxml/#SCXMLEventProcessor) for details about predefined targets.
+/// + __targetexpr__ An expression evaluating to a valid target URI	A dynamic alternative to 'target'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it
+///                  had been entered as the value of 'target'. Must not occur with 'target'.
+/// + __type__	    The URI that identifies the transport mechanism for the message. Must not occur with 'typeexpr'.
+///                 See [6.2.5 The Type of Send](https://www.w3.org/TR/scxml/#SendTypes).
+/// + __typeexpr__	A dynamic alternative to 'type'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been
+///                 entered as the value of 'type'. Must not occur with 'type'.
+/// + __id__	Any valid token	A string literal to be used as the identifier for this instance of <send>. Must not occur with 'idlocation'.
+/// + __idlocation__ Any location expression evaluating to a data model location in which a system-generated id can be stored. See below for details. Must not occur with 'id'.
+/// + __delay__	A time designation as defined in CSS2 format (RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
+///             Indicates how long the processor should wait before dispatching the message.
+///             Must not occur with 'delayexpr' or when the attribute 'target' has the value "_internal".
+/// + __delayexpr__	A value expression which returns a time designation as defined in CSS2 format. A dynamic alternative to 'delay'. If this attribute is present, the SCXML
+///                 Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been entered as the value of 'delay'.
+///                 Must not occur with 'delay' or when the attribute 'target' has the value "_internal".
+/// + __namelist__	A space-separated list of one or more data model locations to be included as attribute/value pairs with the message. (The name of the location is the attribute
+///                 and the value stored at the location is the value.).
+///                 Must not be specified in conjunction with \<content\> element.
+///
+/// *Children*
+/// + __param__ The SCXML Processor must evaluate this element when the parent \<send\> element is evaluated and pass the resulting data to the external service when the message
+///             is delivered. Occurs 0 or more times.
+/// + __content__ The SCXML Processor must evaluate this element when the parent \<send\> element is evaluated and pass the resulting data to the external service when the message
+///             is delivered. Occurs 0 or 1 times.
+///
+/// A conformant SCXML document must specify exactly one of 'event', 'eventexpr' and \<content\>. A conformant document must not specify "namelist" or \<param\> with \<content\>.\
+/// The SCXML Processor must include all attributes and values provided by \<param\> or 'namelist' even if duplicates occur.\
+/// If 'idlocation' is present, the SCXML Processor must generate an id when the parent \<send\> element is evaluated and store it in this location. See [3.14 IDs](https://www.w3.org/TR/scxml/#IDs) for details.\
+/// If a delay is specified via 'delay' or 'delayexpr', the SCXML Processor must interpret the character string as a time interval. It must dispatch the message only when the delay interval elapses.
+/// (Note that the evaluation of the send tag will return immediately.)\
+/// The Processor must evaluate all arguments to <send> when the <send> element is evaluated, and not when the message is actually dispatched. If the evaluation of \<send\>'s arguments produces an error,
+/// the Processor must discard the message without attempting to deliver it. If the SCXML session terminates before the delay interval has elapsed, the SCXML Processor must discard the message without
+/// attempting to deliver it.
 pub const TAG_SEND: &str = "send";
+
 pub const ATTR_EVENT: &str = "event";
 pub const ATTR_EVENTEXPR: &str = "eventexpr";
 pub const ATTR_TARGET: &str = "target";
@@ -490,24 +584,6 @@ impl ReaderState {
         self.current.current_transition = 0;
     }
 
-    fn end_on_exit(&mut self) {
-        let ct_id = self.current.current_executable_content;
-        self.current.current_executable_content = 0;
-
-        let state = self.get_current_state();
-        // Assign the collected content to the on-exirt.
-        state.onexit = ct_id;
-    }
-
-    fn end_on_entry(&mut self) {
-        let ct_id = self.current.current_executable_content;
-        self.current.current_executable_content = 0;
-
-        let state = self.get_current_state();
-        // Assign the collected content to the on-exirt.
-        state.onentry = ct_id;
-    }
-
     fn start_script(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_SCRIPT, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
         let src = attr.get(ATTR_SRC);
@@ -568,9 +644,27 @@ impl ReaderState {
         self.current.current_executable_content = 0;
     }
 
+    fn end_on_entry(&mut self) {
+        let ct_id = self.current.current_executable_content;
+        self.current.current_executable_content = 0;
+
+        let state = self.get_current_state();
+        // Assign the collected content to the on-exirt.
+        state.onentry = ct_id;
+    }
+
     fn start_on_exit(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
         self.current.current_executable_content = 0;
+    }
+
+    fn end_on_exit(&mut self) {
+        let ct_id = self.current.current_executable_content;
+        self.current.current_executable_content = 0;
+
+        let state = self.get_current_state();
+        // Assign the collected content to the on-exit.
+        state.onexit = ct_id;
     }
 
     fn start_if(&mut self, attr: &AttributeMap) {
@@ -600,44 +694,69 @@ impl ReaderState {
     fn start_send(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_SEND, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
 
-        let sendParams = SendParameters::new();
+        let mut sendParams = SendParameters::new();
 
-        let event = attr.get(ATTR_EVENT);
-        let eventexpr = attr.get(ATTR_EVENTEXPR);
+        let mut event = attr.get(ATTR_EVENT);
+        let mut eventexpr = attr.get(ATTR_EVENTEXPR);
 
-        if event.is_some() && eventexpr.is_some() {
-            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR);
+        if event.is_some() {
+            if eventexpr.is_some() {
+                panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR);
+            }
+            sendParams.event = event.unwrap().clone();
+        } else if eventexpr.is_some() {
+            sendParams.eventexpr = eventexpr.unwrap().clone();
         }
 
         let target = attr.get(ATTR_TARGET);
         let targetexpr = attr.get(ATTR_TARGETEXPR);
-        if target.is_some() && targetexpr.is_some() {
-            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR);
+        if target.is_some() {
+            if targetexpr.is_some() {
+                panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR);
+            }
+            sendParams.target = target.unwrap().clone();
+        } else if targetexpr.is_some() {
+            sendParams.targetexpr = targetexpr.unwrap().clone();
         }
 
         let typeS = attr.get(ATTR_TYPE);
         let typeexpr = attr.get(ATTR_TYPEEXPR);
-        if typeS.is_some() && typeexpr.is_some() {
-            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR);
+        if typeS.is_some() {
+            if typeexpr.is_some() {
+                panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR);
+            }
+            sendParams.typeS = typeS.unwrap().clone();
+        } else if typeexpr.is_some() {
+            sendParams.typeexpr = typeexpr.unwrap().clone();
         }
 
         let id = attr.get(ATTR_ID);
         let idlocation = attr.get(ATTR_IDLOCATION);
-        if id.is_some() && idlocation.is_some() {
-            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_ID, ATTR_IDLOCATION);
+        if id.is_some() {
+            if idlocation.is_some() {
+                panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_ID, ATTR_IDLOCATION);
+            }
+            sendParams.name = id.unwrap().clone();
+        } else if idlocation.is_some() {
+            sendParams.namelocation = idlocation.unwrap().clone();
         }
 
         let delay = attr.get(ATTR_DELAY);
         let delayExrp = attr.get(ATTR_DELAYEXPR);
-        if delayExrp.is_some() && delay.is_some() {
-            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR);
+        if delayExrp.is_some() {
+            if delay.is_some() {
+                panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR);
+            }
+            sendParams.delayexrp = delayExrp.unwrap().clone();
+        } else if delay.is_some() {
+            sendParams.delay = delay.unwrap().clone();
         }
 
         let nameList = attr.get(ATTR_NAMELIST);
-
+        if nameList.is_some() {
+            sendParams.nameList = nameList.unwrap().clone();
+        }
         self.add_executable_content(Box::new(sendParams));
-
-        todo!()
     }
 
     fn start_content(&mut self, attr: &AttributeMap) {

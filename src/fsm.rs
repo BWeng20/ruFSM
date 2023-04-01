@@ -492,7 +492,7 @@ impl Data for Event {
 }
 
 impl Event {
-    pub fn new(prefix: &str, id: u32, ev_data: &Option<DoneData>) -> Event {
+    pub fn new(prefix: &str, id: &String, ev_data: &Option<DoneData>) -> Event {
         Event {
             name: format!("{}{}", prefix, id),
             etype: EventType::external,
@@ -1239,7 +1239,7 @@ impl Fsm {
             match &self.caller_sender {
                 None => panic!("caller-sender not available but caller-invoke-id is set."),
                 Some(sender) => {
-                    match sender.send(Box::new(Event::new("done.invoke.", self.caller_invoke_id, done_data))) {
+                    match sender.send(Box::new(Event::new("done.invoke.", &self.caller_invoke_id.to_string(), done_data))) {
                         Err(e) => {
                             self.tracer.trace(format!("Failed to send 'done.invoke'. {}", e).as_str());
                         }
@@ -1640,13 +1640,15 @@ impl Fsm {
                 if self.isSCXMLElement(parent) {
                     self.global().borrow_mut().running = false
                 } else {
-                    self.enqueue_internal(Event::new("done.state.", parent, &stateS.donedata));
+                    let parentS = self.get_state_by_id(parent);
+                    self.enqueue_internal(Event::new("done.state.", &parentS.name, &stateS.donedata));
                     let stateParent = self.get_state_by_id(parent);
                     let grandparent: StateId = stateParent.parent;
                     if self.isParallelState(grandparent) {
                         if self.getChildStates(grandparent).every(
                             &|s: &StateId| -> bool{ self.isInFinalState(*s) }) {
-                            self.enqueue_internal(Event::new("done.state.", grandparent, &None));
+                            let grandparentS = self.get_state_by_id(parent);
+                            self.enqueue_internal(Event::new("done.state.", &grandparentS.name, &None));
                         }
                     }
                 }
@@ -1663,7 +1665,10 @@ impl Fsm {
 
     pub fn executeContent(&mut self, contentId: ExecutableContentId) {
         self.tracer.enterMethod("executeContent");
-        self.datamodel.executeContent(contentId);
+        self.tracer.traceArgument("contentId", &contentId);
+        if contentId != 0 {
+            self.datamodel.executeContent(contentId);
+        }
         self.tracer.exitMethod("executeContent");
     }
 
@@ -2378,7 +2383,7 @@ impl State {
             invoke: List::new(),
             history: List::new(),
             script: 0,
-            script_src: "".to_string()
+            script_src: "".to_string(),
         }
     }
 }
