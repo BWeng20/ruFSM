@@ -383,13 +383,18 @@ impl ReaderState {
         }
         state.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
 
+
         if parent != 0 {
             state.parent = parent;
             let parent_state = self.get_state_by_id_mut(parent);
+            debug!(" state #{} {}{} parent {}", id, if parallel { "(parallel) " } else { "" }, sname, parent_state.name);
             if !parent_state.states.contains(&id) {
                 parent_state.states.push(id);
             }
+        } else {
+            debug!(" state #{} {}{} no parent", id, if parallel { "(parallel) " } else { "" }, sname);
         }
+
         id
     }
 
@@ -452,7 +457,9 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
-        self.get_or_create_state_with_attributes(attr, true, self.current.current_state)
+        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
+        self.current.current_state = state_id;
+        state_id
     }
 
     // A new "final" element started
@@ -463,6 +470,7 @@ impl ReaderState {
         let state_id = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
 
         self.fsm.get_state_by_id_mut(state_id).is_final = true;
+        self.current.current_state = state_id;
         state_id
     }
 
@@ -485,6 +493,7 @@ impl ReaderState {
             None => hstate.history_type = HistoryType::Shallow,
             Some(type_name) => hstate.history_type = map_history_type(type_name)
         }
+        self.current.current_state = state_id;
         state_id
     }
 

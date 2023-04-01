@@ -611,7 +611,7 @@ pub trait Tracer: Send + Debug {
             if s.name.is_empty() {
                 self.trace(format!("{} #{}", what, s.id).as_str());
             } else {
-                self.trace(format!("{} <{}>", what, &s.name).as_str());
+                self.trace(format!("{} <{}> #{}", what, &s.name, s.id).as_str());
             }
         }
     }
@@ -1647,7 +1647,7 @@ impl Fsm {
                     if self.isParallelState(grandparent) {
                         if self.getChildStates(grandparent).every(
                             &|s: &StateId| -> bool{ self.isInFinalState(*s) }) {
-                            let grandparentS = self.get_state_by_id(parent);
+                            let grandparentS = self.get_state_by_id(grandparent);
                             self.enqueue_internal(Event::new("done.state.", &grandparentS.name, &None));
                         }
                     }
@@ -1673,7 +1673,12 @@ impl Fsm {
     }
 
     pub fn isParallelState(&self, state: StateId) -> bool {
-        state > 0 && self.get_state_by_id(state).is_parallel
+        self.tracer.enterMethod("isParallelState");
+        self.tracer.traceArgument("state", &state);
+        let b = state > 0 && self.get_state_by_id(state).is_parallel;
+        self.tracer.traceResult("parallel", &b.to_string());
+        self.tracer.exitMethod("isParallelState");
+        b
     }
 
     pub fn isSCXMLElement(&self, state: StateId) -> bool {
@@ -1922,7 +1927,15 @@ impl Fsm {
     ///     else:
     ///         return false
     /// ```
-    fn isInFinalState(&self, state: StateId) -> bool { todo!() }
+    fn isInFinalState(&self, s: StateId) -> bool {
+        if self.isCompoundState(s) {
+            self.getChildStates(s).some(&|cs: &StateId| -> bool { self.isFinalStateId(*cs) && self.global().borrow().configuration.isMember(cs) })
+        } else if self.isParallelState(s) {
+            self.getChildStates(s).every(&|cs: &StateId| -> bool { self.isInFinalState(*cs) })
+        } else {
+            false
+        }
+    }
 
 
     /// #W3C says:
@@ -2079,9 +2092,12 @@ impl Fsm {
         result
     }
 
+    /// #W3C says:
+    /// A Compound State: A state of type \<state\> with at least one child state.
     fn isCompoundState(&self, state: StateId) -> bool {
         if state != 0 {
-            !self.get_state_by_id(state).states.is_empty()
+            let stateS = self.get_state_by_id(state);
+            !(stateS.is_final || stateS.is_parallel || stateS.states.is_empty())
         } else {
             false
         }
