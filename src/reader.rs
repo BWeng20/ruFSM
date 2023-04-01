@@ -452,12 +452,7 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
         }
-        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
-        if self.current.current_state > 0 {
-            let parent_state = self.get_current_state();
-            parent_state.states.push(state_id);
-        }
-        state_id
+        self.get_or_create_state_with_attributes(attr, true, self.current.current_state)
     }
 
     // A new "final" element started
@@ -476,12 +471,15 @@ impl ReaderState {
         if !self.in_scxml {
             panic!("<{}> needed to be inside <{}>", TAG_HISTORY, TAG_SCXML);
         }
-        let state_id = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
+        // Don't add history-states to "states" (parent = 0)
+        let state_id = self.get_or_create_state_with_attributes(attr, false, 0);
         if self.current.current_state > 0 {
             let parent_state = self.get_current_state();
             parent_state.history.push(state_id);
         }
         let mut hstate = self.fsm.get_state_by_id_mut(state_id);
+        // Assign parent manually, as we didn't gave get_or_create_state_with_attributes the parent.
+        hstate.parent = self.current.current_state;
 
         match attr.get(TAG_TYPE) {
             None => hstate.history_type = HistoryType::Shallow,
