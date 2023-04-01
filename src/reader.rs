@@ -11,7 +11,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::executable_content::{ExecutableContent, Expression, Log};
+use crate::executable_content::{ExecutableContent, Expression, Log, SendParameters};
 use crate::fsm::{ExecutableContentId, Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
@@ -38,14 +38,31 @@ pub const TAG_TARGET: &str = "target";
 pub const TAG_TYPE: &str = "type";
 pub const TAG_ON_ENTRY: &str = "onentry";
 pub const TAG_ON_EXIT: &str = "onexit";
+pub const TAG_INVOKE: &str = "invoke";
+pub const TA_DONEDATA: &str = "donedata";
 
 pub const TAG_INCLUDE: &str = "include";
 pub const TAG_HREF: &str = "href";
-
+pub const ATTR_PARSE: &str = "parse";
+pub const ATTR_XPOINTER: &str = "xpointer";
 
 /// Executable content
 pub const TAG_RAISE: &str = "raise";
+
 pub const TAG_SEND: &str = "send";
+pub const ATTR_EVENT: &str = "event";
+pub const ATTR_EVENTEXPR: &str = "eventexpr";
+pub const ATTR_TARGET: &str = "target";
+pub const ATTR_TARGETEXPR: &str = "targetexpr";
+pub const ATTR_TYPE: &str = "type";
+pub const ATTR_TYPEEXPR: &str = "typeexpr";
+pub const ATTR_IDLOCATION: &str = "idlocation";
+pub const ATTR_DELAY: &str = "delay";
+pub const ATTR_DELAYEXPR: &str = "delayexpr";
+pub const ATTR_NAMELIST: &str = "namelist";
+pub const TAG_PARAM: &str = "param";
+pub const TAG_CONTENT: &str = "content";
+
 pub const TAG_LOG: &str = "log";
 pub const TAG_SCRIPT: &str = "script";
 pub const ATTR_SRC: &str = "src";
@@ -482,6 +499,14 @@ impl ReaderState {
         state.onexit = ct_id;
     }
 
+    fn end_on_entry(&mut self) {
+        let ct_id = self.current.current_executable_content;
+        self.current.current_executable_content = 0;
+
+        let state = self.get_current_state();
+        // Assign the collected content to the on-exirt.
+        state.onentry = ct_id;
+    }
 
     fn start_script(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_SCRIPT, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
@@ -538,6 +563,16 @@ impl ReaderState {
         todo!()
     }
 
+    fn start_on_entry(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_ON_ENTRY, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
+        self.current.current_executable_content = 0;
+    }
+
+    fn start_on_exit(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
+        self.current.current_executable_content = 0;
+    }
+
     fn start_if(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_IF, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]);
         todo!()
@@ -558,17 +593,71 @@ impl ReaderState {
     }
 
     fn start_raise(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_RAISE, &[]);
+        self.verify_parent_tag(TAG_RAISE, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
         todo!()
     }
 
     fn start_send(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_SEND, &[]);
+        self.verify_parent_tag(TAG_SEND, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+
+        let sendParams = SendParameters::new();
+
+        let event = attr.get(ATTR_EVENT);
+        let eventexpr = attr.get(ATTR_EVENTEXPR);
+
+        if event.is_some() && eventexpr.is_some() {
+            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR);
+        }
+
+        let target = attr.get(ATTR_TARGET);
+        let targetexpr = attr.get(ATTR_TARGETEXPR);
+        if target.is_some() && targetexpr.is_some() {
+            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR);
+        }
+
+        let typeS = attr.get(ATTR_TYPE);
+        let typeexpr = attr.get(ATTR_TYPEEXPR);
+        if typeS.is_some() && typeexpr.is_some() {
+            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR);
+        }
+
+        let id = attr.get(ATTR_ID);
+        let idlocation = attr.get(ATTR_IDLOCATION);
+        if id.is_some() && idlocation.is_some() {
+            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_ID, ATTR_IDLOCATION);
+        }
+
+        let delay = attr.get(ATTR_DELAY);
+        let delayExrp = attr.get(ATTR_DELAYEXPR);
+        if delayExrp.is_some() && delay.is_some() {
+            panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR);
+        }
+
+        let nameList = attr.get(ATTR_NAMELIST);
+
+        self.add_executable_content(Box::new(sendParams));
+
         todo!()
     }
 
+    fn start_content(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TA_DONEDATA]);
+        todo!()
+    }
+
+    fn end_content(&mut self) {
+        todo!()
+    }
+
+    fn start_param(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_PARAM, &[TAG_SEND, TAG_INVOKE, TA_DONEDATA]);
+
+        todo!()
+    }
+
+
     fn start_log(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_LOG, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        self.verify_parent_tag(TAG_LOG, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
         let expr = attr.get(ATTR_EXPR);
         if expr.is_some() {
             self.add_executable_content(Box::new(Log::new(expr.unwrap().as_str())));
@@ -576,7 +665,7 @@ impl ReaderState {
     }
 
     fn start_assign(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_ASSIGN, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        self.verify_parent_tag(TAG_ASSIGN, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
         todo!()
     }
 
@@ -635,6 +724,12 @@ impl ReaderState {
             TAG_TRANSITION => {
                 self.start_transition(attr);
             }
+            TAG_ON_ENTRY => {
+                self.start_on_entry(attr);
+            }
+            TAG_ON_EXIT => {
+                self.start_on_exit(attr);
+            }
             TAG_SCRIPT => {
                 txt.clear();
                 self.start_script(attr);
@@ -644,6 +739,12 @@ impl ReaderState {
             }
             TAG_SEND => {
                 self.start_send(attr);
+            }
+            TAG_PARAM => {
+                self.start_param(attr);
+            }
+            TAG_CONTENT => {
+                self.start_content(attr);
             }
             TAG_LOG => {
                 self.start_log(attr);
@@ -686,8 +787,20 @@ impl ReaderState {
         }
     }
 
+    /// Handle a XInclude include element.
+    /// See https://www.w3.org/TR/xinclude/
+    /// Only parse="text" and "href" with a relative path are supported, also no "xpointer" etc.
     fn include(&mut self, attr: &AttributeMap) {
         let href = Self::get_required_attr(TAG_INCLUDE, TAG_HREF, attr);
+        let parse = attr.get(ATTR_PARSE);
+        if parse.is_none() || parse.unwrap().ne("text") {
+            panic!("{}: only {}='text' is supported", TAG_INCLUDE, ATTR_PARSE)
+        }
+        let xpointer = attr.get(ATTR_XPOINTER);
+        if xpointer.is_some() {
+            panic!("{}: {} is not supported", TAG_INCLUDE, ATTR_XPOINTER)
+        }
+
         let src = self.get_resolved_path(href);
 
         match File::open(src.clone()) {
@@ -723,6 +836,16 @@ impl ReaderState {
             TAG_TRANSITION => {
                 self.end_transition();
             }
+            TAG_ON_EXIT => {
+                self.end_on_exit();
+            }
+            TAG_ON_ENTRY => {
+                self.end_on_entry();
+            }
+            TAG_CONTENT => {
+                self.end_content();
+            }
+
             _ => {}
         }
         self.pop();
@@ -797,7 +920,6 @@ fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, 
                 debug!("<<< {}", rs.file);
                 return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e));
             }
-// exits the loop when reaching end of file
             Ok(Event::Eof) => break,
             Ok(Event::Start(e)) => {
                 rs.start_element(&mut reader, &e, &mut txt);
@@ -806,17 +928,16 @@ fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, 
                 rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Empty(e)) => {
-// Element without content.
+                // Element without content.
                 rs.start_element(&mut reader, &e, &mut txt);
                 rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
             }
             Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
             Ok(Event::Comment(e)) => debug!("Comment :{}", e.unescape().unwrap()),
 
-// Ignore other
+            // Ignore other
             Ok(e) => debug!("Ignored SAX Event {:?}", e),
         }
-// if we don't keep a borrow elsewhere, we can clear the buffer to keep memory usage low
         buf.clear();
     }
     debug!("<<< {}", rs.file);
@@ -868,6 +989,33 @@ mod tests {
     fn wrong_end_tag_should_panic() {
         let r = crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'></parallel></scxml>".to_string());
         assert!(r.is_err(), "Shall result in error");
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_parse_in_xinclude_should_panic() {
+        crate::reader::read_from_xml(
+            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='xml'/></state></scxml>".to_string());
+    }
+
+    #[test]
+    #[should_panic]
+    fn none_parse_in_xinclude_should_panic() {
+        crate::reader::read_from_xml(
+            "<scxml><state><include href='xml/example/Test2Sub1.xml'/></state></scxml>".to_string());
+    }
+
+    #[test]
+    #[should_panic]
+    fn xpointer_in_xinclude_should_panic() {
+        crate::reader::read_from_xml(
+            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text' xpointer='#123'/></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn xinclude_should_read() {
+        crate::reader::read_from_xml(
+            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text'/></state></scxml>".to_string());
     }
 
     #[test]

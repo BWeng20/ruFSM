@@ -46,6 +46,29 @@ pub struct ForEach {
     pub content: ExecutableContentId,
 }
 
+#[derive(Debug)]
+pub struct SendParameters {
+    pub id: ExecutableContentId,
+    pub idlocation: String,
+    /// The SCXML id.
+    pub name: String,
+
+    pub event: String,
+    pub eventexpr: String,
+    pub target: String,
+    pub targetexpr: String,
+    pub typeS: String,
+    pub typeexpr: String,
+
+    pub delay: String,
+    pub delayExrp: String,
+
+    pub nameList: String,
+
+    pub content: ExecutableContentId,
+}
+
+
 impl Script {
     pub fn new() -> Script {
         let idc = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -178,5 +201,35 @@ impl ExecutableContent for ForEach {
                 ex.executableContent.get(&self.content).unwrap().execute(md);
             }
         });
+    }
+}
+
+impl SendParameters {
+    pub fn new() -> SendParameters {
+        SendParameters {
+            id: 0,
+            idlocation: "".to_string(),
+            name: "".to_string(),
+            event: "".to_string(),
+            eventexpr: "".to_string(),
+            target: "".to_string(),
+            targetexpr: "".to_string(),
+            typeS: "".to_string(),
+            typeexpr: "".to_string(),
+            delay: "".to_string(),
+            delayExrp: "".to_string(),
+            nameList: "".to_string(),
+            content: 0,
+        }
+    }
+}
+
+impl ExecutableContent for SendParameters {
+    fn get_id(&self) -> ExecutableContentId {
+        self.id
+    }
+
+    fn execute(&self, datamodel: &mut dyn Datamodel) {
+        todo!()
     }
 }
