@@ -17,6 +17,13 @@ To-Do:
       We can use events via external-queue, but spec doesn't force this.
     + In the Architecture below "caller_sender" and "caller_invoke_id"
       are added for supporting notification of invoker that triggered execution of this fsm.
++ Full Send implementation
+    + Implement SCXML Event I/O Processor
+        + Target \_internal
+        + Target \_scxml\_*sessionid*
+        + Target \_parent
+        + Target *invokeid*
+    + Maintain _ioprocessors Variable
 
 ## Architecture
 

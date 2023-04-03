@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Cursor, Read};
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -12,7 +11,7 @@ use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
 use crate::executable_content::{ExecutableContent, Expression, Log, SendParameters};
-use crate::fsm::{ExecutableContentId, Fsm, HistoryType, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionId, TransitionType};
+use crate::fsm::{ExecutableContentId, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
@@ -38,6 +37,7 @@ static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 /// + __datamodel__  Defines part or all of the data model. Occurs 0 or 1 times. See 5.2 \<datamodel\>
 /// + __script__ Provides scripting capability. Occurs 0 or 1 times. 5.8 \<script\>
 pub const TAG_SCXML: &str = "scxml";
+pub const ATTR_NAME: &str = "name";
 
 pub const ATTR_DATAMODEL: &str = "datamodel";
 
@@ -88,6 +88,7 @@ pub const TAG_TYPE: &str = "type";
 pub const TAG_ON_ENTRY: &str = "onentry";
 pub const TAG_ON_EXIT: &str = "onexit";
 pub const TAG_INVOKE: &str = "invoke";
+pub const TAG_FINALIZE: &str = "finalize";
 pub const TA_DONEDATA: &str = "donedata";
 
 pub const TAG_INCLUDE: &str = "include";
@@ -148,6 +149,7 @@ pub const ATTR_EVENT: &str = "event";
 pub const ATTR_EVENTEXPR: &str = "eventexpr";
 pub const ATTR_TARGET: &str = "target";
 pub const ATTR_TARGETEXPR: &str = "targetexpr";
+pub const TARGET_INTERNAL: &str = "_internal";
 pub const ATTR_TYPE: &str = "type";
 pub const ATTR_TYPEEXPR: &str = "typeexpr";
 pub const ATTR_IDLOCATION: &str = "idlocation";
@@ -178,6 +180,7 @@ struct ReaderStackItem {
     current_state: StateId,
     current_transition: TransitionId,
     current_tag: String,
+    current_script_src: String,
     current_executable_content: ExecutableContentId,
 }
 
@@ -187,6 +190,7 @@ impl ReaderStackItem {
             current_state: o.current_state,
             current_transition: o.current_transition,
             current_tag: o.current_tag.clone(),
+            current_script_src: "".to_string(),
             current_executable_content: o.current_executable_content,
         }
     }
@@ -217,6 +221,7 @@ impl ReaderState {
                 current_state: 0,
                 current_transition: 0,
                 current_tag: "".to_string(),
+                current_script_src: "".to_string(),
                 current_executable_content: 0,
 
             },
@@ -249,13 +254,13 @@ impl ReaderState {
     }
 
     fn get_state_by_name(&self, name: &Name) -> Option<&State> {
-        if self.fsm.global().borrow().statesNames.contains_key(name) {
+        if self.fsm.statesNames.contains_key(name) {
             Some(self.fsm.get_state_by_name(name))
         } else { None }
     }
 
     fn get_state_by_name_mut(&mut self, name: &Name) -> Option<&mut State> {
-        if self.fsm.global().borrow().statesNames.contains_key(name) {
+        if self.fsm.statesNames.contains_key(name) {
             Some(self.fsm.get_state_by_name_mut(name))
         } else { None }
     }
@@ -285,18 +290,42 @@ impl ReaderState {
         self.fsm.get_transition_by_id_mut(id)
     }
 
-    fn add_executable_content(&mut self, ec: Box<dyn ExecutableContent>) -> ExecutableContentId {
-        if self.current.current_executable_content == 0 {
-            self.current.current_executable_content = ec.deref().get_id();
-        } else {
-            let global = self.fsm.datamodel.global();
-            let mut gb = global.borrow_mut();
-            let ex = gb.executableContent.get_mut(&self.current.current_executable_content).unwrap();
+    fn start_executable_content(&mut self) {
+        self.current.current_executable_content = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    }
 
-            todo!()
+    fn get_executable_content(&mut self) -> ExecutableContentId {
+        if self.current.current_executable_content == 0 {
+            panic!("Try to get executable content in unsupported document part.");
+        } else {
+            if self.fsm.executableContent.contains_key(&self.current.current_executable_content) {
+                let cid = self.current.current_executable_content;
+                self.current.current_executable_content = 0;
+                cid
+            } else {
+                0
+            }
         }
-        self.fsm.global().borrow_mut().executableContent.insert(ec.deref().get_id(), ec);
-        self.current.current_executable_content
+    }
+
+    fn add_executable_content(&mut self, ec: Box<dyn ExecutableContent>) {
+        if self.current.current_executable_content == 0 {
+            panic!("Try to add executable content to unsupported document part.");
+        } else {
+            debug!("Adding Executable Content {}", self.current.current_executable_content );
+            match self.fsm.executableContent.get_mut(&self.current.current_executable_content) {
+                Some(ex) => {
+                    debug!(" (push)" );
+                    ex.push(ec);
+                }
+                None => {
+                    debug!(" (Insert)" );
+                    let mut ex = Vec::new();
+                    ex.push(ec);
+                    self.fsm.executableContent.insert(self.current.current_executable_content, ex);
+                }
+            }
+        }
     }
 
     fn get_parent_tag(&self) -> &str {
@@ -332,15 +361,14 @@ impl ReaderState {
 
 
     fn get_or_create_state(&mut self, name: &String, parallel: bool) -> StateId {
-        let m = self.fsm.global().borrow().statesNames.get(name).cloned();
+        let m = self.fsm.statesNames.get(name).cloned();
         match m {
             None => {
                 let mut s = State::new(name);
                 s.id = (self.fsm.states.len() + 1) as StateId;
                 s.is_parallel = parallel;
                 let sid = s.id;
-                let gd = self.fsm.global();
-                gd.borrow_mut().statesNames.insert(s.name.clone(), s.id); // s.id, s);
+                self.fsm.statesNames.insert(s.name.clone(), s.id); // s.id, s);
                 self.fsm.states.push(s);
                 sid
             }
@@ -436,7 +464,7 @@ impl ReaderState {
                     Ok(mut file) => {
                         let mut buf = String::with_capacity(file.metadata().unwrap().len() as usize);
                         match file.read_to_string(&mut buf) {
-                            Ok(r) => {
+                            Ok(_r) => {
                                 Ok(buf)
                             }
                             Err(e) => {
@@ -539,7 +567,7 @@ impl ReaderState {
         t.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
 
         // Start script.
-        self.current.current_executable_content = 0;
+        self.start_executable_content();
 
         let event = attr.get(TAG_EVENT);
         if event.is_some() {
@@ -582,17 +610,14 @@ impl ReaderState {
     }
 
     fn end_transition(&mut self) {
-        let ct_id = self.current.current_executable_content;
-        self.current.current_executable_content = 0;
-
+        let ec_id = self.get_executable_content();
         let trans = self.get_current_transition();
         // Assign the collected content to the transition.
-        trans.content = ct_id;
-        self.current.current_transition = 0;
+        trans.content = ec_id;
     }
 
     fn start_script(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_SCRIPT, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        self.verify_parent_tag(TAG_SCRIPT, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH, TAG_FINALIZE]);
         let src = attr.get(ATTR_SRC);
         if src.is_some() {
             let file_src = src.unwrap();
@@ -601,13 +626,10 @@ impl ReaderState {
             // the document is considered non-conformant, and the platform must reject it.
             match self.read_from_uri(file_src) {
                 Ok(source) => {
+                    debug!("src='{}':\n{}", file_src, source );
                     let s = Box::new(Expression::new(source));
-                    let ec_id = self.add_executable_content(s);
-
-                    let state = self.get_current_state();
-                    state.script_src = file_src.clone();
-                    state.script = ec_id;
-                    debug!("src='{}':\n{}", file_src, self.get_current_state().script );
+                    self.add_executable_content(s);
+                    self.current.current_script_src = file_src.clone();
                 }
                 Err(e) => {
                     panic!("Can't read script '{}'. {}", file_src, e);
@@ -621,11 +643,9 @@ impl ReaderState {
         let src = script_text.trim();
 
         if !src.is_empty() {
-            let ct_id = self.add_executable_content(Box::new(Expression::new(script_text)));
-            let state = self.get_current_state();
-            state.script = ct_id;
+            self.add_executable_content(Box::new(Expression::new(src.to_string())));
 
-            if !state.script_src.is_empty() {
+            if !self.current.current_script_src.is_empty() {
                 panic!("<script> with 'src' attribute shall not have content.")
             }
         }
@@ -633,7 +653,7 @@ impl ReaderState {
     }
 
     fn start_for_each(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_FOR_EACH, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]);
+        self.verify_parent_tag(TAG_FOR_EACH, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF, TAG_FINALIZE]);
 
         let array = Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr);
         let item = Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr);
@@ -648,34 +668,30 @@ impl ReaderState {
 
     fn start_on_entry(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_ENTRY, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
-        self.current.current_executable_content = 0;
+        self.start_executable_content();
     }
 
     fn end_on_entry(&mut self) {
-        let ct_id = self.current.current_executable_content;
-        self.current.current_executable_content = 0;
-
+        let ec_id = self.get_executable_content();
         let state = self.get_current_state();
-        // Assign the collected content to the on-exirt.
-        state.onentry = ct_id;
+        // Assign the collected content to the on-entry.
+        state.onentry = ec_id;
     }
 
     fn start_on_exit(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
-        self.current.current_executable_content = 0;
+        self.start_executable_content();
     }
 
     fn end_on_exit(&mut self) {
-        let ct_id = self.current.current_executable_content;
-        self.current.current_executable_content = 0;
-
+        let ec_id = self.get_executable_content();
         let state = self.get_current_state();
         // Assign the collected content to the on-exit.
-        state.onexit = ct_id;
+        state.onexit = ec_id;
     }
 
     fn start_if(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_IF, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF]);
+        self.verify_parent_tag(TAG_IF, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF, TAG_FINALIZE]);
         todo!()
     }
 
@@ -703,8 +719,8 @@ impl ReaderState {
 
         let mut sendParams = SendParameters::new();
 
-        let mut event = attr.get(ATTR_EVENT);
-        let mut eventexpr = attr.get(ATTR_EVENTEXPR);
+        let event = attr.get(ATTR_EVENT);
+        let eventexpr = attr.get(ATTR_EVENTEXPR);
 
         if event.is_some() {
             if eventexpr.is_some() {
@@ -750,12 +766,16 @@ impl ReaderState {
 
         let delay = attr.get(ATTR_DELAY);
         let delayExrp = attr.get(ATTR_DELAYEXPR);
+
         if delayExrp.is_some() {
             if delay.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR);
             }
             sendParams.delayexrp = delayExrp.unwrap().clone();
         } else if delay.is_some() {
+            if (!delay.unwrap().is_empty()) && typeS.is_some() && typeS.unwrap().eq(TARGET_INTERNAL) {
+                panic!("{}: {} with {} {} is not possible", TAG_SEND, ATTR_DELAY, ATTR_TARGET, typeS.unwrap());
+            }
             sendParams.delay = delay.unwrap().clone();
         }
 
@@ -781,9 +801,8 @@ impl ReaderState {
         todo!()
     }
 
-
     fn start_log(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_LOG, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        self.verify_parent_tag(TAG_LOG, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH, TAG_FINALIZE]);
         let expr = attr.get(ATTR_EXPR);
         if expr.is_some() {
             self.add_executable_content(Box::new(Log::new(expr.unwrap().as_str())));
@@ -791,7 +810,7 @@ impl ReaderState {
     }
 
     fn start_assign(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_ASSIGN, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+        self.verify_parent_tag(TAG_ASSIGN, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH, TAG_FINALIZE]);
         todo!()
     }
 
@@ -813,18 +832,27 @@ impl ReaderState {
                     panic!("Only one <{}> allowed", TAG_SCXML);
                 }
                 self.in_scxml = true;
+                match attr.get(ATTR_NAME) {
+                    Some(n) => {
+                        self.fsm.name = n.clone();
+                    }
+                    None => {
+                        // @TODO: Filename?
+                    }
+                }
                 let datamodel = attr.get(ATTR_DATAMODEL);
                 if datamodel.is_some() {
                     debug!(" scxml.datamodel = {}", datamodel.unwrap());
-                    self.fsm.datamodel = crate::fsm::createDatamodel(datamodel.unwrap());
+                    self.fsm.datamodel = datamodel.unwrap().to_string();
                 }
                 let version = attr.get(TAG_VERSION);
                 if version.is_some() {
-                    self.fsm.global().borrow_mut().version = version.unwrap().clone();
+                    self.fsm.version = version.unwrap().clone();
                     debug!(" scxml.version = {}", version.unwrap());
                 }
                 self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
                 self.current.current_state = self.fsm.pseudo_root;
+                self.start_executable_content();
             }
             TAG_DATAMODEL => {
                 self.start_datamodel();
@@ -934,7 +962,7 @@ impl ReaderState {
                 let org_file = self.file.clone();
                 self.file = src.to_str().unwrap().to_string();
                 match read_all_events(self, Box::new(BufReader::new(f))) {
-                    Ok(t) => {}
+                    Ok(_t) => {}
                     Err(e) => {
                         panic!("Can't parse '{}' in <{}>. {}", src.to_str().unwrap(), TAG_INCLUDE, e);
                     }
@@ -953,6 +981,9 @@ impl ReaderState {
         }
         debug!("End Element {}", name);
         match name {
+            TAG_SCXML => {
+                self.fsm.script = self.get_executable_content();
+            }
             TAG_SCRIPT => {
                 self.end_script(txt);
             }
@@ -1024,7 +1055,7 @@ fn read(buf: Box<dyn BufRead>, f: &String) -> Result<Box<Fsm>, String> {
     let mut rs = ReaderState::new(f);
     let r = read_all_events(&mut rs, buf);
     match r {
-        Ok(m) => {
+        Ok(_m) => {
             Ok(rs.fsm)
         }
         Err(e) => {
@@ -1092,17 +1123,24 @@ mod tests {
     fn script_with_src_should_load_file() {
         let r =
             crate::reader::read_from_xml("<scxml initial='Main'><state id='Main'>\
-    <initial><transition><script src='xml/example/script.js'></script></transition></initial></state></scxml>".to_string());
+    <transition><script src='xml/example/script.js'></script></transition></state></scxml>".to_string());
         assert_eq!(r.is_ok(), true);
 
         let mut fsm = r.unwrap();
 
+        let mut b = false;
         for s in &fsm.states {
-            println!("State #{} script: {}", s.id, s.script);
-            if s.script != 0 {
-                println!(" -> {:?}", fsm.global().borrow().executableContent.get(&s.script).unwrap());
+            println!("State {}", s.name);
+            for tid in s.transitions.iterator() {
+                let tr = fsm.transitions.get(tid).unwrap();
+                println!(" Transition #{} content {}", tr.id, tr.content);
+                if tr.content != 0 {
+                    println!(" -> {:?}", fsm.executableContent.get(&tr.content).unwrap());
+                    b = true;
+                }
             }
         }
+        assert_eq!(b, true);
     }
 
 

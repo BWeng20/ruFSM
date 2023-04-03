@@ -1,15 +1,11 @@
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
-use std::ops::Deref;
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use boa_engine::{Context, JsResult, JsValue, property::Attribute};
+use boa_engine::object::{FunctionBuilder};
 
-use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, GlobalData};
+use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalData, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
@@ -40,28 +36,12 @@ impl Data for JsonData {
 
 static CONTEXT_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
-struct ECMAScriptContext {
-    pub global_data: Rc<RefCell<GlobalData>>,
-    pub context: Context,
-}
 
-impl ECMAScriptContext {
-    fn new() -> ECMAScriptContext {
-        ECMAScriptContext {
-            global_data: Rc::new(RefCell::new(GlobalData::new())),
-            context: Context::default(),
-        }
-    }
-}
-
-thread_local!(
-    static CONTEXT_MAP: RefCell<HashMap<u32, Rc<RefCell<ECMAScriptContext>>>> = RefCell::new(HashMap::new());
-);
-
-#[derive(Debug)]
 pub struct ECMAScriptDatamodel {
     pub data: DataStore,
     pub context_id: u32,
+    pub global_data: GlobalData,
+    pub context: Context,
 }
 
 fn str(js: &JsValue, ctx: &mut Context) -> String {
@@ -84,111 +64,76 @@ impl ECMAScriptDatamodel {
         {
             data: DataStore::new(),
             context_id: CONTEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
+            global_data: GlobalData::new(),
+            context: Context::default(),
         };
         e
     }
 
-    fn get_context(&self) -> Rc<RefCell<ECMAScriptContext>> {
-        CONTEXT_MAP.with(|c| {
-            let mut ch = c.borrow_mut();
-            if !ch.contains_key(&self.context_id) {
-                ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
-            }
-            ch.get(&self.context_id).unwrap().clone()
-        })
-    }
 
-    fn execute_internal(&mut self, script: &String) -> String {
+    fn execute_internal(&mut self, fsm: &Fsm, script: &String) -> String {
         println!("Execute: {}", script);
         let mut r: String = "".to_string();
-        CONTEXT_MAP.with(|c| {
-            let ctx: Rc<RefCell<ECMAScriptContext>> = c.borrow().get(&self.context_id).unwrap().clone();
-
-
-            for (name, value) in &self.data.values {
-                ctx.deref().borrow_mut().context.register_global_property(name.as_str(), value.to_string(), Attribute::all());
+        for (name, value) in &self.data.values {
+            self.context.register_global_property(name.as_str(), value.to_string(), Attribute::all());
+        }
+        let result = self.context.eval(script);
+        match result {
+            Ok(res) => {
+                r = res.to_string(&mut self.context).unwrap().to_string()
             }
-            let result = ctx.deref().borrow_mut().context.eval(script);
-            match result {
-                Ok(res) => {
-                    r = res.to_string(&mut ctx.deref().borrow_mut().context).unwrap().to_string()
-                }
-                Err(e) => {
-                    // Pretty print the error
-                    eprintln!("Script Error {}", e.display());
-                }
+            Err(e) => {
+                // Pretty print the error
+                eprintln!("Script Error {}", e.display());
             }
-        });
+        }
         r
     }
 }
-
 
 /**
  * ECMAScript data model
  */
 impl Datamodel for ECMAScriptDatamodel {
-    fn global(&self) -> Rc<RefCell<GlobalData>> {
-        CONTEXT_MAP.with(|c| {
-            let mut ch = c.borrow_mut();
-            if !ch.contains_key(&self.context_id) {
-                ch.insert(self.context_id, Rc::new(RefCell::new(ECMAScriptContext::new())));
-            }
-
-            let ext = ch.get(&self.context_id).unwrap().clone();
-            let eeee = ext.borrow() as &RefCell<ECMAScriptContext>;
-            let x = eeee.borrow().global_data.clone();
-            x
-        })
+    fn global(&mut self) -> &mut GlobalData {
+        &mut self.global_data
+    }
+    fn global_s(&self) -> &GlobalData {
+        &self.global_data
     }
 
     fn get_name(self: &Self) -> &str {
         return ECMA_SCRIPT;
     }
 
-    fn initializeDataModel(&mut self, data: &DataStore) {
-        CONTEXT_MAP.with(|c|
-            {
-                let ch = c.borrow_mut();
-                let mut ecms_ctx = (ch.get(&self.context_id).unwrap().borrow() as &RefCell<ECMAScriptContext>).borrow_mut();
+    fn initializeDataModel(&mut self, fsm: &mut Fsm, dataState: StateId) {
+        let mut s = Vec::new();
+        for (sn, sid) in &fsm.statesNames {
+            s.push(sn.clone());
+        }
 
-                ecms_ctx.context.register_global_builtin_function("log", 1, log_js);
-                let cid = self.context_id;
-                match ecms_ctx.context.register_global_closure("In", 1, move |_this: &JsValue, args: &[JsValue], ctx: &mut Context| -> JsResult<JsValue> {
-                    if args.len() > 0 {
-                        CONTEXT_MAP.with(|c| {
-                            let cid2 = cid;
-                            let ch = c.borrow();
-                            let ecms_ctx = (**ch.get(&cid2).unwrap()).borrow();
-                            let gd_rc: Rc<RefCell<GlobalData>> = ecms_ctx.global_data.clone();
-                            let m = (gd_rc.borrow() as &RefCell<GlobalData>).borrow().statesNames.get(&str(&args[0], ctx)).cloned();
-                            match m
-                            {
-                                Some(_sid) => {
-                                    Ok(JsValue::from(true))
-                                }
-                                None => {
-                                    Ok(JsValue::from(false))
-                                }
-                            }
-                        })
-                    } else {
-                        Err(JsValue::from("Missing argument"))
-                    }
-                }) {
-                    Err(e) => {
-                        panic!("Failed to register 'log' function. {}", e.display());
-                    }
-                    _ => {}
-                };
+        let stateS: &mut State = fsm.get_state_by_id_mut(dataState);
 
-                for (name, data) in &data.values
-                {
-                    self.data.values.insert(name.clone(), data.get_copy());
-                    ecms_ctx.context.register_global_property(name.as_str(), data.to_string(), Attribute::all());
-                }
-            }
-        )
+        self.context.register_global_builtin_function("log", 1, log_js);
+        let cid = self.context_id;
+
+
+        FunctionBuilder::closure_with_captures(&mut self.context,
+                                               move |_this: &JsValue, args: &[JsValue], names: &mut Vec<String>, ctx: &mut Context| {
+                                                   if args.len() > 0 {
+                                                       let name = &str(&args[0], ctx);
+                                                       let m = names.contains(name);
+                                                       Ok(JsValue::from(m))
+                                                   } else {
+                                                       Err(JsValue::from("Missing argument"))
+                                                   }
+                                               }, s).name("In").length(1).build();
+
+        for (name, data) in &stateS.data.values
+        {
+            self.data.values.insert(name.clone(), data.get_copy());
+            self.context.register_global_property(name.as_str(), data.to_string(), Attribute::all());
+        }
     }
 
     fn set(self: &mut ECMAScriptDatamodel, name: &String, data: Box<dyn Data>) {
@@ -213,25 +158,24 @@ impl Datamodel for ECMAScriptDatamodel {
         println!("Log: {}", msg);
     }
 
-    fn execute(&mut self, script: &String) -> String {
-        self.execute_internal(script)
+    fn execute(&mut self, fsm: &Fsm, script: &String) -> String {
+        self.execute_internal(fsm, script)
     }
 
-    fn executeForEach(&mut self, array_expression: &String, item: &String, index: &String, execute_body: &dyn FnOnce(&mut dyn Datamodel)) {
+    fn executeForEach(&mut self, fsm: &Fsm, array_expression: &String, item: &String, index: &String, execute_body: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
         todo!()
     }
 
-    fn executeCondition(&mut self, script: &String) -> Result<bool, String> {
-        match bool::from_str(self.execute_internal(script).as_str()) {
+    fn executeCondition(&mut self, fsm: &Fsm, script: &String) -> Result<bool, String> {
+        match bool::from_str(self.execute_internal(fsm, script).as_str()) {
             Ok(v) => Result::Ok(v),
             Err(e) => Result::Err(e.to_string()),
         }
     }
 
-    fn executeContent(&mut self, content_id: ExecutableContentId) {
-        let global = self.global();
-        let mut ex = global.deref().borrow_mut();
-
-        ex.executableContent.get_mut(&content_id).unwrap().execute(self);
+    fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) {
+        for e in fsm.executableContent.get(&content_id).unwrap() {
+            e.execute(self, fsm);
+        }
     }
 }
