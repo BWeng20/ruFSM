@@ -1,9 +1,10 @@
+#![allow(non_snake_case)]
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use boa_engine::{Context, JsResult, JsValue, property::Attribute};
-use boa_engine::object::{FunctionBuilder};
+use boa_engine::object::FunctionBuilder;
 
 use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalData, State, StateId};
 
@@ -71,7 +72,7 @@ impl ECMAScriptDatamodel {
     }
 
 
-    fn execute_internal(&mut self, fsm: &Fsm, script: &String) -> String {
+    fn execute_internal(&mut self, _fsm: &Fsm, script: &String) -> String {
         println!("Execute: {}", script);
         let mut r: String = "".to_string();
         for (name, value) in &self.data.values {
@@ -106,17 +107,15 @@ impl Datamodel for ECMAScriptDatamodel {
         return ECMA_SCRIPT;
     }
 
-    fn initializeDataModel(&mut self, fsm: &mut Fsm, dataState: StateId) {
+    fn initializeDataModel(&mut self, fsm: &mut Fsm, data_state: StateId) {
         let mut s = Vec::new();
-        for (sn, sid) in &fsm.statesNames {
+        for (sn, _sid) in &fsm.statesNames {
             s.push(sn.clone());
         }
 
-        let stateS: &mut State = fsm.get_state_by_id_mut(dataState);
+        let state_obj: &mut State = fsm.get_state_by_id_mut(data_state);
 
         self.context.register_global_builtin_function("log", 1, log_js);
-        let cid = self.context_id;
-
 
         FunctionBuilder::closure_with_captures(&mut self.context,
                                                move |_this: &JsValue, args: &[JsValue], names: &mut Vec<String>, ctx: &mut Context| {
@@ -129,7 +128,7 @@ impl Datamodel for ECMAScriptDatamodel {
                                                    }
                                                }, s).name("In").length(1).build();
 
-        for (name, data) in &stateS.data.values
+        for (name, data) in &state_obj.data.values
         {
             self.data.values.insert(name.clone(), data.get_copy());
             self.context.register_global_property(name.as_str(), data.to_string(), Attribute::all());
@@ -162,7 +161,7 @@ impl Datamodel for ECMAScriptDatamodel {
         self.execute_internal(fsm, script)
     }
 
-    fn executeForEach(&mut self, fsm: &Fsm, array_expression: &String, item: &String, index: &String, execute_body: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
+    fn executeForEach(&mut self, _fsm: &Fsm, _array_expression: &String, _item: &String, _index: &String, _execute_body: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
         todo!()
     }
 

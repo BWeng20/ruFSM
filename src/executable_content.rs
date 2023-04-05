@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 
 use lazy_static::lazy_static;
 use log::warn;
@@ -8,6 +8,7 @@ use crate::{Event, EventType};
 use crate::fsm::{Datamodel, ExecutableContentId, Fsm};
 
 pub const TARGET_INTERNAL: &str = "_internal";
+pub const TARGET_SCXMLEVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#SCXMLEventProcessor";
 
 /// a duration.
 /// RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
@@ -85,7 +86,6 @@ pub struct ForEach {
     pub content: ExecutableContentId,
 }
 
-#[derive(Debug)]
 pub struct SendParameters {
     pub namelocation: String,
     /// The SCXML id.
@@ -95,17 +95,25 @@ pub struct SendParameters {
     pub eventexpr: String,
     pub target: String,
     pub targetexpr: String,
-    pub typeS: String,
+    pub type_value: String,
     pub typeexpr: String,
 
     pub delay: String,
-    pub delayexrp: String,
+    pub delayexpr: String,
 
-    pub nameList: String,
+    pub name_list: String,
 
     pub content: ExecutableContentId,
+
 }
 
+impl Debug for SendParameters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Send")
+            .field("name", &self.name)
+            .finish()
+    }
+}
 
 impl Script {
     pub fn new() -> Script {
@@ -204,10 +212,10 @@ impl ExecutableContent for ForEach {
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
         let tmp = INDEX_TEMP.to_string();
         let idx = self.index.as_ref().unwrap_or_else(|| { &tmp });
-        datamodel.executeForEach(fsm, &self.array, &self.item, &idx, &|fsmI: &mut Fsm, dm: &mut dyn Datamodel| {
+        datamodel.executeForEach(fsm, &self.array, &self.item, &idx, &|fsm_c: &mut Fsm, dm: &mut dyn Datamodel| {
             if self.content != 0 {
-                for e in fsmI.executableContent.get(&self.content).unwrap() {
-                    e.execute(dm, fsmI);
+                for e in fsm_c.executableContent.get(&self.content).unwrap() {
+                    e.execute(dm, fsm_c);
                 }
             }
         });
@@ -223,26 +231,47 @@ impl SendParameters {
             eventexpr: "".to_string(),
             target: "".to_string(),
             targetexpr: "".to_string(),
-            typeS: "".to_string(),
+            type_value: "".to_string(),
             typeexpr: "".to_string(),
             delay: "".to_string(),
-            delayexrp: "".to_string(),
-            nameList: "".to_string(),
+            delayexpr: "".to_string(),
+            name_list: "".to_string(),
             content: 0,
         }
     }
 }
 
+
+/// Implements the excution of \<send\> element.
 impl ExecutableContent for SendParameters {
     /// If unable to dispatch, place "error.communication" in internal queue
     /// If target is not supported, place "error.execution" in internal queue
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
+        println!("Executing SEND");
         let target;
-        if self.target.is_empty() {
-            target = datamodel.execute(fsm, &self.targetexpr);
+        if self.target.is_empty()
+        {
+            if !self.targetexpr.is_empty() {
+                target = datamodel.execute(fsm, &self.targetexpr);
+            } else {
+                target = "".to_string();
+            }
         } else {
             target = self.target.clone();
-        }
+        };
+
+        let event_name;
+        if self.event.is_empty()
+        {
+            if !self.eventexpr.is_empty() {
+                event_name = datamodel.execute(fsm, &self.eventexpr);
+            } else {
+                event_name = "".to_string();
+            }
+        } else {
+            event_name = self.event.clone();
+        };
+
         let sender = datamodel.global().externalQueue.sender.clone();
 
         if target.is_empty()
@@ -250,8 +279,8 @@ impl ExecutableContent for SendParameters {
             datamodel.global().internalQueue.enqueue(Event::error("execution"));
         } else {
             let delay;
-            if !self.delayexrp.is_empty() {
-                delay = datamodel.execute(fsm, &self.delayexrp);
+            if !self.delayexpr.is_empty() {
+                delay = datamodel.execute(fsm, &self.delayexpr);
             } else {
                 delay = self.delay.clone();
             }
@@ -262,20 +291,28 @@ impl ExecutableContent for SendParameters {
                     // Can't send timers via internal queue
                     datamodel.global().internalQueue.enqueue(Event::error("execution"));
                 } else {
-                    let timer = timer::Timer::new();
-
-                    let _guard = timer.schedule_with_delay(chrono::Duration::seconds(3), move || {
-                        let event = Box::new(Event {
-                            name: "TODO".to_string(),
-                            etype: EventType::external,
-                            sendid: 0,
-                            origin: "".to_string(),
-                            origintype: "".to_string(),
-                            invokeid: 0,
-                            data: None,
+                    let delay_ms = parse_duration_to_millies(&delay);
+                    if delay_ms <= 0
+                    {
+                        // Delay is invalid
+                        datamodel.global().internalQueue.enqueue(Event::error("execution"));
+                    } else {
+                        fsm.schedule(delay_ms, move || {
+                            // @TODO: fill all fields correctly!
+                            let event = Box::new(Event {
+                                name: event_name.clone(),
+                                etype: EventType::external,
+                                sendid: 0,
+                                origin: "".to_string(),
+                                origintype: "".to_string(),
+                                invokeid: 0,
+                                data: None,
+                            });
+                            println!(" Send {}", event.name);
+                            let _ignored = sender.send(event);
                         });
-                        sender.send(event);
-                    });
+                        println!("Scheduled Send (delay {}ms)", delay_ms);
+                    }
                 }
             }
         }

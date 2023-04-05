@@ -10,7 +10,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::executable_content::{ExecutableContent, Expression, Log, SendParameters};
+use crate::executable_content::{ExecutableContent, Expression, Log, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
 use crate::fsm::{ExecutableContentId, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
@@ -83,7 +83,6 @@ pub const TAG_FINAL: &str = "final";
 pub const TAG_TRANSITION: &str = "transition";
 pub const TAG_COND: &str = "cond";
 pub const TAG_EVENT: &str = "event";
-pub const TAG_TARGET: &str = "target";
 pub const TAG_TYPE: &str = "type";
 pub const TAG_ON_ENTRY: &str = "onentry";
 pub const TAG_ON_EXIT: &str = "onexit";
@@ -544,9 +543,9 @@ impl ReaderState {
     fn start_data(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_DATA, &[TAG_DATAMODEL]);
 
-        let id = Self::get_required_attr(TAG_DATA, ATTR_ID, attr);
-        let src = attr.get(ATTR_SRC);
-        let expr = attr.get(ATTR_EXPR);
+        let _id = Self::get_required_attr(TAG_DATA, ATTR_ID, attr);
+        let _src = attr.get(ATTR_SRC);
+        let _expr = attr.get(ATTR_EXPR);
 
         todo!()
     }
@@ -579,7 +578,7 @@ impl ReaderState {
             t.cond = Some(cond.unwrap().clone());
         }
 
-        let target = attr.get(TAG_TARGET);
+        let target = attr.get(ATTR_TARGET);
         match target {
             None => (),
             // TODO: Parse the state specification! (it can be a list)
@@ -655,18 +654,18 @@ impl ReaderState {
     fn start_for_each(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_FOR_EACH, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF, TAG_FINALIZE]);
 
-        let array = Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr);
-        let item = Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr);
-        let index = attr.get(ATTR_INDEX);
+        let _array = Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr);
+        let _item = Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr);
+        let _index = attr.get(ATTR_INDEX);
 
         todo!()
     }
 
-    fn start_cancel(&mut self, attr: &AttributeMap) {
+    fn start_cancel(&mut self, _attr: &AttributeMap) {
         todo!()
     }
 
-    fn start_on_entry(&mut self, attr: &AttributeMap) {
+    fn start_on_entry(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_ENTRY, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
         self.start_executable_content();
     }
@@ -678,7 +677,7 @@ impl ReaderState {
         state.onentry = ec_id;
     }
 
-    fn start_on_exit(&mut self, attr: &AttributeMap) {
+    fn start_on_exit(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
         self.start_executable_content();
     }
@@ -690,7 +689,7 @@ impl ReaderState {
         state.onexit = ec_id;
     }
 
-    fn start_if(&mut self, attr: &AttributeMap) {
+    fn start_if(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_IF, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF, TAG_FINALIZE]);
         todo!()
     }
@@ -699,17 +698,17 @@ impl ReaderState {
         todo!()
     }
 
-    fn start_else_if(&mut self, attr: &AttributeMap) {
+    fn start_else_if(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ELSEIF, &[TAG_IF]);
         todo!()
     }
 
-    fn start_else(&mut self, attr: &AttributeMap) {
+    fn start_else(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ELSE, &[TAG_IF]);
         todo!()
     }
 
-    fn start_raise(&mut self, attr: &AttributeMap) {
+    fn start_raise(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_RAISE, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
         todo!()
     }
@@ -717,7 +716,7 @@ impl ReaderState {
     fn start_send(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_SEND, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
 
-        let mut sendParams = SendParameters::new();
+        let mut send_params = SendParameters::new();
 
         let event = attr.get(ATTR_EVENT);
         let eventexpr = attr.get(ATTR_EVENTEXPR);
@@ -726,9 +725,9 @@ impl ReaderState {
             if eventexpr.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR);
             }
-            sendParams.event = event.unwrap().clone();
+            send_params.event = event.unwrap().clone();
         } else if eventexpr.is_some() {
-            sendParams.eventexpr = eventexpr.unwrap().clone();
+            send_params.eventexpr = eventexpr.unwrap().clone();
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -737,9 +736,11 @@ impl ReaderState {
             if targetexpr.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR);
             }
-            sendParams.target = target.unwrap().clone();
+            send_params.target = target.unwrap().clone();
         } else if targetexpr.is_some() {
-            sendParams.targetexpr = targetexpr.unwrap().clone();
+            send_params.targetexpr = targetexpr.unwrap().clone();
+        } else {
+            send_params.target = TARGET_SCXMLEVENT_PROCESSOR.to_string();
         }
 
         let typeS = attr.get(ATTR_TYPE);
@@ -748,9 +749,9 @@ impl ReaderState {
             if typeexpr.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR);
             }
-            sendParams.typeS = typeS.unwrap().clone();
+            send_params.type_value = typeS.unwrap().clone();
         } else if typeexpr.is_some() {
-            sendParams.typeexpr = typeexpr.unwrap().clone();
+            send_params.typeexpr = typeexpr.unwrap().clone();
         }
 
         let id = attr.get(ATTR_ID);
@@ -759,34 +760,34 @@ impl ReaderState {
             if idlocation.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_ID, ATTR_IDLOCATION);
             }
-            sendParams.name = id.unwrap().clone();
+            send_params.name = id.unwrap().clone();
         } else if idlocation.is_some() {
-            sendParams.namelocation = idlocation.unwrap().clone();
+            send_params.namelocation = idlocation.unwrap().clone();
         }
 
         let delay = attr.get(ATTR_DELAY);
-        let delayExrp = attr.get(ATTR_DELAYEXPR);
+        let delayExpr = attr.get(ATTR_DELAYEXPR);
 
-        if delayExrp.is_some() {
+        if delayExpr.is_some() {
             if delay.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR);
             }
-            sendParams.delayexrp = delayExrp.unwrap().clone();
+            send_params.delayexpr = delayExpr.unwrap().clone();
         } else if delay.is_some() {
             if (!delay.unwrap().is_empty()) && typeS.is_some() && typeS.unwrap().eq(TARGET_INTERNAL) {
                 panic!("{}: {} with {} {} is not possible", TAG_SEND, ATTR_DELAY, ATTR_TARGET, typeS.unwrap());
             }
-            sendParams.delay = delay.unwrap().clone();
+            send_params.delay = delay.unwrap().clone();
         }
 
         let nameList = attr.get(ATTR_NAMELIST);
         if nameList.is_some() {
-            sendParams.nameList = nameList.unwrap().clone();
+            send_params.name_list = nameList.unwrap().clone();
         }
-        self.add_executable_content(Box::new(sendParams));
+        self.add_executable_content(Box::new(send_params));
     }
 
-    fn start_content(&mut self, attr: &AttributeMap) {
+    fn start_content(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TA_DONEDATA]);
         todo!()
     }
@@ -795,7 +796,7 @@ impl ReaderState {
         todo!()
     }
 
-    fn start_param(&mut self, attr: &AttributeMap) {
+    fn start_param(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_PARAM, &[TAG_SEND, TAG_INVOKE, TA_DONEDATA]);
 
         todo!()
@@ -809,7 +810,7 @@ impl ReaderState {
         }
     }
 
-    fn start_assign(&mut self, attr: &AttributeMap) {
+    fn start_assign(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ASSIGN, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH, TAG_FINALIZE]);
         todo!()
     }

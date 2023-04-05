@@ -774,6 +774,7 @@ pub struct Fsm {
     pub caller_invoke_id: InvokeId,
     pub caller_sender: Option<Sender<Box<Event>>>,
 
+    pub timer: timer::Timer,
 }
 
 impl Debug for Fsm {
@@ -834,6 +835,7 @@ impl Fsm {
             binding: BindingType::Early,
             statesNames: StateNameMap::new(),
             executableContent: HashMap::new(),
+            timer: timer::Timer::new(),
         }
     }
 
@@ -2156,28 +2158,28 @@ impl Fsm {
         l
     }
 
-    fn invoke(&mut self, inv: &Invoke) {
+    fn invoke(&mut self, _inv: &Invoke) {
         // TODO: we need a "invoke" concept!
     }
 
-    fn cancelInvokeId(&mut self, inv: InvokeId) {
-        // TODO: we need a "invoke" concept!
-        // Send a cancel event to the thread/pricess.
-        // see isCancelEvent
-    }
-
-    fn cancelInvoke(&mut self, inv: &Invoke) {
+    fn cancelInvokeId(&mut self, _inv: InvokeId) {
         // TODO: we need a "invoke" concept!
         // Send a cancel event to the thread/pricess.
         // see isCancelEvent
     }
 
+    fn cancelInvoke(&mut self, _inv: &Invoke) {
+        // TODO: we need a "invoke" concept!
+        // Send a cancel event to the thread/pricess.
+        // see isCancelEvent
+    }
 
-    fn applyFinalize(&mut self, invokeId: InvokeId, event: &Event) {
+
+    fn applyFinalize(&mut self, _invokeId: InvokeId, _event: &Event) {
         todo!()
     }
 
-    fn send(&mut self, invokeId: InvokeId, event: &Event) {
+    fn send(&mut self, _invokeId: InvokeId, _event: &Event) {
         todo!()
     }
 
@@ -2252,6 +2254,11 @@ impl Fsm {
         }
         l
     }
+
+    pub fn schedule<F>(&self, delay_ms: i64, cb: F)
+        where F: 'static + FnMut() + Send {
+        self.timer.schedule_with_delay(chrono::Duration::milliseconds(delay_ms), cb).ignore();
+    }
 }
 
 #[derive(Debug)]
@@ -2279,14 +2286,12 @@ impl Data for EmptyData {
 pub struct DataStore {
     pub values: HashMap<String, Box<dyn Data>>,
 
-    nullValue: Box<dyn Data>,
 }
 
 impl DataStore {
     pub fn new() -> DataStore {
         DataStore {
             values: HashMap::new(),
-            nullValue: Box::new(EmptyData::new()),
         }
     }
 
@@ -2430,7 +2435,7 @@ impl Clone for State {
 }
 
 impl PartialEq for State {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         todo!()
     }
 }
@@ -2637,7 +2642,6 @@ impl NullDatamodel {
     }
 }
 
-
 impl Datamodel for NullDatamodel {
     fn global(&mut self) -> &mut GlobalData {
         &mut self.global
@@ -2652,11 +2656,11 @@ impl Datamodel for NullDatamodel {
     }
     fn initializeDataModel(self: &mut Self, _fsm: &mut Fsm, _dataState: StateId) {}
 
-    fn set(self: &mut NullDatamodel, name: &String, data: Box<dyn Data>) {
+    fn set(self: &mut NullDatamodel, _name: &String, _data: Box<dyn Data>) {
         // nothing to do
     }
 
-    fn get(self: &NullDatamodel, name: &String) -> Option<&dyn Data> {
+    fn get(self: &NullDatamodel, _name: &String) -> Option<&dyn Data> {
         None
     }
 
