@@ -1,16 +1,17 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
+use std::{fmt, thread};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::ops::DerefMut;
 use std::slice::Iter;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread;
 use std::thread::JoinHandle;
 
 use log::info;
@@ -505,6 +506,18 @@ impl Event {
         }
     }
 
+    pub fn trace(t: Trace, enable: bool) -> Event {
+        Event {
+            name: format!("trace.{}.{}", t, if enable { "on" } else { "off" }),
+            etype: EventType::external,
+            sendid: 0,
+            origin: "".to_string(),
+            data: None,
+            invokeid: 0,
+            origintype: "".to_string(),
+        }
+    }
+
     pub fn error(name: &str) -> Event {
         Event {
             name: format!("error.{}", name),
@@ -538,6 +551,28 @@ pub enum Trace {
     ARGUMENTS,
     RESULTS,
     ALL,
+}
+
+impl fmt::Display for Trace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+impl FromStr for Trace {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Trace, Self::Err> {
+        match input.to_lowercase().as_str() {
+            "methods" => Ok(Trace::METHODS),
+            "states" => Ok(Trace::STATES),
+            "events" => Ok(Trace::EVENTS),
+            "arguments" => Ok(Trace::ARGUMENTS),
+            "results" => Ok(Trace::RESULTS),
+            "all" => Ok(Trace::ALL),
+            _ => Err(()),
+        }
+    }
 }
 
 /// Trait used to trace methods and
@@ -599,7 +634,30 @@ pub trait Tracer: Send + Debug {
     }
 
     /// Called by FSM if an external event is received
-    fn event_external_received(&self, what: &Event) {
+    fn event_external_received(&mut self, what: &Event) {
+        if what.name.starts_with("trace.") {
+            let p = what.name.as_str().split('.').collect::<Vec<&str>>();
+            if p.len() == 3 {
+                match Trace::from_str(p.get(1).unwrap()) {
+                    Ok(t) => {
+                        match *p.get(2).unwrap() {
+                            "on" | "ON" | "On" => {
+                                self.enableTrace(t);
+                            }
+                            "off" | "OFF" | "Off" => {
+                                self.disableTrace(t);
+                            }
+                            _ => {
+                                self.trace(format!("Trace event '{}' with illegal flag '{}'. Use 'On' or 'Off'.", what.name, *p.get(2).unwrap()).as_str());
+                            }
+                        }
+                    }
+                    Err(_e) => {
+                        self.trace(format!("Trace event '{}' has unknown trace flag '{}'", what.name, p.get(1).unwrap()).as_str());
+                    }
+                }
+            }
+        }
         if self.isTrace(Trace::EVENTS) {
             self.trace(format!("Ext-> {} #{}", what.name, what.invokeid).as_str());
         }

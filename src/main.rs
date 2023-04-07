@@ -2,6 +2,8 @@ extern crate core;
 
 use std::{env, io, process, thread, time};
 use std::io::{stdout, Write};
+use std::str::FromStr;
+use std::sync::mpsc::Sender;
 
 use crate::fsm::{Event, EventType, Trace};
 
@@ -11,6 +13,26 @@ mod executable_content;
 
 #[cfg(feature = "ECMAScript")]
 mod ecma_script_datamodel;
+
+
+fn handleTrace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
+    match Trace::from_str(opt) {
+        Ok(t) => {
+            let event = Box::new(Event::trace(t, enable));
+            match sender.send(event) {
+                Ok(_r) => {
+                    // ok
+                }
+                Err(e) => {
+                    eprintln!("Error sending trace event: {}", e);
+                }
+            }
+        }
+        Err(_e) => {
+            println!("Unknown trace option. Use one of:\n methods\n states\n events\n arguments\n results\n all\n");
+        }
+    }
+}
 
 /// Loads the specified FSM and prompts for Events.
 fn main() {
@@ -27,7 +49,7 @@ fn main() {
     match reader::read_from_xml_file(args[1].clone()) {
         Ok(mut sm) => {
             sm.tracer.enableTrace(Trace::ALL);
-            let (_thread_handle, sender) = fsm::start_fsm(sm);
+            let (_thread_handle, mut sender) = fsm::start_fsm(sm);
 
             let mut line = String::new();
             let stdin = io::stdin();
@@ -48,24 +70,39 @@ fn main() {
                                 line.pop();
                             }
                         }
-                        let event = Box::new(Event {
-                            name: line.clone(),
-                            etype: EventType::platform,
-                            sendid: 0,
-                            origin: empty_str.clone(),
-                            origintype: empty_str.clone(),
-                            invokeid: 1,
-                            data: None,
-                        });
-                        match sender.send(event) {
-                            Ok(_r) => {
-                                // ok
+                        let line_lc = line.to_lowercase();
+                        if line_lc.starts_with("tron") && line.len() > 5 {
+                            handleTrace(&mut sender, &line_lc[5..], true);
+                        } else if line_lc.starts_with("troff") && line_lc.len() > 6 {
+                            handleTrace(&mut sender, &line_lc[6..], false);
+                        } else if !line_lc.eq("help") && !line.is_empty() {
+                            let event = Box::new(Event {
+                                name: line.clone(),
+                                etype: EventType::platform,
+                                sendid: 0,
+                                origin: empty_str.clone(),
+                                origintype: empty_str.clone(),
+                                invokeid: 1,
+                                data: None,
+                            });
+                            match sender.send(event) {
+                                Ok(_r) => {
+                                    // ok
+                                }
+                                Err(e) => {
+                                    eprintln!("Error sending event: {}", e);
+                                    eprintln!("Aborting...");
+                                    process::exit(-2);
+                                }
                             }
-                            Err(e) => {
-                                eprintln!("Error sending event: {}", e);
-                                eprintln!("Aborting...");
-                                process::exit(-2);
-                            }
+                        } else {
+                            println!(r#"Usage:
+  Use 'Tron <flag>' or 'Troff <flag>' to control trace-levels.
+  E.g. enter: tron all
+  To send events, type the name of the event and press enter.
+  Remind that Events are case sensitive.
+  To print this information enter 'help' or an empty line.
+  "#);
                         }
                     }
 
