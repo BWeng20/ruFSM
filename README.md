@@ -63,7 +63,6 @@ classDiagram
     Fsm *-- Queue: internal queue
 
     class Fsm{
-      +Datamodel datamodel
       +Queue internalQueue
       +BlockingQueue externalQueue
       +Tracer tracer
@@ -192,6 +191,17 @@ The project use crate "log" and if feature "EnvLog" is active, the crate "env_lo
 
 The module reader prints the SAX-events to "log::debug".\
 FSM methods, state transitions and output are traces via a trait "fsm::Tracer" with a default implementation that prints to "info".\
-The Tracer can be replaced by the client by settings the instance to some other implementation or configured to print only specific information.
+The Tracer can be replaced by the client by settings the instance to some other implementation or configured to print only specific information. The Tracer itself has different
+flasg to control what is traces, see Enum Trace for details.
 
 The used log level of crate "log" can be controlled by environment variable "RUST_LOG", e.g. "RUST_LOG=debug".
+
+### Testing
+
+For testing your scxml you can use the main-function of the project.
+
+`rfsm MySM.scxml`
+
+The scxml will be parsed and the resulting FSM will be executed. The app prompts for events that are send via the external-event-queue.
+
+Enter 'help' to display some usage information.
