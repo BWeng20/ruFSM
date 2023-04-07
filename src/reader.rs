@@ -1,8 +1,8 @@
+use std::{mem, str, string::String};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::str;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use log::debug;
@@ -11,10 +11,11 @@ use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
 use crate::executable_content::{ExecutableContent, Expression, Log, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
-use crate::fsm::{ExecutableContentId, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, Name, State, StateId, Transition, TransitionId, TransitionType};
+use crate::fsm::{ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, Name, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
+pub type XReader<'a> = Reader<&'a [u8]>;
 
 static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
@@ -201,6 +202,7 @@ struct ReaderState {
     in_scxml: bool,
     id_count: i32,
     file: String,
+    content: String,
 
     // The resulting fsm
     fsm: Box<Fsm>,
@@ -211,7 +213,7 @@ struct ReaderState {
 
 
 impl ReaderState {
-    pub fn new(f: &String) -> ReaderState {
+    pub fn new() -> ReaderState {
         ReaderState {
             in_scxml: false,
             id_count: 0,
@@ -222,12 +224,74 @@ impl ReaderState {
                 current_tag: "".to_string(),
                 current_script_src: "".to_string(),
                 current_executable_content: 0,
-
             },
             fsm: Box::new(Fsm::new()),
-            file: f.clone(),
+            file: "Buffer".to_string(),
+            content: "".to_string(),
         }
     }
+
+    /// Process a XML file.
+    /// For technical reasons (to handle user content) the file is read in a temporary buffer.
+    fn process_file(&mut self, file: String) -> Result<&str, String> {
+        self.file = file;
+        match File::open(self.file.clone()) {
+            Ok(mut f) => {
+                self.content.clear();
+                match f.read_to_string(&mut self.content) {
+                    Ok(_len) => {
+                        self.process()
+                    }
+                    Err(e) => {
+                        Err(format!("Failed to read {}. {}", self.file, e))
+                    }
+                }
+            }
+            Err(e) => {
+                Err(format!("Failed to open {}. {}", self.file, e))
+            }
+        }
+    }
+
+    /// Process all events from current content
+    fn process(&mut self) -> Result<&str, String> {
+        debug!(">>> Reading {}", self.file);
+
+        // @TODO: reader needs a mutable reference to "content", for processing user content we need a read-only-ref. How to share?
+        let ct = self.content.clone();
+        let mut reader = Reader::from_str(ct.as_str());
+        reader.trim_text(true);
+
+        let mut txt = Vec::new();
+        loop {
+            match reader.read_event() {
+                Err(e) => {
+                    debug!("<<< {}", self.file);
+                    return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e));
+                }
+                Ok(Event::Eof) => break,
+                Ok(Event::Start(e)) => {
+                    self.start_element(&mut reader, &e, true, &mut txt);
+                }
+                Ok(Event::End(e)) => {
+                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
+                }
+                Ok(Event::Empty(e)) => {
+                    // Element without content.
+                    self.start_element(&mut reader, &e, false, &mut txt);
+                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
+                }
+                Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+                Ok(Event::Comment(e)) => debug!("Comment :{}", e.unescape().unwrap()),
+
+                // Ignore other
+                Ok(e) => debug!("Ignored SAX Event {:?}", e),
+            }
+        }
+        debug!("<<< {}", self.file);
+        Ok("ok")
+    }
+
 
     fn push(&mut self, tag: &str) {
         self.stack.push(ReaderStackItem::new(&self.current));
@@ -537,17 +601,62 @@ impl ReaderState {
     // A "datamodel" element started (node, not attribute)
     fn start_datamodel(&mut self) {
         self.verify_parent_tag(TAG_DATAMODEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
-        todo!()
     }
 
-    fn start_data(&mut self, attr: &AttributeMap) {
+    fn start_data(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
         self.verify_parent_tag(TAG_DATA, &[TAG_DATAMODEL]);
 
-        let _id = Self::get_required_attr(TAG_DATA, ATTR_ID, attr);
-        let _src = attr.get(ATTR_SRC);
-        let _expr = attr.get(ATTR_EXPR);
+        let id = Self::get_required_attr(TAG_DATA, ATTR_ID, attr);
+        let src = attr.get(ATTR_SRC);
 
-        todo!()
+        let expr = attr.get(ATTR_EXPR);
+
+        let mut content = "".to_string();
+        if has_content {
+            let start = BytesStart::new(TAG_DATA.to_string());
+            let end = start.to_end().into_owned();
+
+            let mut buf = Vec::new();
+            match reader.read_to_end_into(end.name(), &mut buf) {
+                Ok(span) => {
+                    content = self.content[span.start..span.end].trim().to_string();
+                    debug!("Data Content {} - {}: {}", span.start, span.end, content);
+                }
+                Err(e) => {
+                    panic!("Data structure not correct. {}", e);
+                }
+            }
+            // Remove data element from stack
+            self.pop();
+        }
+
+        // W3C:
+        // In a conformant SCXML document, a <data> element may have either a 'src' or an 'expr' attribute,
+        // but must not have both. Furthermore, if either attribute is present, the element must not have any children.
+        // Thus 'src', 'expr' and children are mutually exclusive in the <data> element.
+
+        if src.is_some() {
+            if !(expr.is_none() && content.is_empty()) {
+                panic!("{} shall have only {}, {} or children, but not some combination of it.", TAG_DATA, ATTR_SRC, ATTR_EXPR);
+            }
+
+            // W3C:
+            // Gives the location from which the data object should be fetched.
+            // If the 'src' attribute is present, the Platform must fetch the specified object
+            // at the time specified by the 'binding' attribute of \<scxml\> and must assign it as
+            // the value of the data element
+            todo!();
+            // @TODO SrcData is not yet implemented
+            // let file_src = src.unwrap();
+            // self.get_current_state().data.set(id, Box::new(SrcData { src: file_src.clone(), content: None }));
+        } else if expr.is_some() {
+            if !content.is_empty() {
+                panic!("{} shall have only {}, {} or children, but not some combination of it.", TAG_DATA, ATTR_SRC, ATTR_EXPR);
+            }
+            self.get_current_state().data.set(id, Box::new(ExpressionData { expr: expr.unwrap().clone() }));
+        } else if !content.is_empty() {
+            self.get_current_state().data.set(id, Box::new(SimpleData { value: content.clone() }));
+        }
     }
 
     /// A "initial" element started (node, not attribute)
@@ -743,13 +852,13 @@ impl ReaderState {
             send_params.target = TARGET_SCXMLEVENT_PROCESSOR.to_string();
         }
 
-        let typeS = attr.get(ATTR_TYPE);
+        let type_attr = attr.get(ATTR_TYPE);
         let typeexpr = attr.get(ATTR_TYPEEXPR);
-        if typeS.is_some() {
+        if type_attr.is_some() {
             if typeexpr.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR);
             }
-            send_params.type_value = typeS.unwrap().clone();
+            send_params.type_value = type_attr.unwrap().clone();
         } else if typeexpr.is_some() {
             send_params.typeexpr = typeexpr.unwrap().clone();
         }
@@ -765,24 +874,24 @@ impl ReaderState {
             send_params.namelocation = idlocation.unwrap().clone();
         }
 
-        let delay = attr.get(ATTR_DELAY);
-        let delayExpr = attr.get(ATTR_DELAYEXPR);
+        let delay_attr = attr.get(ATTR_DELAY);
+        let delay_expr_attr = attr.get(ATTR_DELAYEXPR);
 
-        if delayExpr.is_some() {
-            if delay.is_some() {
+        if delay_expr_attr.is_some() {
+            if delay_attr.is_some() {
                 panic!("{}: attributes {} and {} must not occur both", TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR);
             }
-            send_params.delayexpr = delayExpr.unwrap().clone();
-        } else if delay.is_some() {
-            if (!delay.unwrap().is_empty()) && typeS.is_some() && typeS.unwrap().eq(TARGET_INTERNAL) {
-                panic!("{}: {} with {} {} is not possible", TAG_SEND, ATTR_DELAY, ATTR_TARGET, typeS.unwrap());
+            send_params.delayexpr = delay_expr_attr.unwrap().clone();
+        } else if delay_attr.is_some() {
+            if (!delay_attr.unwrap().is_empty()) && type_attr.is_some() && type_attr.unwrap().eq(TARGET_INTERNAL) {
+                panic!("{}: {} with {} {} is not possible", TAG_SEND, ATTR_DELAY, ATTR_TARGET, type_attr.unwrap());
             }
-            send_params.delay = delay.unwrap().clone();
+            send_params.delay = delay_attr.unwrap().clone();
         }
 
-        let nameList = attr.get(ATTR_NAMELIST);
-        if nameList.is_some() {
-            send_params.name_list = nameList.unwrap().clone();
+        let name_list = attr.get(ATTR_NAMELIST);
+        if name_list.is_some() {
+            send_params.name_list = name_list.unwrap().clone();
         }
         self.add_executable_content(Box::new(send_params));
     }
@@ -815,7 +924,7 @@ impl ReaderState {
         todo!()
     }
 
-    fn start_element(&mut self, reader: &Reader<Box<dyn BufRead>>, e: &BytesStart, txt: &mut Vec<String>) {
+    fn start_element(&mut self, reader: &mut XReader, e: &BytesStart, has_content: bool, txt: &mut Vec<String>) {
         let n = e.local_name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
@@ -859,7 +968,7 @@ impl ReaderState {
                 self.start_datamodel();
             }
             TAG_DATA => {
-                self.start_data(attr);
+                self.start_data(attr, reader, has_content);
             }
             TAG_STATE => {
                 self.start_state(attr);
@@ -956,26 +1065,24 @@ impl ReaderState {
             panic!("{}: {} is not supported", TAG_INCLUDE, ATTR_XPOINTER)
         }
 
-        let src = self.get_resolved_path(href);
-
-        match File::open(src.clone()) {
-            Ok(f) => {
-                let org_file = self.file.clone();
-                self.file = src.to_str().unwrap().to_string();
-                match read_all_events(self, Box::new(BufReader::new(f))) {
-                    Ok(_t) => {}
-                    Err(e) => {
-                        panic!("Can't parse '{}' in <{}>. {}", src.to_str().unwrap(), TAG_INCLUDE, e);
-                    }
+        match self.get_resolved_path(href).to_str() {
+            Some(src) => {
+                let org_file = mem::take(&mut self.file);
+                let org_content = mem::take(&mut self.content);
+                let rs = self.process_file(src.to_string());
+                if rs.is_err() {
+                    panic!("Failed to read {}. {}", src, rs.err().unwrap());
                 }
                 self.file = org_file;
+                self.content = org_content;
             }
-            Err(e) => {
-                panic!("Can't read '{}' in <{}>. {}", src.to_str().unwrap(), TAG_INCLUDE, e);
+            None => {
+                panic!("Can resolve path {}", href);
             }
         }
     }
 
+    /// Called from SAX handler if some end-tag was read.
     fn end_element(&mut self, name: &str, txt: &mut Vec<String>) {
         if !self.current.current_tag.eq(name) {
             panic!("Illegal end-tag {:?}, expected {:?}", &name, &self.current.current_tag);
@@ -1011,9 +1118,9 @@ impl ReaderState {
 }
 
 /**
- * Decode attributes into a hash-map
+ * Decodes attributes into a hash-map
  */
-fn decode_attributes(reader: &Reader<Box<dyn BufRead>>, attr: &mut Attributes) -> AttributeMap {
+fn decode_attributes(reader: &XReader, attr: &mut Attributes) -> AttributeMap {
     attr.map(|attr_result| {
         match attr_result {
             Ok(a) => {
@@ -1036,25 +1143,8 @@ fn decode_attributes(reader: &Reader<Box<dyn BufRead>>, attr: &mut Attributes) -
 
 /// Reads the FSM from a XML file
 pub fn read_from_xml_file(file: String) -> Result<Box<Fsm>, String> {
-    match File::open(file.clone()) {
-        Ok(f) => {
-            read(Box::new(BufReader::new(f)), &file)
-        }
-        Err(e) => {
-            Err(format!("Failed to read {}. {}", file, e))
-        }
-    }
-}
-
-/// Reads the FSM from a XML String
-pub fn read_from_xml(xml: String) -> Result<Box<Fsm>, String> {
-    let fake_file = "".to_string();
-    read(Box::new(Cursor::new(xml)), &fake_file)
-}
-
-fn read(buf: Box<dyn BufRead>, f: &String) -> Result<Box<Fsm>, String> {
-    let mut rs = ReaderState::new(f);
-    let r = read_all_events(&mut rs, buf);
+    let mut rs = ReaderState::new();
+    let r = rs.process_file(file);
     match r {
         Ok(_m) => {
             Ok(rs.fsm)
@@ -1065,58 +1155,35 @@ fn read(buf: Box<dyn BufRead>, f: &String) -> Result<Box<Fsm>, String> {
     }
 }
 
-fn read_all_events(rs: &mut ReaderState, buf: Box<dyn BufRead>) -> Result<&str, String> {
-    debug!(">>> Reading {}", rs.file);
-
-    let mut reader = Reader::from_reader(buf);
-    reader.trim_text(true);
-    let mut txt = Vec::new();
-    let mut buf = Vec::new();
-    loop {
-        match reader.read_event_into(&mut buf) {
-            Err(e) => {
-                debug!("<<< {}", rs.file);
-                return Err(format!("Error at position {}: {:?}", reader.buffer_position(), e));
-            }
-            Ok(Event::Eof) => break,
-            Ok(Event::Start(e)) => {
-                rs.start_element(&mut reader, &e, &mut txt);
-            }
-            Ok(Event::End(e)) => {
-                rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
-            }
-            Ok(Event::Empty(e)) => {
-                // Element without content.
-                rs.start_element(&mut reader, &e, &mut txt);
-                rs.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
-            }
-            Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
-            Ok(Event::Comment(e)) => debug!("Comment :{}", e.unescape().unwrap()),
-
-            // Ignore other
-            Ok(e) => debug!("Ignored SAX Event {:?}", e),
+/// Reads the FSM from a XML String
+pub fn read_from_xml(xml: String) -> Result<Box<Fsm>, String> {
+    let mut rs = ReaderState::new();
+    rs.content = xml;
+    let r = rs.process();
+    match r {
+        Ok(_m) => {
+            Ok(rs.fsm)
         }
-        buf.clear();
+        Err(e) => {
+            Err(e)
+        }
     }
-    debug!("<<< {}", rs.file);
-    Ok("ok")
 }
+
 
 #[cfg(test)]
 mod tests {
-    use crate::fsm::Transition;
-
     #[test]
     #[should_panic]
     fn initial_attribute_should_panic() {
-        crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'>\
+        let _r = crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'>\
     <initial><transition></transition></initial></state></scxml>".to_string());
     }
 
     #[test]
     #[should_panic]
     fn script_with_src_and_content_should_panic() {
-        crate::reader::read_from_xml("<scxml initial='Main'><state id='Main'>\
+        let _r = crate::reader::read_from_xml("<scxml initial='Main'><state id='Main'>\
     <initial><transition><script src='xml/example/script.js'>println();</script></transition></initial></state></scxml>".to_string());
     }
 
@@ -1127,7 +1194,7 @@ mod tests {
     <transition><script src='xml/example/script.js'></script></transition></state></scxml>".to_string());
         assert_eq!(r.is_ok(), true);
 
-        let mut fsm = r.unwrap();
+        let fsm = r.unwrap();
 
         let mut b = false;
         for s in &fsm.states {
@@ -1147,7 +1214,7 @@ mod tests {
 
     #[test]
     fn initial_attribute() {
-        crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'></state></scxml>".to_string());
+        let _r = crate::reader::read_from_xml("<scxml initial='Main'><state id='Main' initial='A'></state></scxml>".to_string());
     }
 
     #[test]
@@ -1159,46 +1226,46 @@ mod tests {
     #[test]
     #[should_panic]
     fn wrong_parse_in_xinclude_should_panic() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='xml'/></state></scxml>".to_string());
     }
 
     #[test]
     #[should_panic]
     fn none_parse_in_xinclude_should_panic() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml'/></state></scxml>".to_string());
     }
 
     #[test]
     #[should_panic]
     fn xpointer_in_xinclude_should_panic() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text' xpointer='#123'/></state></scxml>".to_string());
     }
 
     #[test]
     fn xinclude_should_read() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text'/></state></scxml>".to_string());
     }
 
     #[test]
     #[should_panic]
     fn wrong_transition_type_should_panic() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><transition type='bla'></transition></state></scxml>".to_string());
     }
 
     #[test]
     fn transition_type_internal() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><transition type='internal'></transition></state></scxml>".to_string());
     }
 
     #[test]
     fn transition_type_external() {
-        crate::reader::read_from_xml(
+        let _r = crate::reader::read_from_xml(
             "<scxml><state><transition type='external'></transition></state></scxml>".to_string());
     }
 }

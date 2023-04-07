@@ -2261,8 +2261,61 @@ impl Fsm {
     }
 }
 
+
 #[derive(Debug)]
-struct EmptyData {}
+pub struct SrcData {
+    pub src: String,
+    pub content: Option<String>,
+}
+
+impl SrcData {
+    pub fn new() -> SrcData {
+        SrcData { src: "".to_string(), content: None }
+    }
+}
+
+impl ToString for SrcData {
+    fn to_string(&self) -> String {
+        self.src.clone()
+    }
+}
+
+impl Data for SrcData {
+    fn get_copy(&self) -> Box<dyn Data> {
+        Box::new(SrcData {
+            src: self.src.clone(),
+            content: self.content.clone(),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct ExpressionData {
+    pub expr: String,
+}
+
+impl ExpressionData {
+    pub fn new() -> ExpressionData {
+        ExpressionData { expr: "".to_string() }
+    }
+}
+
+impl ToString for ExpressionData {
+    fn to_string(&self) -> String {
+        self.expr.clone()
+    }
+}
+
+impl Data for ExpressionData {
+    fn get_copy(&self) -> Box<dyn Data> {
+        Box::new(ExpressionData {
+            expr: self.expr.clone(),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct EmptyData {}
 
 impl EmptyData {
     pub fn new() -> EmptyData {
@@ -2522,6 +2575,30 @@ pub trait Data: Send + Debug + ToString {
     fn get_copy(&self) -> Box<dyn Data>;
 }
 
+pub struct SimpleData {
+    pub value: String,
+}
+
+impl Debug for SimpleData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl ToString for SimpleData {
+    fn to_string(&self) -> String {
+        self.value.clone()
+    }
+}
+
+impl Data for SimpleData {
+    fn get_copy(&self) -> Box<dyn Data> {
+        Box::new(SimpleData {
+            value: self.value.clone(),
+        })
+    }
+}
+
 /// Datamodel interface trait.
 /// #W3C says:
 /// The Data Model offers the capability of storing, reading, and modifying a set of data that is internal to the state machine.
@@ -2696,15 +2773,6 @@ impl Datamodel for NullDatamodel {
 ////////////////////////////////////////
 //// Display support
 
-// Returns the id or "none"
-fn optional_to_string<T: Display>(op: &Option<T>) -> String {
-    if op.is_some() {
-        format!("{}", op.as_ref().unwrap())
-    } else {
-        "none".to_string()
-    }
-}
-
 impl Display for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Fsm{{v:{} root:{} states:", self.version, self.pseudo_root)?;
@@ -2842,7 +2910,7 @@ mod tests {
         assert_eq!(l3.size(), l1.size() + l2.size());
 
         let l4 = l1.append(&l1);
-        assert_eq!(l3.size(), 2 * l1.size());
+        assert_eq!(l4.size(), 2 * l1.size());
     }
 
     #[test]

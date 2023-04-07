@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use std::fmt::{Debug, Formatter};
+
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -11,29 +11,6 @@ use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalDat
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
 
-pub struct JsonData {
-    pub value: String,
-}
-
-impl Debug for JsonData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
-    }
-}
-
-impl ToString for JsonData {
-    fn to_string(&self) -> String {
-        self.value.clone()
-    }
-}
-
-impl Data for JsonData {
-    fn get_copy(&self) -> Box<dyn Data> {
-        Box::new(JsonData {
-            value: self.value.clone(),
-        })
-    }
-}
 
 static CONTEXT_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
