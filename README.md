@@ -194,7 +194,7 @@ FSM methods, state transitions and output are traces via a trait "fsm::Tracer" w
 The Tracer can be replaced by the client by settings the instance to some other implementation or configured to print only specific information. The Tracer itself has different
 flasg to control what is traces, see Enum Trace for details.
 
-The used log level of crate "log" can be controlled by environment variable "RUST_LOG", e.g. "RUST_LOG=debug".
+The used log level of crate "log" can be controlled by environment variable "RUST_LOG", e.g. "RUST_LOG=debug". Tr
 
 ### Testing
 
@@ -202,6 +202,8 @@ For testing your scxml you can use the main-function of the project.
 
 `rfsm MySM.scxml`
 
-The scxml will be parsed and the resulting FSM will be executed. The app prompts for events that are send via the external-event-queue.
+The scxml will be parsed and the resulting FSM will be executed. The app prompts for events that are send via the external-event-queue. Enter 'help' to display some usage
+information.
 
-Enter 'help' to display some usage information.
+Remind that Tracer uses "log" for any outut, to see it on console, you will need to set the log level before starting rfsm. E.g. by a`export RUST_LOG=debug`
+or depending on your OS, `set RUST_LOG=debug`.
