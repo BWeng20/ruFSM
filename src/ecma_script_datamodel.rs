@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use boa_engine::{Context, JsResult, JsValue, property::Attribute};
 use boa_engine::object::FunctionBuilder;
+use log::{debug, info};
 
+use crate::executable_content::{DefaultExecutableContentTracer, ExecutableContent, ExecutableContentTracer};
 use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalData, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
@@ -20,6 +22,7 @@ pub struct ECMAScriptDatamodel {
     pub context_id: u32,
     pub global_data: GlobalData,
     pub context: Context,
+    pub tracer: Option<Box<dyn ExecutableContentTracer>>,
 }
 
 fn str(js: &JsValue, ctx: &mut Context) -> String {
@@ -44,6 +47,7 @@ impl ECMAScriptDatamodel {
             context_id: CONTEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
             global_data: GlobalData::new(),
             context: Context::default(),
+            tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
         };
         e
     }
@@ -138,8 +142,8 @@ impl Datamodel for ECMAScriptDatamodel {
         self.execute_internal(fsm, script)
     }
 
-    fn executeForEach(&mut self, _fsm: &Fsm, _array_expression: &String, _item: &String, _index: &String, _execute_body: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
-        todo!()
+    fn executeForEach(&mut self, _fsm: &Fsm, array_expression: &String, item: &String, index: &String, _execute_body: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
+        // todo!()
     }
 
     fn executeCondition(&mut self, fsm: &Fsm, script: &String) -> Result<bool, String> {
@@ -151,7 +155,15 @@ impl Datamodel for ECMAScriptDatamodel {
 
     fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) {
         for e in fsm.executableContent.get(&content_id).unwrap() {
+            match &mut self.tracer {
+                Some(t) => {
+                    e.trace(t.as_mut(), fsm);
+                }
+                None => {}
+            }
             e.execute(self, fsm);
         }
     }
 }
+
+

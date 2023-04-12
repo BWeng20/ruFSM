@@ -10,7 +10,7 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::executable_content::{ExecutableContent, Expression, Log, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
+use crate::executable_content::{ExecutableContent, Expression, ForEach, If, Log, SendParameters, TARGET_SCXMLEVENT_PROCESSOR, TYPE_IF};
 use crate::fsm::{ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, Name, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
@@ -18,7 +18,6 @@ pub type AttributeMap = HashMap<String, String>;
 pub type XReader<'a> = Reader<&'a [u8]>;
 
 static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
-
 
 /// #W3C says:
 /// The top-level wrapper element, which carries version information. The actual state machine consists of its children.
@@ -181,7 +180,6 @@ struct ReaderStackItem {
     current_transition: TransitionId,
     current_tag: String,
     current_script_src: String,
-    current_executable_content: ExecutableContentId,
 }
 
 impl ReaderStackItem {
@@ -191,7 +189,6 @@ impl ReaderStackItem {
             current_transition: o.current_transition,
             current_tag: o.current_tag.clone(),
             current_script_src: "".to_string(),
-            current_executable_content: o.current_executable_content,
         }
     }
 }
@@ -209,6 +206,8 @@ struct ReaderState {
 
     current: ReaderStackItem,
     stack: Vec<ReaderStackItem>,
+    executable_content_stack: Vec<ExecutableContentId>,
+    current_executable_content: ExecutableContentId,
 }
 
 
@@ -218,12 +217,13 @@ impl ReaderState {
             in_scxml: false,
             id_count: 0,
             stack: vec![],
+            executable_content_stack: vec![],
+            current_executable_content: 0,
             current: ReaderStackItem {
                 current_state: 0,
                 current_transition: 0,
                 current_tag: "".to_string(),
                 current_script_src: "".to_string(),
-                current_executable_content: 0,
             },
             fsm: Box::new(Fsm::new()),
             file: "Buffer".to_string(),
@@ -353,41 +353,92 @@ impl ReaderState {
         self.fsm.get_transition_by_id_mut(id)
     }
 
-    fn start_executable_content(&mut self) {
-        self.current.current_executable_content = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    /// Starts a new region of executable content.\
+    /// A stack is used to handle nested executable content.
+    /// This stack works independent from the main element stack, but should be
+    /// considered as synchronized with it.
+    /// # Arguments
+    /// * `stack` - If true, the current region is put on stack,
+    ///             continued after the matching [get_executable_content](Self::get_executable_content).
+    ///             If false, the current stack is discarded.
+    fn start_executable_content(&mut self, stack: bool) -> ExecutableContentId {
+        if stack {
+            debug!(" push executable content region #{}", self.current_executable_content );
+            self.executable_content_stack.push(self.current_executable_content);
+        } else {
+            self.executable_content_stack.clear();
+        }
+        self.current_executable_content = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        debug!(" start executable content region #{}", self.current_executable_content );
+        self.fsm.executableContent.insert(self.current_executable_content, Vec::new());
+        self.current_executable_content
     }
 
-    fn get_executable_content(&mut self) -> ExecutableContentId {
-        if self.current.current_executable_content == 0 {
+    fn get_executable_content_as<T: 'static>(ec_opt: Option<&mut dyn ExecutableContent>) -> Option<&mut T> {
+        match ec_opt {
+            Some(ec) => {
+                let va = ec.as_any();
+                match (*va).downcast_mut::<T>() {
+                    Some(v) => {
+                        Some(v)
+                    }
+                    None => {
+                        None
+                    }
+                }
+            }
+            None => { None }
+        }
+    }
+
+    fn get_last_executable_content_entry(&mut self, ec_id: ExecutableContentId) -> Option<&mut dyn ExecutableContent> {
+        let v =
+            self.fsm.executableContent.get_mut(&ec_id);
+        match v {
+            Some(vc) => {
+                Some(vc.last_mut().unwrap().as_mut())
+            }
+            None => {
+                None
+            }
+        }
+    }
+
+
+    /// Gets the id of the current executable content region.\
+    /// The current id is reset to 0 or popped from stack if the stack is not empty.
+    /// See [start_executable_content](Self::start_executable_content).
+    fn end_executable_content(&mut self) -> ExecutableContentId {
+        if self.current_executable_content == 0 {
             panic!("Try to get executable content in unsupported document part.");
         } else {
-            if self.fsm.executableContent.contains_key(&self.current.current_executable_content) {
-                let cid = self.current.current_executable_content;
-                self.current.current_executable_content = 0;
-                cid
+            let ec_id = self.current_executable_content;
+            debug!(" end executable content region #{}", ec_id );
+            match self.executable_content_stack.pop()
+            {
+                Some(oec_id) => {
+                    self.current_executable_content = oec_id;
+                    debug!(" pop executable content region #{}", oec_id );
+                }
+                None => {
+                    self.current_executable_content = 0;
+                }
+            };
+            if self.fsm.executableContent.contains_key(&ec_id) {
+                ec_id
             } else {
                 0
             }
         }
     }
 
+    /// Adds content to the current executable content region.
     fn add_executable_content(&mut self, ec: Box<dyn ExecutableContent>) {
-        if self.current.current_executable_content == 0 {
+        if self.current_executable_content == 0 {
             panic!("Try to add executable content to unsupported document part.");
         } else {
-            debug!("Adding Executable Content {}", self.current.current_executable_content );
-            match self.fsm.executableContent.get_mut(&self.current.current_executable_content) {
-                Some(ex) => {
-                    debug!(" (push)" );
-                    ex.push(ec);
-                }
-                None => {
-                    debug!(" (Insert)" );
-                    let mut ex = Vec::new();
-                    ex.push(ec);
-                    self.fsm.executableContent.insert(self.current.current_executable_content, ex);
-                }
-            }
+            debug!("Adding Executable Content '{}' to #{}", ec.get_type(), self.current_executable_content );
+            self.fsm.executableContent.get_mut(&self.current_executable_content).unwrap().push(ec);
         }
     }
 
@@ -675,7 +726,7 @@ impl ReaderState {
         t.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
 
         // Start script.
-        self.start_executable_content();
+        self.start_executable_content(false);
 
         let event = attr.get(TAG_EVENT);
         if event.is_some() {
@@ -718,7 +769,7 @@ impl ReaderState {
     }
 
     fn end_transition(&mut self) {
-        let ec_id = self.get_executable_content();
+        let ec_id = self.end_executable_content();
         let trans = self.get_current_transition();
         // Assign the collected content to the transition.
         trans.content = ec_id;
@@ -763,11 +814,32 @@ impl ReaderState {
     fn start_for_each(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_FOR_EACH, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF, TAG_FINALIZE]);
 
-        let _array = Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr);
-        let _item = Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr);
-        let _index = attr.get(ATTR_INDEX);
+        let ec_id = self.current_executable_content;
+        let mut fe = ForEach::new();
+        fe.array = Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr).clone();
+        fe.item = Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr).clone();
+        match attr.get(ATTR_INDEX) {
+            Some(index) => {
+                fe.index = index.clone();
+            }
+            None => {}
+        }
+        self.add_executable_content(Box::new(fe));
+        let content_id = self.start_executable_content(true);
 
-        todo!()
+        let ec_opt = self.get_last_executable_content_entry(ec_id);
+        match Self::get_executable_content_as::<ForEach>(ec_opt) {
+            Some(fe) => {
+                fe.content = content_id;
+            }
+            None => {
+                panic!("Internal Error: Executable Content missing in start_for_each in region #{}", ec_id);
+            }
+        }
+    }
+
+    fn end_for_each(&mut self) {
+        self.end_executable_content();
     }
 
     fn start_cancel(&mut self, _attr: &AttributeMap) {
@@ -776,11 +848,11 @@ impl ReaderState {
 
     fn start_on_entry(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_ENTRY, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
-        self.start_executable_content();
+        self.start_executable_content(false);
     }
 
     fn end_on_entry(&mut self) {
-        let ec_id = self.get_executable_content();
+        let ec_id = self.end_executable_content();
         let state = self.get_current_state();
         // Assign the collected content to the on-entry.
         state.onentry = ec_id;
@@ -788,33 +860,89 @@ impl ReaderState {
 
     fn start_on_exit(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
-        self.start_executable_content();
+        self.start_executable_content(false);
     }
 
     fn end_on_exit(&mut self) {
-        let ec_id = self.get_executable_content();
+        let ec_id = self.end_executable_content();
         let state = self.get_current_state();
         // Assign the collected content to the on-exit.
         state.onexit = ec_id;
     }
 
-    fn start_if(&mut self, _attr: &AttributeMap) {
+    fn start_if(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_IF, &[TAG_ON_ENTRY, TAG_ON_EXIT, TAG_TRANSITION, TAG_FOR_EACH, TAG_IF, TAG_FINALIZE]);
-        todo!()
+
+        let ec_if = If::new(Self::get_required_attr(TAG_IF, TAG_COND, attr));
+        self.add_executable_content(Box::new(ec_if));
+        self.start_executable_content(true);
     }
 
     fn end_if(&mut self) {
-        todo!()
+        let content_id = self.end_executable_content();
     }
 
-    fn start_else_if(&mut self, _attr: &AttributeMap) {
+    fn start_else_if(&mut self, attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ELSEIF, &[TAG_IF]);
-        todo!()
+
+        // Close parent <if> content region
+        let if_content_id = self.end_executable_content();
+
+        let if_id = self.current_executable_content;
+
+        // Start new "else" region - will contain only one "if" .
+        let else_id = self.start_executable_content(true);
+
+        // Add "if"
+        let mut else_if = If::new(Self::get_required_attr(TAG_IF, TAG_COND, attr));
+        self.add_executable_content(Box::new(else_if));
+
+        let else_if_content_id = self.start_executable_content(true);
+
+        // Put together
+        let else_if_ec = self.get_last_executable_content_entry(else_id);
+        match Self::get_executable_content_as::<If>(else_if_ec) {
+            Some(evc_if) => {
+                evc_if.content = else_if_content_id;
+            }
+            None => {
+                panic!("Internal Error: Executable Content missing in start_else_if in region #{}", else_id);
+            }
+        }
+
+        let if_ec = self.get_last_executable_content_entry(if_id);
+        match Self::get_executable_content_as::<If>(if_ec) {
+            Some(evc_if) => {
+                evc_if.content = if_content_id;
+                evc_if.else_content = else_id;
+            }
+            None => {
+                panic!("Internal Error: Executable Content missing in start_else_if");
+            }
+        }
     }
 
     fn start_else(&mut self, _attr: &AttributeMap) {
         self.verify_parent_tag(TAG_ELSE, &[TAG_IF]);
-        todo!()
+
+        // Close parent <if> content region
+        let if_content_id = self.end_executable_content();
+
+        let if_id = self.current_executable_content;
+
+        // Start new "else" region
+        let else_id = self.start_executable_content(true);
+
+        // Put together
+        let if_ec = self.get_last_executable_content_entry(if_id);
+        match Self::get_executable_content_as::<If>(if_ec) {
+            Some(evc_if) => {
+                evc_if.else_content = else_id;
+            }
+            None => {
+                panic!("Internal Error: Executable Content missing in start_else");
+            }
+        }
     }
 
     fn start_raise(&mut self, _attr: &AttributeMap) {
@@ -962,7 +1090,7 @@ impl ReaderState {
                 }
                 self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
                 self.current.current_state = self.fsm.pseudo_root;
-                self.start_executable_content();
+                self.start_executable_content(false);
             }
             TAG_DATAMODEL => {
                 self.start_datamodel();
@@ -1090,7 +1218,7 @@ impl ReaderState {
         debug!("End Element {}", name);
         match name {
             TAG_SCXML => {
-                self.fsm.script = self.get_executable_content();
+                self.fsm.script = self.end_executable_content();
             }
             TAG_SCRIPT => {
                 self.end_script(txt);
@@ -1110,7 +1238,9 @@ impl ReaderState {
             TAG_CONTENT => {
                 self.end_content();
             }
-
+            TAG_FOR_EACH => {
+                self.end_for_each();
+            }
             _ => {}
         }
         self.pop();

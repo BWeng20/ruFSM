@@ -15,7 +15,7 @@ mod executable_content;
 mod ecma_script_datamodel;
 
 
-fn handleTrace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
+fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
     match Trace::from_str(opt) {
         Ok(t) => {
             let event = Box::new(Event::trace(t, enable));
@@ -72,9 +72,9 @@ fn main() {
                         }
                         let line_lc = line.to_lowercase();
                         if line_lc.starts_with("tron") && line.len() > 5 {
-                            handleTrace(&mut sender, &line_lc[5..], true);
+                            handle_trace(&mut sender, &line_lc[5..], true);
                         } else if line_lc.starts_with("troff") && line_lc.len() > 6 {
-                            handleTrace(&mut sender, &line_lc[6..], false);
+                            handle_trace(&mut sender, &line_lc[6..], false);
                         } else if !line_lc.eq("help") && !line.is_empty() {
                             let event = Box::new(Event {
                                 name: line.clone(),

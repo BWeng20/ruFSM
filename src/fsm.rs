@@ -18,7 +18,7 @@ use log::info;
 
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
-use crate::executable_content::ExecutableContent;
+use crate::executable_content::{ExecutableContent, ExecutableContentTracer};
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
@@ -2318,7 +2318,6 @@ impl Fsm {
         self.timer.schedule_with_delay(chrono::Duration::milliseconds(delay_ms), cb).ignore();
     }
 }
-
 
 #[derive(Debug)]
 pub struct SrcData {
