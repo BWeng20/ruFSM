@@ -11,7 +11,7 @@ use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
 use crate::executable_content::{ExecutableContent, Expression, ForEach, If, Log, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
-use crate::fsm::{ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, Name, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
+use crate::fsm::{ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
@@ -314,22 +314,6 @@ impl ReaderState {
         target_name.split_ascii_whitespace().for_each(|target| {
             targets.push(self.get_or_create_state(&target.to_string(), false))
         });
-    }
-
-    fn get_state_by_name(&self, name: &Name) -> Option<&State> {
-        if self.fsm.statesNames.contains_key(name) {
-            Some(self.fsm.get_state_by_name(name))
-        } else { None }
-    }
-
-    fn get_state_by_name_mut(&mut self, name: &Name) -> Option<&mut State> {
-        if self.fsm.statesNames.contains_key(name) {
-            Some(self.fsm.get_state_by_name_mut(name))
-        } else { None }
-    }
-
-    fn get_state_by_id(&self, id: StateId) -> &State {
-        self.fsm.get_state_by_id(id)
     }
 
     fn get_state_by_id_mut(&mut self, id: StateId) -> &mut State {
@@ -897,7 +881,7 @@ impl ReaderState {
     }
 
     fn end_if(&mut self) {
-        let content_id = self.end_executable_content_region(TAG_IF);
+        let _content_id = self.end_executable_content_region(TAG_IF);
     }
 
     fn start_else_if(&mut self, attr: &AttributeMap) {
@@ -913,7 +897,7 @@ impl ReaderState {
         let else_id = self.current_executable_content;
 
         // Add new "if"
-        let mut else_if = If::new(Self::get_required_attr(TAG_IF, TAG_COND, attr));
+        let else_if = If::new(Self::get_required_attr(TAG_IF, TAG_COND, attr));
         self.add_executable_content(Box::new(else_if));
 
         let else_if_content_id = self.start_executable_content_region(true, TAG_ELSEIF);
@@ -951,7 +935,7 @@ impl ReaderState {
         self.verify_parent_tag(TAG_ELSE, &[TAG_IF]);
 
         // Close parent <if> content region
-        let if_content_id = self.end_executable_content_region(TAG_IF);
+        self.end_executable_content_region(TAG_IF);
 
         let mut if_id = self.current_executable_content;
 

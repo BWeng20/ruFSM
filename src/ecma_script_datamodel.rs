@@ -1,15 +1,14 @@
 #![allow(non_snake_case)]
 
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use boa_engine::{Context, JsResult, JsString, JsValue, property::Attribute};
-use boa_engine::object::{FunctionBuilder, JsArray, JsMap, JsObject};
+use boa_engine::{Context, JsResult, JsValue, property::Attribute};
+use boa_engine::object::{FunctionBuilder, JsArray, JsMap};
 use boa_engine::value::Type;
 use log::{debug, error, info};
 
-use crate::executable_content::{DefaultExecutableContentTracer, ExecutableContent, ExecutableContentTracer};
+use crate::executable_content::{DefaultExecutableContentTracer, ExecutableContentTracer};
 use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalData, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
@@ -32,7 +31,7 @@ fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
         Ok(s) => {
             s.to_string()
         }
-        Err(e) => {
+        Err(_e) => {
             jv.display().to_string()
         }
     }
@@ -40,11 +39,12 @@ fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
 
 
 fn log_js(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
+    let mut msg = String::new();
     for arg in args {
-        print!("{}", arg.to_string(ctx)?);
+        msg.push_str(js_to_string(arg, ctx).as_str());
     }
-    println!();
-    Ok(JsValue::undefined())
+    info!("{}", msg);
+    Ok(JsValue::from(msg))
 }
 
 
@@ -151,7 +151,7 @@ impl Datamodel for ECMAScriptDatamodel {
         self.execute_internal(fsm, script)
     }
 
-    fn executeForEach(&mut self, fsm: &Fsm, array_expression: &String, item_name: &String, index: &String,
+    fn executeForEach(&mut self, _fsm: &Fsm, array_expression: &String, item_name: &String, index: &String,
                       execute_body: &mut dyn FnMut(&mut dyn Datamodel)) {
         match self.context.eval(array_expression) {
             Ok(r) => {
@@ -160,7 +160,7 @@ impl Datamodel for ECMAScriptDatamodel {
                         // Iterate through all chars
                     }
                     Type::Object => {
-                        let mut obj = r.as_object().unwrap().to_owned();
+                        let obj = r.as_object().unwrap().to_owned();
                         if obj.is_array() {
                             let ja = JsArray::from_object(obj, &mut self.context).unwrap();
                             let N = ja.length(&mut self.context).unwrap() as i64;
@@ -174,7 +174,7 @@ impl Datamodel for ECMAScriptDatamodel {
                                         }
                                         execute_body(self);
                                     }
-                                    Err(e) => {
+                                    Err(_e) => {
                                         // @TODO Ignore, abort or log?
                                     }
                                 }
@@ -186,10 +186,10 @@ impl Datamodel for ECMAScriptDatamodel {
                             match mir {
                                 Ok(it) => {
                                     let mut e = it.next(&mut self.context);
-                                    while (e.is_ok()) {
-                                        todo!();
+                                    while e.is_ok() {
                                         e = it.next(&mut self.context);
                                     }
+                                    todo!();
                                 }
                                 Err(e) => {
                                     let msg = format!("Failed to extract iterator. {}", js_to_string(&e, &mut self.context));

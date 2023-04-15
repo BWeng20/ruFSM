@@ -7,12 +7,12 @@ use std::sync::mpsc::Sender;
 
 use crate::fsm::{Event, EventType, Trace};
 
-mod reader;
-mod fsm;
-mod executable_content;
+pub mod reader;
+pub mod fsm;
+pub mod executable_content;
 
 #[cfg(feature = "ECMAScript")]
-mod ecma_script_datamodel;
+pub mod ecma_script_datamodel;
 
 
 fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {

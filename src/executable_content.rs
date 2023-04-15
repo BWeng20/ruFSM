@@ -1,6 +1,5 @@
 use std::any::Any;
-use std::fmt::{Arguments, Debug, Formatter};
-use std::io::Write;
+use std::fmt::{Debug, Formatter};
 
 use lazy_static::lazy_static;
 use log::{info, warn};
@@ -19,17 +18,17 @@ pub const TYPE_LOG: &str = "log";
 pub const TYPE_FOREACH: &str = "foreach";
 pub const TYPE_SEND: &str = "send";
 
-pub trait To_Any: 'static {
+pub trait ToAny: 'static {
     fn as_any(&mut self) -> &mut dyn Any;
 }
 
-impl<T: Debug + 'static> To_Any for T {
+impl<T: Debug + 'static> ToAny for T {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 }
 
-pub trait ExecutableContent: To_Any + Debug + Send {
+pub trait ExecutableContent: ToAny + Debug + Send {
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm);
     fn get_type(&self) -> &str;
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm);
@@ -115,7 +114,7 @@ impl ExecutableContent for Script {
         TYPE_SCRIPT
     }
 
-    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm) {
+    fn trace(&self, _tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
         todo!()
     }
 }
@@ -137,7 +136,7 @@ impl ExecutableContent for Expression {
         TYPE_EXPRESSION
     }
 
-    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm) {
+    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
         tracer.print_name_and_attributes(self, &[("content", &self.content)]);
     }
 }
@@ -160,7 +159,7 @@ impl ExecutableContent for Log {
         TYPE_LOG
     }
 
-    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm) {
+    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
         tracer.print_name_and_attributes(self, &[
             ("expression", &self.expression)]);
     }
@@ -356,7 +355,7 @@ impl ExecutableContent for SendParameters {
         TYPE_SEND
     }
 
-    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm) {
+    fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
         tracer.print_name_and_attributes(self, &[
             ("namelocation", &self.namelocation),
             ("name", &self.name),

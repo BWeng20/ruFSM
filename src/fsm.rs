@@ -961,15 +961,6 @@ impl Fsm {
         } else { std::cmp::Ordering::Less }
     }
 
-    fn executableDocumentOrder(t1: &ExecutableContentId, t2: &ExecutableContentId) -> ::std::cmp::Ordering {
-        if t1 > t2 {
-            std::cmp::Ordering::Greater
-        } else if t1 == t2 {
-            std::cmp::Ordering::Equal
-        } else { std::cmp::Ordering::Less }
-    }
-
-
     fn invokeDocumentOrder(s1: &Invoke, s2: &Invoke) -> ::std::cmp::Ordering {
         if s1.id > s2.id {
             std::cmp::Ordering::Greater
@@ -2276,15 +2267,6 @@ impl Fsm {
     fn nameMatch(&self, events: &Vec<String>, name: &String) -> bool
     {
         events.contains(name)
-    }
-
-    /// Converts a list of ids to list of references.
-    fn list_to_states(&self, stateIds: &List<StateId>) -> List<&State> {
-        let mut l = List::new();
-        for sid in stateIds.iterator() {
-            l.push(self.get_state_by_id(*sid));
-        }
-        l
     }
 
     /// Converts a set of ids to list of references.
