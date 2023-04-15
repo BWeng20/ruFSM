@@ -1,11 +1,13 @@
 #![allow(non_snake_case)]
 
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use boa_engine::{Context, JsResult, JsValue, property::Attribute};
-use boa_engine::object::FunctionBuilder;
-use log::{debug, info};
+use boa_engine::{Context, JsResult, JsString, JsValue, property::Attribute};
+use boa_engine::object::{FunctionBuilder, JsArray, JsMap, JsObject};
+use boa_engine::value::Type;
+use log::{debug, error, info};
 
 use crate::executable_content::{DefaultExecutableContentTracer, ExecutableContent, ExecutableContentTracer};
 use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalData, State, StateId};
@@ -25,8 +27,15 @@ pub struct ECMAScriptDatamodel {
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
 }
 
-fn str(js: &JsValue, ctx: &mut Context) -> String {
-    js.to_string(ctx).unwrap().to_string()
+fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
+    match jv.to_string(ctx) {
+        Ok(s) => {
+            s.to_string()
+        }
+        Err(e) => {
+            jv.display().to_string()
+        }
+    }
 }
 
 
@@ -54,7 +63,7 @@ impl ECMAScriptDatamodel {
 
 
     fn execute_internal(&mut self, _fsm: &Fsm, script: &String) -> String {
-        println!("Execute: {}", script);
+        debug!("Execute: {}", script);
         let mut r: String = "".to_string();
         for (name, value) in &self.data.values {
             self.context.register_global_property(name.as_str(), value.to_string(), Attribute::all());
@@ -66,7 +75,7 @@ impl ECMAScriptDatamodel {
             }
             Err(e) => {
                 // Pretty print the error
-                eprintln!("Script Error {}", e.display());
+                error!("Script Error {}", e.display());
             }
         }
         r
@@ -101,7 +110,7 @@ impl Datamodel for ECMAScriptDatamodel {
         FunctionBuilder::closure_with_captures(&mut self.context,
                                                move |_this: &JsValue, args: &[JsValue], names: &mut Vec<String>, ctx: &mut Context| {
                                                    if args.len() > 0 {
-                                                       let name = &str(&args[0], ctx);
+                                                       let name = &js_to_string(&args[0], ctx);
                                                        let m = names.contains(name);
                                                        Ok(JsValue::from(m))
                                                    } else {
@@ -135,15 +144,71 @@ impl Datamodel for ECMAScriptDatamodel {
     fn clear(self: &mut ECMAScriptDatamodel) {}
 
     fn log(&mut self, msg: &String) {
-        println!("Log: {}", msg);
+        info!("Log: {}", msg);
     }
 
     fn execute(&mut self, fsm: &Fsm, script: &String) -> String {
         self.execute_internal(fsm, script)
     }
 
-    fn executeForEach(&mut self, _fsm: &Fsm, array_expression: &String, item: &String, index: &String, _execute_body: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
-        // todo!()
+    fn executeForEach(&mut self, fsm: &Fsm, array_expression: &String, item_name: &String, index: &String,
+                      execute_body: &mut dyn FnMut(&mut dyn Datamodel)) {
+        match self.context.eval(array_expression) {
+            Ok(r) => {
+                match r.get_type() {
+                    Type::String => {
+                        // Iterate through all chars
+                    }
+                    Type::Object => {
+                        let mut obj = r.as_object().unwrap().to_owned();
+                        if obj.is_array() {
+                            let ja = JsArray::from_object(obj, &mut self.context).unwrap();
+                            let N = ja.length(&mut self.context).unwrap() as i64;
+                            for idx in 0..N {
+                                match ja.at(idx, &mut self.context) {
+                                    Ok(item) => {
+                                        debug!("ForEach: #{} {}", idx, &js_to_string(&item, &mut self.context) );
+                                        self.context.register_global_property(item_name.as_str(), item, Attribute::all());
+                                        if !index.is_empty() {
+                                            self.context.register_global_property(index.as_str(), idx, Attribute::all());
+                                        }
+                                        execute_body(self);
+                                    }
+                                    Err(e) => {
+                                        // @TODO Ignore, abort or log?
+                                    }
+                                }
+                            }
+                        } else if obj.is_map() {} else {
+                            // Iterate through all members
+                            let jm = JsMap::from_object(obj, &mut self.context).unwrap();
+                            let mir = jm.values(&mut self.context);
+                            match mir {
+                                Ok(it) => {
+                                    let mut e = it.next(&mut self.context);
+                                    while (e.is_ok()) {
+                                        todo!();
+                                        e = it.next(&mut self.context);
+                                    }
+                                }
+                                Err(e) => {
+                                    let msg = format!("Failed to extract iterator. {}", js_to_string(&e, &mut self.context));
+                                    self.log(&msg);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        self.log(&"Resulting value is not a supported collection.".to_string());
+                    }
+                }
+            }
+            Err(e) => {
+                self.log(&e.display().to_string());
+            }
+        }
+
+        todo!()
     }
 
     fn executeCondition(&mut self, fsm: &Fsm, script: &String) -> Result<bool, String> {
@@ -154,7 +219,8 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) {
-        for e in fsm.executableContent.get(&content_id).unwrap() {
+        for (idx, e) in fsm.executableContent.get(&content_id).unwrap().iter().enumerate() {
+            info!("executeContent #{}/{}:", content_id, idx);
             match &mut self.tracer {
                 Some(t) => {
                     e.trace(t.as_mut(), fsm);
@@ -165,5 +231,6 @@ impl Datamodel for ECMAScriptDatamodel {
         }
     }
 }
+
 
 

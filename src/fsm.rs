@@ -18,7 +18,7 @@ use log::info;
 
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMA_SCRIPT_LC, ECMAScriptDatamodel};
-use crate::executable_content::{ExecutableContent, ExecutableContentTracer};
+use crate::executable_content::ExecutableContent;
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
@@ -2697,7 +2697,8 @@ pub trait Datamodel {
     /// Execute a script.
     fn execute(&mut self, fsm: &Fsm, script: &String) -> String;
 
-    fn executeForEach(&mut self, fsm: &Fsm, arrayExpression: &String, item: &String, index: &String, executeBody: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel));
+    fn executeForEach(&mut self, fsm: &Fsm, array_expression: &String, item: &String, index: &String,
+                      execute_body: &mut dyn FnMut(&mut dyn Datamodel));
 
     /// #W3C says:
     /// The set of operators in conditional expressions varies depending on the data model,
@@ -2808,7 +2809,8 @@ impl Datamodel for NullDatamodel {
         "".to_string()
     }
 
-    fn executeForEach(&mut self, _fsm: &Fsm, _array_expression: &String, _item: &String, _index: &String, _executeBody: &dyn FnOnce(&mut Fsm, &mut dyn Datamodel)) {
+    fn executeForEach(&mut self, _fsm: &Fsm, _array_expression: &String, _item: &String, _index: &String,
+                      _executeBody: &mut dyn FnMut(&mut dyn Datamodel)) {
         // nothing to do
     }
 

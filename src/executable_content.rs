@@ -234,10 +234,10 @@ impl ExecutableContent for ForEach {
         } else {
             self.index.clone()
         };
-        datamodel.executeForEach(fsm, &self.array, &self.item, &idx, &|fsm_c: &mut Fsm, dm: &mut dyn Datamodel| {
+        datamodel.executeForEach(fsm, &self.array, &self.item, &idx, &mut |datamodel| {
             if self.content != 0 {
-                for e in fsm_c.executableContent.get(&self.content).unwrap() {
-                    e.execute(dm, fsm_c);
+                for e in fsm.executableContent.get(&self.content).unwrap() {
+                    e.execute(datamodel, fsm);
                 }
             }
         });
