@@ -4,9 +4,9 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use boa_engine::{Context, JsResult, JsValue, property::Attribute};
-use boa_engine::object::{FunctionBuilder, JsArray, JsMap};
+use boa_engine::object::FunctionBuilder;
 use boa_engine::value::Type;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 use crate::executable_content::{DefaultExecutableContentTracer, ExecutableContentTracer};
 use crate::fsm::{Data, Datamodel, DataStore, ExecutableContentId, Fsm, GlobalData, State, StateId};
@@ -63,7 +63,6 @@ impl ECMAScriptDatamodel {
 
 
     fn execute_internal(&mut self, _fsm: &Fsm, script: &String) -> String {
-        debug!("Execute: {}", script);
         let mut r: String = "".to_string();
         for (name, value) in &self.data.values {
             self.context.register_global_property(name.as_str(), value.to_string(), Attribute::all());
@@ -71,7 +70,8 @@ impl ECMAScriptDatamodel {
         let result = self.context.eval(script);
         match result {
             Ok(res) => {
-                r = res.to_string(&mut self.context).unwrap().to_string()
+                r = res.to_string(&mut self.context).unwrap().to_string();
+                debug!("Execute: {} => {}", script, r);
             }
             Err(e) => {
                 // Pretty print the error
@@ -153,49 +153,31 @@ impl Datamodel for ECMAScriptDatamodel {
 
     fn executeForEach(&mut self, _fsm: &Fsm, array_expression: &String, item_name: &String, index: &String,
                       execute_body: &mut dyn FnMut(&mut dyn Datamodel)) {
+        debug!("ForEach: array: {}", array_expression );
         match self.context.eval(array_expression) {
             Ok(r) => {
                 match r.get_type() {
-                    Type::String => {
-                        // Iterate through all chars
-                    }
                     Type::Object => {
-                        let obj = r.as_object().unwrap().to_owned();
-                        if obj.is_array() {
-                            let ja = JsArray::from_object(obj, &mut self.context).unwrap();
-                            let N = ja.length(&mut self.context).unwrap() as i64;
-                            for idx in 0..N {
-                                match ja.at(idx, &mut self.context) {
-                                    Ok(item) => {
-                                        debug!("ForEach: #{} {}", idx, &js_to_string(&item, &mut self.context) );
-                                        self.context.register_global_property(item_name.as_str(), item, Attribute::all());
-                                        if !index.is_empty() {
-                                            self.context.register_global_property(index.as_str(), idx, Attribute::all());
-                                        }
-                                        execute_body(self);
+                        let obj = r.as_object().unwrap();
+                        // Iterate through all members
+                        let ob = obj.borrow();
+                        let p = ob.properties();
+                        let mut idx: i64 = 0;
+                        for item_prop in p.values() {
+                            match item_prop.value() {
+                                Some(item) => {
+                                    debug!("ForEach: #{} {}", idx, &js_to_string(&item, &mut self.context) );
+                                    self.context.register_global_property(item_name.as_str(), item, Attribute::all());
+                                    if !index.is_empty() {
+                                        self.context.register_global_property(index.as_str(), idx, Attribute::all());
                                     }
-                                    Err(_e) => {
-                                        // @TODO Ignore, abort or log?
-                                    }
+                                    execute_body(self);
+                                }
+                                None => {
+                                    warn!("ForEach: #{} - failed to get value", idx, );
                                 }
                             }
-                        } else if obj.is_map() {} else {
-                            // Iterate through all members
-                            let jm = JsMap::from_object(obj, &mut self.context).unwrap();
-                            let mir = jm.values(&mut self.context);
-                            match mir {
-                                Ok(it) => {
-                                    let mut e = it.next(&mut self.context);
-                                    while e.is_ok() {
-                                        e = it.next(&mut self.context);
-                                    }
-                                    todo!();
-                                }
-                                Err(e) => {
-                                    let msg = format!("Failed to extract iterator. {}", js_to_string(&e, &mut self.context));
-                                    self.log(&msg);
-                                }
-                            }
+                            idx = idx + 1;
                         }
                     }
                     _ => {
@@ -207,9 +189,8 @@ impl Datamodel for ECMAScriptDatamodel {
                 self.log(&e.display().to_string());
             }
         }
-
-        todo!()
     }
+
 
     fn executeCondition(&mut self, fsm: &Fsm, script: &String) -> Result<bool, String> {
         match bool::from_str(self.execute_internal(fsm, script).as_str()) {
@@ -219,8 +200,7 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) {
-        for (idx, e) in fsm.executableContent.get(&content_id).unwrap().iter().enumerate() {
-            info!("executeContent #{}/{}:", content_id, idx);
+        for (_idx, e) in fsm.executableContent.get(&content_id).unwrap().iter().enumerate() {
             match &mut self.tracer {
                 Some(t) => {
                     e.trace(t.as_mut(), fsm);

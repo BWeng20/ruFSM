@@ -1,2 +1,1 @@
-println("hello1");
-println("hello2");
+log("Hello from included script");
