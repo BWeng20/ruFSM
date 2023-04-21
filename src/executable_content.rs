@@ -17,6 +17,9 @@ pub const TYPE_SCRIPT: &str = "script";
 pub const TYPE_LOG: &str = "log";
 pub const TYPE_FOREACH: &str = "foreach";
 pub const TYPE_SEND: &str = "send";
+pub const TYPE_RAISE: &str = "raise";
+pub const TYPE_CANCEL: &str = "cancel";
+pub const TYPE_ASSIGN: &str = "assign";
 
 pub trait ToAny: 'static {
     fn as_any(&mut self) -> &mut dyn Any;
@@ -33,6 +36,42 @@ pub trait ExecutableContent: ToAny + Debug + Send {
     fn get_type(&self) -> &str;
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm);
 }
+
+pub fn get_safe_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> &mut T {
+    let va = ec.as_any();
+    match (*va).downcast_mut::<T>() {
+        Some(v) => {
+            v
+        }
+        None => {
+            panic!("Failed to cast executable content")
+        }
+    }
+}
+
+
+pub fn get_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> Option<&mut T> {
+    let va = ec.as_any();
+    match (*va).downcast_mut::<T>() {
+        Some(v) => {
+            Some(v)
+        }
+        None => {
+            None
+        }
+    }
+}
+
+
+pub fn get_opt_executable_content_as<T: 'static>(ec_opt: Option<&mut dyn ExecutableContent>) -> Option<&mut T> {
+    match ec_opt {
+        Some(ec) => {
+            get_executable_content_as::<T>(ec)
+        }
+        None => { None }
+    }
+}
+
 
 pub trait ExecutableContentTracer {
     fn print_name_and_attributes(&mut self, ec: &dyn ExecutableContent, attrs: &[(&str, &String)]);
@@ -84,16 +123,122 @@ pub struct SendParameters {
     pub delay: String,
     pub delayexpr: String,
     pub name_list: String,
+
+    /// content inside \<content\> child
     pub content: String,
+    /// expr-attribute of \<content\> child
+    pub content_expr: String,
 }
 
-impl Debug for SendParameters {
+pub struct Cancel {
+    pub sendid: String,
+    pub sendidexpr: String,
+}
+
+pub struct Raise {
+    pub event: String,
+}
+
+pub struct Assign {
+    pub location: String,
+    pub expr: String,
+}
+
+impl Assign {
+    pub fn new() -> Assign {
+        Assign {
+            location: String::new(),
+            expr: String::new(),
+        }
+    }
+}
+
+impl Debug for Assign {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Send")
-            .field("name", &self.name)
+        f.debug_struct("Assign")
+            .field("location", &self.location)
+            .field("expr", &self.expr)
             .finish()
     }
 }
+
+impl ExecutableContent for Assign {
+    fn execute(&self, _datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+        todo!()
+    }
+
+    fn get_type(&self) -> &str {
+        TYPE_ASSIGN
+    }
+
+    fn trace(&self, _tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
+        todo!()
+    }
+}
+
+
+impl Raise {
+    pub fn new() -> Raise {
+        Raise {
+            event: String::new(),
+        }
+    }
+}
+
+impl Debug for Raise {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Raise")
+            .field("event", &self.event)
+            .finish()
+    }
+}
+
+impl ExecutableContent for Raise {
+    fn execute(&self, _datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+        todo!()
+    }
+
+    fn get_type(&self) -> &str {
+        TYPE_RAISE
+    }
+
+    fn trace(&self, _tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
+        todo!()
+    }
+}
+
+impl Cancel {
+    pub fn new() -> Cancel {
+        Cancel {
+            sendid: String::new(),
+            sendidexpr: String::new(),
+        }
+    }
+}
+
+impl Debug for Cancel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cancel")
+            .field("sendid", &self.sendid)
+            .field("sendidexpr", &self.sendidexpr)
+            .finish()
+    }
+}
+
+impl ExecutableContent for Cancel {
+    fn execute(&self, _datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+        todo!()
+    }
+
+    fn get_type(&self) -> &str {
+        TYPE_CANCEL
+    }
+
+    fn trace(&self, _tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
+        todo!()
+    }
+}
+
 
 impl Script {
     pub fn new() -> Script {
@@ -120,9 +265,9 @@ impl ExecutableContent for Script {
 }
 
 impl Expression {
-    pub fn new(expression: String) -> Expression {
+    pub fn new() -> Expression {
         Expression {
-            content: expression,
+            content: String::new(),
         }
     }
 }
@@ -270,10 +415,18 @@ impl SendParameters {
             delayexpr: "".to_string(),
             name_list: "".to_string(),
             content: "".to_string(),
+            content_expr: "".to_string(),
         }
     }
 }
 
+impl Debug for SendParameters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Send")
+            .field("name", &self.name)
+            .finish()
+    }
+}
 
 /// Implements the excution of \<send\> element.
 impl ExecutableContent for SendParameters {
@@ -372,6 +525,7 @@ impl ExecutableContent for SendParameters {
         ]);
     }
 }
+
 
 #[cfg(test)]
 mod tests {

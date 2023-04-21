@@ -10,8 +10,8 @@ use quick_xml::events::{BytesStart, Event};
 use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
-use crate::executable_content::{ExecutableContent, Expression, ForEach, If, Log, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
-use crate::fsm::{ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, map_history_type, map_transition_type, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
+use crate::executable_content::{Assign, Cancel, ExecutableContent, Expression, ForEach, get_opt_executable_content_as, get_safe_executable_content_as, If, Log, Raise, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
+use crate::fsm::{DoneData, ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, Invoke, map_history_type, map_transition_type, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
@@ -87,8 +87,11 @@ pub const TAG_TYPE: &str = "type";
 pub const TAG_ON_ENTRY: &str = "onentry";
 pub const TAG_ON_EXIT: &str = "onexit";
 pub const TAG_INVOKE: &str = "invoke";
+pub const ATTR_SRCEXPR: &str = "srcexpr";
+pub const ATTR_AUTOFORWARD: &str = "autoforward";
+
 pub const TAG_FINALIZE: &str = "finalize";
-pub const TA_DONEDATA: &str = "donedata";
+pub const TAG_DONEDATA: &str = "donedata";
 
 pub const TAG_INCLUDE: &str = "include";
 pub const TAG_HREF: &str = "href";
@@ -162,6 +165,8 @@ pub const TAG_LOG: &str = "log";
 pub const TAG_SCRIPT: &str = "script";
 pub const ATTR_SRC: &str = "src";
 pub const TAG_ASSIGN: &str = "assign";
+pub const ATTR_LOCATION: &str = "location";
+
 pub const TAG_IF: &str = "if";
 pub const TAG_FOR_EACH: &str = "foreach";
 pub const ATTR_ARRAY: &str = "array";
@@ -169,6 +174,9 @@ pub const ATTR_ITEM: &str = "item";
 pub const ATTR_INDEX: &str = "index";
 
 pub const TAG_CANCEL: &str = "cancel";
+pub const ATTR_SENDIDEXPR: &str = "sendidexpr";
+pub const ATTR_SENDID: &str = "sendid";
+
 pub const TAG_ELSE: &str = "else";
 pub const TAG_ELSEIF: &str = "elseif";
 pub const ATTR_EXPR: &str = "expr";
@@ -179,7 +187,6 @@ struct ReaderStackItem {
     current_state: StateId,
     current_transition: TransitionId,
     current_tag: String,
-    current_script_src: String,
 }
 
 impl ReaderStackItem {
@@ -188,7 +195,6 @@ impl ReaderStackItem {
             current_state: o.current_state,
             current_transition: o.current_transition,
             current_tag: o.current_tag.clone(),
-            current_script_src: "".to_string(),
         }
     }
 }
@@ -223,7 +229,6 @@ impl ReaderState {
                 current_state: 0,
                 current_transition: 0,
                 current_tag: "".to_string(),
-                current_script_src: "".to_string(),
             },
             fsm: Box::new(Fsm::new()),
             file: "Buffer".to_string(),
@@ -257,7 +262,8 @@ impl ReaderState {
     fn process(&mut self) -> Result<&str, String> {
         debug!(">>> Reading {}", self.file);
 
-        // @TODO: reader needs a mutable reference to "content", for processing user content we need a read-only-ref. How to share?
+        // @TODO: reader needs a mutable reference to "content", for processing user content we need a read-only-ref.
+        // How we can share instead of "clone"?
         let ct = self.content.clone();
         let mut reader = Reader::from_str(ct.as_str());
         reader.trim_text(true);
@@ -271,15 +277,15 @@ impl ReaderState {
                 }
                 Ok(Event::Eof) => break,
                 Ok(Event::Start(e)) => {
-                    self.start_element(&mut reader, &e, true, &mut txt);
+                    self.start_element(&mut reader, &e, true);
                 }
                 Ok(Event::End(e)) => {
-                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
+                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap());
                 }
                 Ok(Event::Empty(e)) => {
                     // Element without content.
-                    self.start_element(&mut reader, &e, false, &mut txt);
-                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap(), &mut txt);
+                    self.start_element(&mut reader, &e, false);
+                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap());
                 }
                 Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
                 Ok(Event::Comment(e)) => debug!("Comment :{}", e.unescape().unwrap()),
@@ -310,10 +316,25 @@ impl ReaderState {
         format!("__id{}", self.id_count)
     }
 
+    fn parse_location_expressions(&mut self, _location_expr: &str, _targets: &mut Vec<String>) {
+        todo!()
+    }
+
     fn parse_state_specification(&mut self, target_name: &str, targets: &mut Vec<StateId>) {
         target_name.split_ascii_whitespace().for_each(|target| {
             targets.push(self.get_or_create_state(&target.to_string(), false))
         });
+    }
+
+    fn parse_boolean(&mut self, value: &Option<&String>, default: bool) -> bool {
+        match value {
+            Some(val) => {
+                val.eq_ignore_ascii_case("true")
+            }
+            None => {
+                default
+            }
+        }
     }
 
     fn get_state_by_id_mut(&mut self, id: StateId) -> &mut State {
@@ -359,23 +380,6 @@ impl ReaderState {
         self.current_executable_content
     }
 
-    fn get_executable_content_as<T: 'static>(ec_opt: Option<&mut dyn ExecutableContent>) -> Option<&mut T> {
-        match ec_opt {
-            Some(ec) => {
-                let va = ec.as_any();
-                match (*va).downcast_mut::<T>() {
-                    Some(v) => {
-                        Some(v)
-                    }
-                    None => {
-                        None
-                    }
-                }
-            }
-            None => { None }
-        }
-    }
-
     /// Get the last entry for the current content region.
     fn get_last_executable_content_entry_for_region(&mut self, ec_id: ExecutableContentId) -> Option<&mut dyn ExecutableContent> {
         let v =
@@ -389,7 +393,6 @@ impl ReaderState {
             }
         }
     }
-
 
     /// Ends the current executable content region and returns the old region id.\
     /// The current id is reset to 0 or popped from stack if the stack is not empty.
@@ -651,24 +654,12 @@ impl ReaderState {
 
         let expr = attr.get(ATTR_EXPR);
 
-        let mut content = "".to_string();
-        if has_content {
-            let start = BytesStart::new(TAG_DATA.to_string());
-            let end = start.to_end().into_owned();
-
-            let mut buf = Vec::new();
-            match reader.read_to_end_into(end.name(), &mut buf) {
-                Ok(span) => {
-                    content = self.content[span.start..span.end].trim().to_string();
-                    debug!("Data Content {} - {}: {}", span.start, span.end, content);
-                }
-                Err(e) => {
-                    panic!("Data structure not correct. {}", e);
-                }
-            }
-            // Remove data element from stack
-            self.pop();
-        }
+        let content =
+            if has_content {
+                self.read_content(TAG_DATA, reader)
+            } else {
+                String::new()
+            };
 
         // W3C:
         // In a conformant SCXML document, a <data> element may have either a 'src' or an 'expr' attribute,
@@ -686,6 +677,7 @@ impl ReaderState {
             // at the time specified by the 'binding' attribute of \<scxml\> and must assign it as
             // the value of the data element
             todo!();
+
             // @TODO SrcData is not yet implemented
             // let file_src = src.unwrap();
             // self.get_current_state().data.set(id, Box::new(SrcData { src: file_src.clone(), content: None }));
@@ -699,12 +691,60 @@ impl ReaderState {
         }
     }
 
-    /// A "initial" element started (node, not attribute)
+    /// A "initial" element started (the element, not the attribute)
     fn start_initial(&mut self) {
         self.verify_parent_tag(TAG_INITIAL, &[TAG_STATE, TAG_PARALLEL]);
         if self.get_current_state().initial > 0 {
             panic!("<{}> must not be specified if {}-attribute was given", TAG_INITIAL, ATTR_INITIAL)
         }
+    }
+
+    fn start_invoke(&mut self, attr: &AttributeMap) {
+        let _parent_tag = self.verify_parent_tag(TAG_INVOKE,
+                                                 &[TAG_STATE, TAG_PARALLEL]).to_string();
+        let mut invoke = Invoke::new();
+
+        let type_opt = attr.get(ATTR_TYPE);
+        if type_opt.is_some() {
+            invoke.type_name = type_opt.unwrap().clone();
+        }
+        let typeexpr = attr.get(ATTR_TYPEEXPR);
+        if typeexpr.is_some() {
+            invoke.type_expr = typeexpr.unwrap().clone();
+        }
+
+        // W3c: Must not occur with the 'srcexpr' attribute or the <content> element.
+        let src = attr.get(ATTR_SRC);
+        if src.is_some() {
+            invoke.src = src.unwrap().clone();
+        }
+        let srcexpr = attr.get(ATTR_SRCEXPR);
+        if srcexpr.is_some() {
+            invoke.srcexpr = srcexpr.unwrap().clone();
+        }
+
+        // TODO--
+        let id = attr.get(ATTR_ID);
+        if id.is_some() {
+            invoke.external_id = id.unwrap().clone();
+        }
+        let idlocation = attr.get(ATTR_IDLOCATION);
+        if idlocation.is_some() {
+            invoke.external_id_location = idlocation.unwrap().clone();
+        }
+
+        let namelist = attr.get(ATTR_NAMELIST);
+        if namelist.is_some() {
+            self.parse_location_expressions(namelist.unwrap(), &mut invoke.namelist);
+        }
+        invoke.autoforward = self.parse_boolean(&attr.get(ATTR_AUTOFORWARD), false);
+
+        self.get_current_state().invoke.push(invoke);
+    }
+
+    fn start_finalize(&mut self, _attr: &AttributeMap) {
+        let _parent_tag = self.verify_parent_tag(TAG_FINALIZE, &[TAG_INVOKE]).to_string();
+        todo!()
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
@@ -730,7 +770,6 @@ impl ReaderState {
         let target = attr.get(ATTR_TARGET);
         match target {
             None => (),
-            // TODO: Parse the state specification! (it can be a list)
             Some(target_name) => {
                 self.parse_state_specification(target_name, &mut t.target);
             }
@@ -764,8 +803,11 @@ impl ReaderState {
         trans.content = ec_id;
     }
 
-    fn start_script(&mut self, attr: &AttributeMap) {
+    fn start_script(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
         self.verify_parent_tag(TAG_SCRIPT, &[TAG_SCXML, TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH, TAG_FINALIZE]);
+
+        let mut s = Expression::new();
+
         let src = attr.get(ATTR_SRC);
         if src.is_some() {
             let file_src = src.unwrap();
@@ -775,29 +817,31 @@ impl ReaderState {
             match self.read_from_uri(file_src) {
                 Ok(source) => {
                     debug!("src='{}':\n{}", file_src, source );
-                    let s = Box::new(Expression::new(source));
-                    self.add_executable_content(s);
-                    self.current.current_script_src = file_src.clone();
+                    s.content = source;
                 }
                 Err(e) => {
                     panic!("Can't read script '{}'. {}", file_src, e);
                 }
             }
         }
-    }
 
-    fn end_script(&mut self, txt: &mut Vec<String>) {
-        let script_text = txt.concat();
+        let script_text =
+            if has_content {
+                self.read_content(TAG_SCRIPT, reader)
+            } else {
+                String::new()
+            };
+
         let src = script_text.trim();
 
         if !src.is_empty() {
-            self.add_executable_content(Box::new(Expression::new(src.to_string())));
-
-            if !self.current.current_script_src.is_empty() {
+            if !s.content.is_empty() {
                 panic!("<script> with 'src' attribute shall not have content.")
             }
+            s.content = src.to_string();
         }
-        txt.clear();
+
+        self.add_executable_content(Box::new(s));
     }
 
     fn start_for_each(&mut self, attr: &AttributeMap) {
@@ -817,7 +861,7 @@ impl ReaderState {
         let content_id = self.start_executable_content_region(true, TAG_FOR_EACH);
 
         let ec_opt = self.get_last_executable_content_entry_for_region(ec_id);
-        match Self::get_executable_content_as::<ForEach>(ec_opt) {
+        match get_opt_executable_content_as::<ForEach>(ec_opt) {
             Some(fe) => {
                 fe.content = content_id;
             }
@@ -831,8 +875,25 @@ impl ReaderState {
         self.end_executable_content_region(TAG_FOR_EACH);
     }
 
-    fn start_cancel(&mut self, _attr: &AttributeMap) {
-        todo!()
+    fn start_cancel(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_CANCEL, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+
+        let sendid = attr.get(ATTR_SENDID);
+        let sendidexpr = attr.get(ATTR_SENDIDEXPR);
+
+        let mut cancel = Cancel::new();
+
+        if sendid.is_some() {
+            if sendidexpr.is_some() {
+                panic!("{}: attributes {} and {} must not occur both", TAG_CANCEL, ATTR_SENDID, ATTR_SENDIDEXPR);
+            }
+            cancel.sendid = sendid.unwrap().clone();
+        } else if sendidexpr.is_some() {
+            cancel.sendidexpr = sendidexpr.unwrap().clone();
+        } else {
+            panic!("{}: attribute {} or {} must be given", TAG_CANCEL, ATTR_SENDID, ATTR_SENDIDEXPR);
+        }
+        self.add_executable_content(Box::new(cancel));
     }
 
     fn start_on_entry(&mut self, _attr: &AttributeMap) {
@@ -870,7 +931,7 @@ impl ReaderState {
         let if_cid = self.current_executable_content;
 
         let if_ec = self.get_last_executable_content_entry_for_region(if_id);
-        match Self::get_executable_content_as::<If>(if_ec) {
+        match get_opt_executable_content_as::<If>(if_ec) {
             Some(evc_if) => {
                 evc_if.content = if_cid;
             }
@@ -904,7 +965,7 @@ impl ReaderState {
 
         // Put together
         let else_if_ec = self.get_last_executable_content_entry_for_region(else_id);
-        match Self::get_executable_content_as::<If>(else_if_ec) {
+        match get_opt_executable_content_as::<If>(else_if_ec) {
             Some(evc_if) => {
                 evc_if.content = else_if_content_id;
             }
@@ -915,7 +976,7 @@ impl ReaderState {
 
         while if_id > 0 {
             let if_ec = self.get_last_executable_content_entry_for_region(if_id);
-            match Self::get_executable_content_as::<If>(if_ec) {
+            match get_opt_executable_content_as::<If>(if_ec) {
                 Some(mut evc_if) => {
                     if evc_if.else_content > 0 {
                         if_id = evc_if.else_content;
@@ -945,7 +1006,7 @@ impl ReaderState {
         // Put together. Set deepest else
         while if_id > 0 {
             let if_ec = self.get_last_executable_content_entry_for_region(if_id);
-            match Self::get_executable_content_as::<If>(if_ec) {
+            match get_opt_executable_content_as::<If>(if_ec) {
                 Some(mut evc_if) => {
                     if evc_if.else_content > 0 {
                         if_id = evc_if.else_content;
@@ -959,11 +1020,6 @@ impl ReaderState {
                 }
             }
         }
-    }
-
-    fn start_raise(&mut self, _attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_RAISE, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
-        todo!()
     }
 
     fn start_send(&mut self, attr: &AttributeMap) {
@@ -1040,17 +1096,85 @@ impl ReaderState {
         self.add_executable_content(Box::new(send_params));
     }
 
-    fn start_content(&mut self, _attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TA_DONEDATA]);
-        todo!()
+    /// Reads the content until a end-tag is encountered.
+    fn read_content(&mut self, tag: &str, reader: &mut XReader) -> String {
+        let start = BytesStart::new(tag.to_string());
+        let end = start.to_end().into_owned();
+        let content;
+
+        let mut buf = Vec::new();
+        match reader.read_to_end_into(end.name(), &mut buf) {
+            Ok(span) => {
+                content = self.content[span.start..span.end].trim().to_string();
+                debug!("{} content {} - {}: {}", tag, span.start, span.end, content);
+            }
+            Err(e) => {
+                panic!("XML invalid. {}", e);
+            }
+        }
+        // Remove element from stack
+        self.pop();
+
+        content
     }
 
-    fn end_content(&mut self) {
+    fn start_content(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
+        self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA]);
+
+        let expr = attr.get(ATTR_EXPR);
+
+        let content =
+            if has_content {
+                self.read_content(TAG_CONTENT, reader)
+            } else {
+                String::new()
+            };
+
+        // W3C:
+        // A conformant SCXML document must not specify both the 'expr' attribute and child content.
+        if expr.is_some() && (!content.is_empty()) {
+            panic!("{} shall have only {} or children, but not both.", TAG_CONTENT, ATTR_EXPR);
+        }
+
+        let parent_tag = self.get_parent_tag();
+        match parent_tag {
+            TAG_DONEDATA => {
+                let mut done_data = DoneData::new();
+                done_data.content = content;
+                if expr.is_some() {
+                    done_data.content_expr = expr.unwrap().to_string();
+                }
+                todo!();
+            }
+            TAG_INVOKE => {
+                let state = self.get_current_state();
+                let mut invoke = state.invoke.last_mut();
+                invoke.content = content;
+                if expr.is_some() {
+                    invoke.content_expr = expr.unwrap().to_string();
+                }
+            }
+            TAG_SEND => {
+                let ec_id = self.current_executable_content;
+                let ec = self.get_last_executable_content_entry_for_region(ec_id);
+                if ec.is_some() {
+                    let send = get_safe_executable_content_as::<SendParameters>(ec.unwrap());
+                    send.content = content;
+                    if expr.is_some() {
+                        send.content_expr = expr.unwrap().to_string();
+                    }
+                }
+            }
+            _ => {
+                panic!("Internal Error: invalid parent-tag in start_content")
+            }
+        }
+
         todo!()
     }
 
     fn start_param(&mut self, _attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_PARAM, &[TAG_SEND, TAG_INVOKE, TA_DONEDATA]);
+        self.verify_parent_tag(TAG_PARAM, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA]);
 
         todo!()
     }
@@ -1063,12 +1187,47 @@ impl ReaderState {
         }
     }
 
-    fn start_assign(&mut self, _attr: &AttributeMap) {
+    fn start_assign(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
         self.verify_parent_tag(TAG_ASSIGN, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH, TAG_FINALIZE]);
-        todo!()
+
+        let mut assign = Assign::new();
+        assign.location = Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr).clone();
+
+        let expr = attr.get(ATTR_EXPR);
+        if expr.is_some() {
+            assign.expr = expr.unwrap().clone();
+        }
+
+        let assign_text =
+            if has_content {
+                self.read_content(TAG_ASSIGN, reader)
+            } else {
+                String::new()
+            };
+
+        let assign_src = assign_text.trim();
+
+        if !assign_src.is_empty() {
+            if !assign.expr.is_empty() {
+                panic!("<assign> with 'expr' attribute shall not have content.")
+            }
+            assign.expr = assign_src.to_string();
+        }
+
+        self.add_executable_content(Box::new(assign));
     }
 
-    fn start_element(&mut self, reader: &mut XReader, e: &BytesStart, has_content: bool, txt: &mut Vec<String>) {
+    fn start_raise(&mut self, attr: &AttributeMap) {
+        self.verify_parent_tag(TAG_RAISE, &[TAG_TRANSITION, TAG_ON_EXIT, TAG_ON_ENTRY, TAG_IF, TAG_FOR_EACH]);
+
+        let mut raise = Raise::new();
+        raise.event = Self::get_required_attr(TAG_RAISE, ATTR_EVENT, attr).clone();
+
+        self.add_executable_content(Box::new(raise));
+    }
+
+
+    fn start_element(&mut self, reader: &mut XReader, e: &BytesStart, has_content: bool) {
         let n = e.local_name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
@@ -1129,8 +1288,14 @@ impl ReaderState {
             TAG_INITIAL => {
                 self.start_initial();
             }
+            TAG_INVOKE => {
+                self.start_invoke(attr);
+            }
             TAG_TRANSITION => {
                 self.start_transition(attr);
+            }
+            TAG_FINALIZE => {
+                self.start_finalize(attr);
             }
             TAG_ON_ENTRY => {
                 self.start_on_entry(attr);
@@ -1139,8 +1304,7 @@ impl ReaderState {
                 self.start_on_exit(attr);
             }
             TAG_SCRIPT => {
-                txt.clear();
-                self.start_script(attr);
+                self.start_script(attr, reader, has_content);
             }
             TAG_RAISE => {
                 self.start_raise(attr);
@@ -1152,13 +1316,13 @@ impl ReaderState {
                 self.start_param(attr);
             }
             TAG_CONTENT => {
-                self.start_content(attr);
+                self.start_content(attr, reader, has_content);
             }
             TAG_LOG => {
                 self.start_log(attr);
             }
             TAG_ASSIGN => {
-                self.start_assign(attr);
+                self.start_assign(attr, reader, has_content);
             }
             TAG_FOR_EACH => {
                 self.start_for_each(attr);
@@ -1227,16 +1391,13 @@ impl ReaderState {
     }
 
     /// Called from SAX handler if some end-tag was read.
-    fn end_element(&mut self, name: &str, txt: &mut Vec<String>) {
+    fn end_element(&mut self, name: &str) {
         if !self.current.current_tag.eq(name) {
             panic!("Illegal end-tag {:?}, expected {:?}", &name, &self.current.current_tag);
         }
         debug!("End Element {}", name);
         match name {
             TAG_SCXML => {}
-            TAG_SCRIPT => {
-                self.end_script(txt);
-            }
             TAG_IF => {
                 self.end_if();
             }
@@ -1248,9 +1409,6 @@ impl ReaderState {
             }
             TAG_ON_ENTRY => {
                 self.end_on_entry();
-            }
-            TAG_CONTENT => {
-                self.end_content();
             }
             TAG_FOR_EACH => {
                 self.end_for_each();
@@ -1411,5 +1569,18 @@ mod tests {
     fn transition_type_external() {
         let _r = crate::reader::read_from_xml(
             "<scxml><state><transition type='external'></transition></state></scxml>".to_string());
+    }
+
+    #[test]
+    #[should_panic]
+    fn assign_with_expr_and_content_shall_panic() {
+        let _r = crate::reader::read_from_xml(
+            "<scxml><state><transition><assign location='x' expr='123'>123</assign></transition></state></scxml>".to_string());
+    }
+
+    #[test]
+    fn assign_without_expr_and_content() {
+        let _r = crate::reader::read_from_xml(
+            "<scxml><state><transition><assign location='x'>123</assign></transition></state></scxml>".to_string());
     }
 }

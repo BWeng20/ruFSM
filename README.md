@@ -179,7 +179,12 @@ Standard. So don't expect to have 100% JavaScript here.
 
 You can check the requirements for ECMA in SCXML [here](https://www.w3.org/TR/scxml/#ecma-profile)
 
-### Data Management
+### Not conformant or not implemented features of the W3C recommendation
+
++ XML inside &lt;content> is not handled accoring to _[content_and_namespaces](https://www.w3.org/TR/scxml/#content_and_namespaces)_. The content inside &lt;content> is not
+  interpreted and send to the receiver unmodified.
+
+### Internal Data Management
 
 The FSM has - conceptually - a lot of cross-references between states, transitions and other stuff. Such relationships are not easy to implement with Rust. The usual way is to NOT
 refer to the entities directly and use IDs instead. The IDs reference the entities in a common memory area (see structure "GlobalData"). With that Rust doesn't have any issues with

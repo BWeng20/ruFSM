@@ -178,6 +178,10 @@ impl<T: Clone + PartialEq> List<T> {
         }
         s
     }
+
+    pub fn last_mut(&mut self) -> &mut T {
+        self.data.last_mut().unwrap()
+    }
 }
 
 /// Set datatype used by the algorithm,
@@ -542,6 +546,105 @@ impl Event {
         })
     }
 }
+
+pub type InvokeId = u32;
+
+#[derive(Clone, PartialEq)]
+/// #W3c says:
+/// The \<invoke\> element is used to create an instance of an external service.
+pub struct Invoke {
+    pub doc_id: DocumentId,
+
+    /// Platform Internal id
+    pub id: InvokeId,
+
+    /// #W3c says:
+    /// Attribute 'id':\
+    /// A string literal to be used as the identifier for this instance of <invoke>. See 3.14 IDs for details.
+    pub external_id: String,
+
+    /// #W3c says:
+    /// Attribute 'idlocation':\
+    /// Location expression.\
+    /// Any data model expression evaluating to a data model location.\
+    /// Must not occur with the 'id' attribute.
+    pub external_id_location: String,
+
+    /// #W3c says:
+    /// Attribute 'type':\
+    /// A URI specifying the type of the external service.
+    pub type_name: String,
+
+    /// #W3c says:
+    /// Attribute 'typeexpr':\
+    /// A dynamic alternative to 'type'. If this attribute is present, the SCXML Processor must evaluate it
+    /// when the parent \<invoke\> element is evaluated and treat the result as if it had been entered as
+    /// the value of 'type'.
+    pub type_expr: String,
+
+    /// #W3c says:
+    /// List of valid location expressions
+    pub namelist: Vec<String>,
+
+    /// #W3c says:
+    /// A URI to be passed to the external service.\
+    /// Must not occur with the 'srcexpr' attribute or the \<content\> element.
+    pub src: String,
+
+    /// #W3c says:
+    /// A dynamic alternative to 'src'. If this attribute is present,
+    /// the SCXML Processor must evaluate it when the parent \<invoke\> element is evaluated and treat the result
+    /// as if it had been entered as the value of 'src'.
+    pub srcexpr: String,
+
+    /// #W3c says:
+    /// Boolean.\
+    /// A flag indicating whether to forward events to the invoked process.
+    pub autoforward: bool,
+
+    /// content inside \<content\> child
+    pub content: String,
+
+    /// expr-attribute of \<content\> child
+    pub content_expr: String,
+}
+
+impl Invoke {
+    pub fn new() -> Invoke {
+        Invoke {
+            doc_id: 0,
+            id: 0,
+            external_id: "".to_string(),
+            external_id_location: "".to_string(),
+            type_name: "".to_string(),
+            type_expr: "".to_string(),
+            namelist: vec![],
+            src: "".to_string(),
+            srcexpr: "".to_string(),
+            autoforward: false,
+            content: "".to_string(),
+            content_expr: "".to_string(),
+        }
+    }
+}
+
+impl Debug for Invoke {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Invoke")
+            .field("platform id", &self.id)
+            .field("id", &self.external_id)
+            .field("idlocation", &self.external_id_location)
+            .field("type", &self.type_name)
+            .field("typeexpr", &self.type_expr)
+            .field("src", &self.src)
+            .field("srcexpr", &self.srcexpr)
+            .field("autoforward", &self.autoforward)
+            .field("content", &self.content)
+            .field("content_expr", &self.content_expr)
+            .finish()
+    }
+}
+
 
 #[derive(Debug, Clone, PartialEq, Copy, Hash, Eq)]
 pub enum Trace {
@@ -1213,7 +1316,7 @@ impl Fsm {
                 for sid in datamodel.global().configuration.iterator() {
                     let state = self.get_state_by_id(*sid);
                     for inv in state.invoke.iterator() {
-                        if inv.invokeid == invokeId {
+                        if inv.id == invokeId {
                             toFinalize.push(inv.id);
                         }
                         if inv.autoforward {
@@ -1598,7 +1701,7 @@ impl Fsm {
             {
                 let s = self.get_state_by_id(*sid);
                 for inv in s.invoke.iterator() {
-                    invokeList.push(inv.invokeid);
+                    invokeList.push(inv.id);
                 }
             }
 
@@ -1872,7 +1975,14 @@ impl Fsm {
     /// history pseudo-state, we dereference it and add the history value instead.) Note that this '
     /// procedure permanently modifies both statesToEnter and statesForDefaultEntry.
     ///
-    /// First, If state is a history state then add either the history values associated with state or state's default target to statesToEnter. Then (since the history value may not be an immediate descendant of 'state's parent) add any ancestors between the history value and state's parent. Else (if state is not a history state), add state to statesToEnter. Then if state is a compound state, add state to statesForDefaultEntry and recursively call addStatesToEnter on its default initial state(s). Then, since the default initial states may not be children of 'state', add any ancestors between the default initial states and 'state'. Otherwise, if state is a parallel state, recursively call addStatesToEnter on any of its child states that don't already have a descendant on statesToEnter.
+    /// First, If state is a history state then add either the history values associated with state or state's default
+    /// target to statesToEnter. Then (since the history value may not be an immediate descendant of 'state's parent)
+    /// add any ancestors between the history value and state's parent. Else (if state is not a history state),
+    /// add state to statesToEnter. Then if state is a compound state, add state to statesForDefaultEntry and
+    /// recursively call addStatesToEnter on its default initial state(s). Then, since the default initial states
+    /// may not be children of 'state', add any ancestors between the default initial states and 'state'.
+    /// Otherwise, if state is a parallel state, recursively call addStatesToEnter on any of its child states that
+    /// don't already have a descendant on statesToEnter.
     /// ```
     /// procedure addDescendantStatesToEnter(state,statesToEnter,statesForDefaultEntry, defaultHistoryContent):
     ///     if isHistoryState(state):
@@ -2402,7 +2512,21 @@ impl DataStore {
 
 #[derive(Clone)]
 #[derive(Debug)]
-pub struct DoneData {}
+pub struct DoneData {
+    /// content of \<content\> child
+    pub content: String,
+    /// expr-attribute of \<content\> child
+    pub content_expr: String,
+}
+
+impl DoneData {
+    pub fn new() -> DoneData {
+        DoneData {
+            content: String::new(),
+            content_expr: String::new(),
+        }
+    }
+}
 
 /// Stores all data for a State.
 /// In this model "State" is used for SCXML elements "State" and "Parallel".
@@ -2705,20 +2829,6 @@ pub fn createDatamodel(name: &str) -> Box<dyn Datamodel> {
     }
 }
 
-pub type InvokeId = u32;
-
-#[derive(Debug)]
-#[derive(Clone, PartialEq)]
-pub struct Invoke {
-    pub doc_id: DocumentId,
-    pub id: InvokeId,
-    pub name: String,
-    pub invokeid: InvokeId,
-    pub autoforward: bool,
-    // TODO
-}
-
-
 /// ## W3C says:
 /// ###B.1 The Null Data Model
 /// The value "null" for the 'datamodel' attribute results in an absent or empty data model. In particular:
@@ -2894,7 +3004,7 @@ mod tests {
 
     fn test_send(sender: &Sender<Box<Event>>, e: Event)
     {
-        sender.send(Box::new(e));
+        let _r = sender.send(Box::new(e));
     }
 
     #[test]
@@ -3241,6 +3351,6 @@ mod tests {
         test_send(&sender, Event { name: "exit".to_string(), etype: EventType::platform, sendid: 0, origin: emptyStr.clone(), origintype: emptyStr.clone(), invokeid: 2, data: None });
 
         // TODO: How to check for timeouts??
-        threadHandle.join();
+        let _r = threadHandle.join();
     }
 }
