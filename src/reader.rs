@@ -586,21 +586,17 @@ impl ReaderState {
         }
     }
 
-    // A new "parallel" element started
+    /// A new "parallel" element started
     fn start_parallel(&mut self, attr: &AttributeMap) -> StateId {
-        if !self.in_scxml {
-            panic!("<{}> needed to be inside <{}>", TAG_PARALLEL, TAG_SCXML);
-        }
+        self.verify_parent_tag(TAG_PARALLEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
         let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
         self.current.current_state = state_id;
         state_id
     }
 
-    // A new "final" element started
+    /// A new "final" element started
     fn start_final(&mut self, attr: &AttributeMap) -> StateId {
-        if !self.in_scxml {
-            panic!("<{}> needed to be inside <{}>", TAG_FINAL, TAG_SCXML);
-        }
+        self.verify_parent_tag(TAG_FINAL, &[TAG_SCXML, TAG_STATE]);
         let state_id = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
 
         self.fsm.get_state_by_id_mut(state_id).is_final = true;
@@ -608,11 +604,15 @@ impl ReaderState {
         state_id
     }
 
-    // A new "history" element started
+    /// A new "donedata" element started
+    fn start_donedata(&mut self) {
+        self.verify_parent_tag(TAG_DONEDATA, &[TAG_FINAL]);
+        self.get_current_state().donedata = Some(DoneData::new());
+    }
+
+    /// A new "history" element started
     fn start_history(&mut self, attr: &AttributeMap) -> StateId {
-        if !self.in_scxml {
-            panic!("<{}> needed to be inside <{}>", TAG_HISTORY, TAG_SCXML);
-        }
+        self.verify_parent_tag(TAG_HISTORY, &[TAG_STATE, TAG_PARALLEL]);
         // Don't add history-states to "states" (parent = 0)
         let state_id = self.get_or_create_state_with_attributes(attr, false, 0);
         if self.current.current_state > 0 {
@@ -633,9 +633,7 @@ impl ReaderState {
 
     // A new "state" element started
     fn start_state(&mut self, attr: &AttributeMap) -> StateId {
-        if !self.in_scxml {
-            panic!("<{}> needed to be inside <{}>", TAG_STATE, TAG_SCXML);
-        }
+        self.verify_parent_tag(TAG_STATE, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
         let sid = self.get_or_create_state_with_attributes(&attr, false, self.current.current_state);
         self.current.current_state = sid;
         sid
@@ -975,12 +973,15 @@ impl ReaderState {
         }
 
         while if_id > 0 {
+            // Find matching "if" level for the new "else if"
             let if_ec = self.get_last_executable_content_entry_for_region(if_id);
             match get_opt_executable_content_as::<If>(if_ec) {
                 Some(mut evc_if) => {
                     if evc_if.else_content > 0 {
+                        // Some higher "if". Go inside else-region.
                         if_id = evc_if.else_content;
                     } else {
+                        // Match, set "else-region".
                         if_id = 0;
                         evc_if.else_content = else_id;
                     }
@@ -1139,12 +1140,15 @@ impl ReaderState {
         let parent_tag = self.get_parent_tag();
         match parent_tag {
             TAG_DONEDATA => {
-                let mut done_data = DoneData::new();
-                done_data.content = content;
-                if expr.is_some() {
-                    done_data.content_expr = expr.unwrap().to_string();
+                let state = self.get_current_state();
+                match state.donedata.as_mut() {
+                    Some(dd) => {
+                        dd.content_expr = expr.unwrap().to_string();
+                    }
+                    None => {
+                        panic!("Internal Error: donedata-Option not initialized")
+                    }
                 }
-                todo!();
             }
             TAG_INVOKE => {
                 let state = self.get_current_state();
@@ -1169,8 +1173,6 @@ impl ReaderState {
                 panic!("Internal Error: invalid parent-tag in start_content")
             }
         }
-
-        todo!()
     }
 
     fn start_param(&mut self, _attr: &AttributeMap) {
@@ -1282,6 +1284,9 @@ impl ReaderState {
             TAG_FINAL => {
                 self.start_final(attr);
             }
+            TAG_DONEDATA => {
+                self.start_donedata();
+            }
             TAG_HISTORY => {
                 self.start_history(attr);
             }
@@ -1373,6 +1378,9 @@ impl ReaderState {
             panic!("{}: {} is not supported", TAG_INCLUDE, ATTR_XPOINTER)
         }
 
+        // remove "include" from parent-stack as long as we read the content.
+        self.pop();
+
         match self.get_resolved_path(href).to_str() {
             Some(src) => {
                 let org_file = mem::take(&mut self.file);
@@ -1388,6 +1396,8 @@ impl ReaderState {
                 panic!("Can resolve path {}", href);
             }
         }
+
+        self.push(TAG_INCLUDE);
     }
 
     /// Called from SAX handler if some end-tag was read.
