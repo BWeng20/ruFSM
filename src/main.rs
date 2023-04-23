@@ -38,17 +38,54 @@ fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
 fn main() {
     env_logger::init();
 
+    let mut trace = Trace::STATES;
+
+    let mut final_args = Vec::<String>::new();
+
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
+    let mut idx = 1;
+    // Don't use clap for now to reduce dependencies.
+    while idx < args.len() {
+        let arg = &args[idx];
+        idx += 1;
+
+        if arg.starts_with("-") {
+            let sarg = arg.trim_start_matches('-');
+            match sarg {
+                "trace" => {
+                    if idx >= args.len() {
+                        panic!("Missing arguments");
+                    }
+                    let trace_opt = &args[idx];
+                    idx += 1;
+                    match Trace::from_str(trace_opt) {
+                        Ok(t) => {
+                            trace = t;
+                        }
+                        Err(_e) => {
+                            panic!("Unsupported trace option {}.", trace_opt);
+                        }
+                    }
+                }
+                _ => {
+                    panic!("Unsupported option {}", sarg);
+                }
+            }
+        } else {
+            final_args.push(arg.clone());
+        }
+    }
+
+    if final_args.len() < 1 {
         println!("Missing argument. Please specify a scxml file");
         process::exit(1);
     }
 
-    println!("Loading FSM from {}", args[1]);
+    println!("Loading FSM from {}", final_args[0]);
 
-    match reader::read_from_xml_file(args[1].clone()) {
+    match reader::read_from_xml_file(final_args[0].clone()) {
         Ok(mut sm) => {
-            sm.tracer.enableTrace(Trace::ALL);
+            sm.tracer.enableTrace(trace);
             let (thread_handle, mut sender) = fsm::start_fsm(sm);
 
             let mut line = String::new();
