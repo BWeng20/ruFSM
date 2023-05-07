@@ -1,3 +1,6 @@
+//! Implememnts a SAX Parser for SCXML documents according to the W3C recommendation.
+//! See [W3C:SCXML](https://www.w3.org/TR/scxml/#overview).
+
 use std::{mem, str, string::String};
 use std::collections::HashMap;
 use std::fs::File;

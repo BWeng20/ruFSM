@@ -1,3 +1,6 @@
+//! Implementation of "executable content" elements
+//! See [W3C:Executable Content](https://www.w3.org/TR/scxml/#executable)
+
 use std::any::Any;
 use std::fmt::{Debug, Formatter};
 

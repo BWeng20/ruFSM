@@ -1,3 +1,7 @@
+//! Implements the SCXML Datamodel for ECMA with Boa Engine.
+//! See [W3C:The ECMAScript Data Model](https://www.w3.org/TR/scxml/#ecma-profile).
+//! See [Github:Boa Engine](https://github.com/boa-dev/boa).
+
 #![allow(non_snake_case)]
 
 use std::str::FromStr;

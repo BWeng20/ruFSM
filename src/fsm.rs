@@ -1,3 +1,6 @@
+//! Implements the W3C recommendation algorithm.
+//! See [W3C:Algorithm for SCXML Interpretation](https://www.w3.org/TR/scxml/#AlgorithmforSCXMLInterpretation)
+
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
