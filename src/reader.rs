@@ -14,7 +14,7 @@ use quick_xml::events::attributes::Attributes;
 use quick_xml::Reader;
 
 use crate::executable_content::{Assign, Cancel, ExecutableContent, Expression, ForEach, get_opt_executable_content_as, get_safe_executable_content_as, If, Log, Raise, SendParameters, TARGET_SCXMLEVENT_PROCESSOR};
-use crate::fsm::{DoneData, ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, Invoke, map_history_type, map_transition_type, SimpleData, State, StateId, Transition, TransitionId, TransitionType};
+use crate::fsm::{DoneData, ExecutableContentId, ExpressionData, Fsm, HistoryType, ID_COUNTER, Invoke, map_history_type, map_transition_type, SimpleData, SrcData, State, StateId, Transition, TransitionId, TransitionType};
 use crate::fsm::vecToString;
 
 pub type AttributeMap = HashMap<String, String>;
@@ -663,7 +663,7 @@ impl ReaderState {
             };
 
         // W3C:
-        // In a conformant SCXML document, a <data> element may have either a 'src' or an 'expr' attribute,
+        // In a conformant SCXML document, a \<data}> element may have either a 'src' or an 'expr' attribute,
         // but must not have both. Furthermore, if either attribute is present, the element must not have any children.
         // Thus 'src', 'expr' and children are mutually exclusive in the <data> element.
 
@@ -677,11 +677,7 @@ impl ReaderState {
             // If the 'src' attribute is present, the Platform must fetch the specified object
             // at the time specified by the 'binding' attribute of \<scxml\> and must assign it as
             // the value of the data element
-            todo!();
-
-            // @TODO SrcData is not yet implemented
-            // let file_src = src.unwrap();
-            // self.get_current_state().data.set(id, Box::new(SrcData { src: file_src.clone(), content: None }));
+            self.get_current_state().data.set(id, Box::new(SrcData { src: src.unwrap().clone(), content: None }));
         } else if expr.is_some() {
             if !content.is_empty() {
                 panic!("{} shall have only {}, {} or children, but not some combination of it.", TAG_DATA, ATTR_SRC, ATTR_EXPR);
@@ -745,7 +741,12 @@ impl ReaderState {
 
     fn start_finalize(&mut self, _attr: &AttributeMap) {
         let _parent_tag = self.verify_parent_tag(TAG_FINALIZE, &[TAG_INVOKE]).to_string();
-        todo!()
+        self.start_executable_content_region(false, TAG_FINALIZE);
+    }
+
+    fn end_finalize(&mut self) {
+        let ec_id = self.end_executable_content_region(TAG_FINALIZE);
+        self.get_current_state().invoke.last_mut().finalize = ec_id;
     }
 
     fn start_transition(&mut self, attr: &AttributeMap) {
@@ -1425,6 +1426,9 @@ impl ReaderState {
             }
             TAG_FOR_EACH => {
                 self.end_for_each();
+            }
+            TAG_FINALIZE => {
+                self.end_finalize();
             }
             _ => {}
         }

@@ -610,6 +610,10 @@ pub struct Invoke {
 
     /// expr-attribute of \<content\> child
     pub content_expr: String,
+
+    /// #W3c says:
+    /// Executable content to massage the data returned from the invoked component. Occurs 0 or 1 times. See 6.5 \<finalize}> for details.
+    pub finalize: ExecutableContentId,
 }
 
 impl Invoke {
@@ -627,6 +631,7 @@ impl Invoke {
             autoforward: false,
             content: "".to_string(),
             content_expr: "".to_string(),
+            finalize: 0
         }
     }
 }
