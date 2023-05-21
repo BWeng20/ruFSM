@@ -1126,6 +1126,7 @@ impl ReaderState {
     fn start_content(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
         self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA]);
 
+        let parent_tag = self.get_parent_tag().to_string();
         let expr = attr.get(ATTR_EXPR);
 
         let content =
@@ -1141,8 +1142,7 @@ impl ReaderState {
             panic!("{} shall have only {} or children, but not both.", TAG_CONTENT, ATTR_EXPR);
         }
 
-        let parent_tag = self.get_parent_tag();
-        match parent_tag {
+        match parent_tag.as_str() {
             TAG_DONEDATA => {
                 let state = self.get_current_state();
                 match state.donedata.as_mut() {
@@ -1174,7 +1174,7 @@ impl ReaderState {
                 }
             }
             _ => {
-                panic!("Internal Error: invalid parent-tag in start_content")
+                panic!("Internal Error: invalid parent-tag <{}> in start_content", parent_tag)
             }
         }
     }

@@ -1,3 +1,6 @@
+//! Demonstration and Test appliocation.
+//! Usage:
+//!    rfsm scxmlfile \[-trace flag\]
 extern crate core;
 
 use std::{env, io, process, thread, time};
@@ -13,7 +16,6 @@ pub mod executable_content;
 
 #[cfg(feature = "ECMAScript")]
 pub mod ecma_script_datamodel;
-
 
 fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
     match Trace::from_str(opt) {
@@ -38,13 +40,14 @@ fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
 fn main() {
     env_logger::init();
 
+    // Default for trace option.
     let mut trace = Trace::STATES;
 
     let mut final_args = Vec::<String>::new();
 
     let args: Vec<String> = env::args().collect();
     let mut idx = 1;
-    // Don't use clap for now to reduce dependencies.
+    // Don't use clap to parse arguments for now to reduce dependencies.
     while idx < args.len() {
         let arg = &args[idx];
         idx += 1;
@@ -83,8 +86,10 @@ fn main() {
 
     println!("Loading FSM from {}", final_args[0]);
 
+    // Use reader to parse the scxml file:
     match reader::read_from_xml_file(final_args[0].clone()) {
         Ok(mut sm) => {
+            // Use reader to parse the scxml file:
             sm.tracer.enableTrace(trace);
             let (thread_handle, mut sender) = fsm::start_fsm(sm);
 
@@ -93,8 +98,11 @@ fn main() {
             let empty_str = "".to_string();
 
             loop {
+                // let the FSM some time to process.
+                // only needed to ensure that the prompt will be printed after normal FSM output.
                 thread::sleep(time::Duration::from_millis(200));
 
+                // If FSM was reached final state(s) the worker thread will be finished.
                 if thread_handle.is_finished() {
                     print!("\nSM finished!");
                     // TODO: dump data from the "finish"

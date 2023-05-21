@@ -2326,12 +2326,13 @@ impl Fsm {
     }
 
     fn invoke(&mut self, _inv: &Invoke) {
-        // TODO: we need a "invoke" concept!
+        // We need a "invoke" concept!
+        todo!()
     }
 
     fn cancelInvokeId(&mut self, _inv: InvokeId) {
         // TODO: we need a "invoke" concept!
-        // Send a cancel event to the thread/pricess.
+        // Send a cancel event to the thread/process.
         // see isCancelEvent
     }
 
