@@ -27,6 +27,9 @@ To-Do:
 
 ## Architecture
 
+SCXML is parsed via a SAX parser, using Crate `quick-xml`.
+The resulting model can be moved to another thread.
+
 ### Overview
 
 ```mermaid
