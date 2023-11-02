@@ -192,14 +192,15 @@ the child/parent relationships in the model.
 
 ### Logging
 
-The project use crate "log" and if feature "EnvLog" is active, the crate "env_log" as implementation.
+The project use crate "log". If the feature "EnvLog" is active, the crate "env_log" is used as "log" implementation.
 
 The module reader prints the SAX-events to "log::debug".\
 FSM methods, state transitions and output are traces via a trait "fsm::Tracer" with a default implementation that prints to "info".\
-The Tracer can be replaced by the client by settings the instance to some other implementation or configured to print only specific information. The Tracer itself has different
-flasg to control what is traces, see Enum Trace for details.
+The Tracer can be replaced by the using client by some other implementation or it can be configured to print only specific information. 
+The Tracer has different flags to control what is traced, see Enum Trace for details.
 
-The used log level of crate "log" can be controlled by environment variable "RUST_LOG", e.g. "RUST_LOG=debug". Tr
+The used log level of crate "log" can be controlled by environment variable "RUST_LOG", e.g. "RUST_LOG=debug".
+
 
 ### Testing
 
@@ -210,5 +211,5 @@ For testing your scxml you can use the main-function of the project.
 The scxml will be parsed and the resulting FSM will be executed. The app prompts for events that are send via the external-event-queue. Enter 'help' to display some usage
 information.
 
-Remind that Tracer uses "log" for any outut, to see it on console, you will need to set the log level before starting rfsm. E.g. by a`export RUST_LOG=debug`
+Remind that Tracer uses "log" for any output, to see it on console, you will need to set the log level before starting rfsm. E.g. by a`export RUST_LOG=debug`
 or depending on your OS, `set RUST_LOG=debug`.
