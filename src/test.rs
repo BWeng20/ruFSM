@@ -1,11 +1,15 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process;
+use std::sync::mpsc;
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 #[cfg(test)]
 use std::{println as error, println as info};
+use std::{process, thread};
 
+use log::warn;
 #[cfg(not(test))]
 use log::{error, info};
 #[cfg(feature = "json-config")]
@@ -13,12 +17,10 @@ use serde::Deserialize;
 #[cfg(feature = "yaml-config")]
 use yaml_rust::YamlLoader;
 
-use crate::fsm::{Event, Fsm};
+use crate::fsm::{Event, FinishMode, Fsm};
 use crate::fsm_executor::FsmExecutor;
 #[cfg(feature = "Trace")]
-use crate::test_tracer::{abort_test, TestTracer};
-#[cfg(feature = "Trace")]
-use crate::tracer::{TraceMode, Tracer};
+use crate::tracer::TraceMode;
 use crate::{fsm, scxml_reader};
 
 #[cfg_attr(feature = "json-config", derive(Deserialize))]
@@ -166,61 +168,137 @@ pub fn run_test_manual_with_send(
     expected_final_configuration: &Vec<String>,
     mut cb: impl FnMut(Sender<Box<Event>>),
 ) -> bool {
-    let mut tracer = Box::new(TestTracer::new());
-    tracer.enable_trace(trace_mode);
-    let current_config = tracer.get_fsm_config();
-    fsm.tracer = tracer;
+    fsm.tracer.enable_trace(trace_mode);
 
-    let mut executer = FsmExecutor::new_without_io_processor();
+    let mut executor = FsmExecutor::new_without_io_processor();
+    let executor_state = executor.state.clone();
     for ip in include_paths {
-        executer.include_paths.push(ip.clone());
+        executor.include_paths.push(ip.clone());
     }
-    let session = fsm::start_fsm(fsm, Box::new(executer));
+    let session = fsm::start_fsm_with_data_and_finish_mode(
+        fsm,
+        Box::new(executor),
+        &HashMap::new(),
+        FinishMode::KEEP_CONFIGURATION,
+    );
 
     let mut watchdog_sender: Option<Box<Sender<String>>> = None;
     if timeout > 0 {
-        watchdog_sender = Some(TestTracer::start_watchdog(test_name, timeout));
+        watchdog_sender = Some(start_watchdog(test_name, timeout));
     }
 
     // Sending some event
     cb(session.sender);
 
     info!("FSM started. Waiting to terminate...");
+    if session.session_thread.is_none() {
+        panic!("Internal error: session_thread not available")
+    }
     let _ = session.session_thread.unwrap().join();
 
     if watchdog_sender.is_some() {
         // Inform watchdog
-        TestTracer::disable_watchdog(&watchdog_sender.unwrap());
+        disable_watchdog(&watchdog_sender.unwrap());
     }
 
     if expected_final_configuration.is_empty() {
         true
     } else {
-        match TestTracer::verify_final_configuration(&expected_final_configuration, &current_config)
+        match executor_state
+            .lock()
+            .unwrap()
+            .sessions
+            .get(&session.session_id)
         {
-            Ok(states) => {
-                info!(
-                    "[{}] ==> Final configuration '{}' reached",
-                    test_name, states
-                );
-                true
-            }
-            Err(states) => {
-                let mut config_states = Vec::new();
-                let guard = current_config.lock();
-                if guard.is_ok() {
-                    for name in guard.unwrap().keys() {
-                        config_states.push(name.clone());
-                    }
-                }
-                error!(
-                    "[{}] ==> Expected final state '{}' not reached. Final configuration: {}",
-                    test_name,
-                    states,
-                    config_states.join(",")
-                );
+            None => {
+                error!("FSM Session lost");
                 false
             }
+            Some(session) => match &session.global_data.lock().final_configuration {
+                None => {
+                    error!("Final Configuration not available");
+                    false
+                }
+                Some(final_configuration) => {
+                    match verify_final_configuration(
+                        &expected_final_configuration,
+                        final_configuration,
+                    ) {
+                        Ok(states) => {
+                            info!(
+                                "[{}] ==> Final configuration '{}' reached",
+                                test_name, states
+                            );
+                            true
+                        }
+                        Err(states) => {
+                            error!(
+                                    "[{}] ==> Expected final state '{}' not reached. Final configuration: {}",
+                                    test_name,
+                                    states,
+                                    final_configuration.join(",")
+                                );
+                            false
+                        }
+                    }
+                }
+            },
         }
     }
+}
+
+pub fn start_watchdog(test_name: &str, timeout: u64) -> Box<Sender<String>> {
+    let (watchdog_sender, watchdog_receiver) = mpsc::channel();
+    let test_name = test_name.to_string();
+
+    let _timer = thread::spawn(move || {
+        match watchdog_receiver.recv_timeout(Duration::from_millis(timeout)) {
+            Ok(_r) => {
+                // All ok, FSM terminated in time.
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // Disconnected, also ok
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => abort_test(format!(
+                "[{}] ==> FSM timed out after {} milliseconds",
+                test_name, timeout
+            )),
+        }
+    });
+    Box::new(watchdog_sender)
+}
+
+/// Informs the watchdog that the test has finished.
+///
+/// + watchdog_sender - the sender-channel to the watchdog.
+pub fn disable_watchdog(watchdog_sender: &Box<Sender<String>>) {
+    match watchdog_sender.send("finished".to_string()) {
+        Ok(_) => {}
+        Err(err) => {
+            warn!("Failed to send notification to watchdog. {}", err)
+        }
+    }
+}
+
+/// Verifies that the configuration contains a number of expected states
+///
+/// + expected_states - List of expected states, the FSM configuration must contain all of them.
+/// + fsm_config - The final FSM configuration to verify. May contain more than the required states.
+pub fn verify_final_configuration(
+    expected_states: &Vec<String>,
+    fsm_config: &Vec<String>,
+) -> Result<String, String> {
+    for fc_name in expected_states {
+        if !fsm_config.contains(fc_name) {
+            return Err(fc_name.clone());
+        }
+    }
+    return Ok(expected_states.join(","));
+}
+
+/// Aborts the test with 1 exit code.\
+/// Never returns.
+pub fn abort_test(message: String) -> ! {
+    error!("Fatal Error: {}", message);
+    process::exit(1);
 }

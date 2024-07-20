@@ -7,8 +7,7 @@ use rfsm::fsm_executor::INCLUDE_PATH_ARGUMENT_OPTION;
 use rfsm::test::load_json_config;
 #[cfg(feature = "yaml-config")]
 use rfsm::test::load_yaml_config;
-use rfsm::test::{load_fsm, run_test, TestSpecification, TestUseCase};
-use rfsm::test_tracer::abort_test;
+use rfsm::test::{abort_test, load_fsm, run_test, TestSpecification, TestUseCase};
 use rfsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
 
 #[tokio::main(flavor = "multi_thread")]
@@ -91,11 +90,9 @@ async fn main() {
                             println!("Loaded {}", test_spec_file);
                             Some(fsm)
                         }
-                        Err(_err) => {
-                            abort_test(
-                                format!("Failed to load fsm '{}'", test_spec_file).to_string(),
-                            );
-                        }
+                        Err(_err) => abort_test(
+                            format!("Failed to load fsm '{}'", test_spec_file).to_string(),
+                        ),
                     }
                 } else {
                     fsm
