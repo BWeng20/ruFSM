@@ -1384,8 +1384,8 @@ impl ReaderState {
                     if expr.is_some() || content.is_some() {
                         send.content = Some(CommonContent {
                             content_expr: match expr {
-                                None => { None }
-                                Some(v) => { Some(v.clone()) }
+                                None => None,
+                                Some(v) => Some(v.clone()),
                             },
                             content,
                         });
@@ -1572,22 +1572,31 @@ impl ReaderState {
     }
 
     fn end_scxml(&mut self) {
-        let pseudo_root = self.get_state_by_id_mut(self.fsm.pseudo_root);
-        if pseudo_root.initial == 0 {
+        self.set_default_initial(self.fsm.pseudo_root);
+    }
+
+    fn set_default_initial(&mut self, id: StateId) {
+        let state = self.get_state_by_id_mut(id);
+        if state.initial == 0 {
             //  W3C: If not specified, the default initial state is the first child state in document order.
-            match pseudo_root.states.first() {
+            match state.states.first() {
                 None => {
                     // No states at all
                 }
                 Some(first_state) => {
                     let mut t = Transition::new();
-                    pseudo_root.initial = t.id;
-                    t.source = pseudo_root.id;
+                    state.initial = t.id;
+                    t.source = state.id;
                     t.target.push(*first_state);
                     self.fsm.transitions.insert(t.id, t);
                 }
             }
         }
+    }
+
+    fn end_state(&mut self) {
+        //  W3C: If not specified, the default initial state is the first child state in document order.
+        self.set_default_initial(self.current.current_state);
     }
 
     fn start_element(&mut self, reader: &mut XReader, e: &BytesStart, has_content: bool) {
@@ -1784,6 +1793,9 @@ impl ReaderState {
             }
             TAG_FINALIZE => {
                 self.end_finalize();
+            }
+            TAG_STATE => {
+                self.end_state();
             }
             _ => {}
         }

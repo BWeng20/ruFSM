@@ -61,9 +61,6 @@ struct Message {
 enum BasicHTTPEvent {
     /// A http request was parsed and shall to be executed by the target fsm.
     Message(Message),
-
-    /// Informs the message thread about a new FSM in the system.
-    NewFsm(String, EventSender),
 }
 
 impl BasicHTTPEvent {
@@ -191,10 +188,6 @@ impl BasicHTTPEventIOProcessor {
                             BasicHTTPEvent::Message(message) => {
                                 debug!("BasicHTTPEvent:Message #{} {:?}", c, message);
                                 // TODO: Sending event to session
-                            }
-                            BasicHTTPEvent::NewFsm(name, sender) => {
-                                debug!("BasicHTTPEvent:NewFsm #{} {} {:?}", c, name, sender);
-                                // TODO: Adding fsm to list
                             }
                         }
                     }
