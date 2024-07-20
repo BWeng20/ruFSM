@@ -23,16 +23,17 @@ use std::{println as debug, println as info, println as error};
 use log::{debug, error, info};
 
 use crate::datamodel::{
-    Data, DataStore, Datamodel, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC, SCXML_TYPE,
+    Data, DataStore, Datamodel, GlobalDataAccess, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
+    SCXML_TYPE,
 };
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMAScriptDatamodel, ECMA_SCRIPT_LC};
 use crate::event_io_processor::EventIOProcessor;
 use crate::executable_content::ExecutableContent;
 use crate::fsm_executor::FsmExecutor;
-use crate::get_global;
 #[cfg(feature = "Trace")]
 use crate::tracer::{DefaultTracer, TraceMode, Tracer};
+use crate::{get_global, get_global_s};
 
 /// Platform specific event to cancel the current session.
 pub const EVENT_CANCEL_SESSION: &str = "error.platform.cancel";
@@ -47,9 +48,18 @@ pub fn start_fsm(sm: Box<Fsm>, executor: Box<FsmExecutor>) -> ScxmlSession {
 }
 
 pub fn start_fsm_with_data(
+    sm: Box<crate::fsm::Fsm>,
+    executor: Box<FsmExecutor>,
+    data: &HashMap<String, Data>,
+) -> crate::fsm::ScxmlSession {
+    start_fsm_with_data_and_finish_mode(sm, executor, data, FinishMode::DISPOSE)
+}
+
+pub fn start_fsm_with_data_and_finish_mode(
     mut sm: Box<Fsm>,
     executor: Box<FsmExecutor>,
     data: &HashMap<String, Data>,
+    finish_mode: FinishMode,
 ) -> ScxmlSession {
     #![allow(non_snake_case)]
     let externalQueue: BlockingQueue<Box<Event>> = BlockingQueue::new();
@@ -65,19 +75,37 @@ pub fn start_fsm_with_data(
     }
 
     let data_copy = data.clone();
-    let session_id = SESSION_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let session_id: SessionId = SESSION_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut session = ScxmlSession::new_without_join_handle(session_id, sender.clone());
 
-    executor.state.lock().unwrap().sessions.insert(
-        session_id,
-        ScxmlSession::new_without_join_handle(session_id, sender.clone()),
-    );
+    match finish_mode {
+        FinishMode::DISPOSE => {}
+        FinishMode::KEEP_CONFIGURATION => {
+            // FSM shall enter the final configuration during exct.
+            let _ = session
+                .global_data
+                .lock()
+                .final_configuration
+                .insert(Vec::new());
+        }
+        FinishMode::NOTHING => {}
+    }
+
+    executor
+        .state
+        .lock()
+        .unwrap()
+        .sessions
+        .insert(session_id, session.clone());
+
+    let global_data = session.global_data.clone();
 
     let thread = thread::Builder::new()
         .name("fsm_interpret".to_string())
         .spawn(move || {
             info!("SM starting...");
             {
-                let mut datamodel = create_datamodel(sm.datamodel.as_str(), &vt);
+                let mut datamodel = create_datamodel(sm.datamodel.as_str(), global_data, &vt);
 
                 {
                     let mut global = get_global!(datamodel);
@@ -92,17 +120,12 @@ pub fn start_fsm_with_data(
                     datamodel.set(val.0.as_str(), val.1.clone());
                 }
                 sm.interpret(datamodel.deref_mut());
-                match &mut get_global!(datamodel).executor {
-                    None => {}
-                    Some(executor) => {
-                        executor.remove_session(session_id);
-                    }
-                };
             }
             info!("SM finished");
         });
 
-    ScxmlSession::new(session_id, thread.unwrap(), sender)
+    let _ = session.session_thread.insert(thread.unwrap());
+    session
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -925,8 +948,8 @@ impl Debug for Cancel {
 /// #Actual Implementation
 /// In the W3C algorithm the datamodel is simple a global variable.
 /// As the datamodel needs access to other global variables and rust doesn't like
-/// accessing data of parents from inside a member, most global data is moved this
-/// struct that is owned by the datamodel.
+/// accessing data of parents from inside a member, most global data is moved to
+/// this struct that is owned by the datamodel.
 #[allow(non_snake_case)]
 pub struct GlobalData {
     pub executor: Option<Box<FsmExecutor>>,
@@ -948,6 +971,9 @@ pub struct GlobalData {
 
     /// Unique Id of the owning session.
     pub session_id: SessionId,
+
+    /// Will contain after execution the final configuration, if set before.
+    pub final_configuration: Option<Vec<String>>,
 }
 
 impl GlobalData {
@@ -964,6 +990,7 @@ impl GlobalData {
             caller_invoke_id: None,
             parent_session_id: None,
             session_id: 0,
+            final_configuration: None,
         }
     }
 
@@ -975,21 +1002,37 @@ impl GlobalData {
     }
 }
 
+/// Mode how the executor handles the ScxmlSession
+/// if the FSM is finished.
+#[derive(Debug, Clone)]
+pub enum FinishMode {
+    DISPOSE,
+    KEEP_CONFIGURATION,
+    NOTHING,
+}
+
 /// Represents some external session.
 /// Holds thread-id and channel-sender to the external queue of the session.
-#[derive(Debug)]
 pub struct ScxmlSession {
     pub session_id: SessionId,
     pub session_thread: Option<JoinHandle<()>>,
     pub sender: Sender<Box<Event>>,
+    /// global_data should be access after the FSM is finished to avoid deadlocks.
+    pub global_data: GlobalDataAccess,
 }
 
 impl ScxmlSession {
-    pub fn new(id: SessionId, jh: JoinHandle<()>, sender: Sender<Box<Event>>) -> ScxmlSession {
+    pub fn new(
+        id: SessionId,
+        jh: JoinHandle<()>,
+        sender: Sender<Box<Event>>,
+        global_data: GlobalDataAccess,
+    ) -> ScxmlSession {
         ScxmlSession {
             session_id: id,
             session_thread: Some(jh),
             sender,
+            global_data,
         }
     }
     pub fn new_without_join_handle(id: SessionId, sender: Sender<Box<Event>>) -> ScxmlSession {
@@ -997,6 +1040,7 @@ impl ScxmlSession {
             session_id: id,
             session_thread: None,
             sender,
+            global_data: GlobalDataAccess::new(),
         }
     }
 }
@@ -1007,6 +1051,7 @@ impl Clone for ScxmlSession {
             session_id: self.session_id,
             session_thread: None,
             sender: self.sender.clone(),
+            global_data: self.global_data.clone(),
         }
     }
 
@@ -1038,7 +1083,8 @@ pub struct Fsm {
     /// This state also serve as the "scxml" state element were mentioned.
     pub pseudo_root: StateId,
 
-    /// The only real storage of states, identified by the Id
+    /// The only real storage of states, identified by the Id - the zero based index
+    /// into the vector.
     /// If a state has no declared id, one is generated.
     pub states: Vec<State>,
     pub transitions: TransitionMap,
@@ -1562,10 +1608,23 @@ impl Fsm {
     /// ```
     #[allow(non_snake_case)]
     fn exitInterpreter(&mut self, datamodel: &mut dyn Datamodel) {
-        let statesToExit = get_global!(datamodel)
-            .configuration
-            .toList()
-            .sort(&|s1, s2| self.state_exit_order(s1, s2));
+        let statesToExit;
+        {
+            let mut global = get_global!(datamodel);
+
+            if global.final_configuration.is_some() {
+                let mut fc = Vec::new();
+                for sid in global.configuration.iterator() {
+                    fc.push(self.get_state_by_id(*sid).name.clone());
+                }
+                let _ = global.final_configuration.insert(fc);
+            }
+
+            statesToExit = global
+                .configuration
+                .toList()
+                .sort(&|s1, s2| self.state_exit_order(s1, s2));
+        }
         for sid in statesToExit.iterator() {
             let mut content: Vec<ExecutableContentId> = Vec::new();
             let mut invokes: Vec<Invoke> = Vec::new();
@@ -2890,9 +2949,7 @@ impl Fsm {
 
         let result = if src.is_empty() {
             match datamodel.evaluate_content(&inv.content) {
-                None => {
-                    Err("No content to execute".to_string())
-                }
+                None => Err("No content to execute".to_string()),
                 Some(content) => {
                     let mut global = get_global!(datamodel);
                     let session_id = global.session_id;
@@ -2906,6 +2963,7 @@ impl Fsm {
                             &name_values,
                             Some(session_id),
                             &invokeId,
+                            FinishMode::DISPOSE,
                             #[cfg(feature = "Trace")]
                             self.tracer.trace_mode(),
                         )
@@ -3252,13 +3310,14 @@ impl Transition {
 
 pub fn create_datamodel(
     name: &str,
+    global_data: GlobalDataAccess,
     processors: &Vec<Box<dyn EventIOProcessor>>,
 ) -> Box<dyn Datamodel> {
     match name.to_lowercase().as_str() {
         // TODO: use some registration api to handle data models
         #[cfg(feature = "ECMAScript")]
         ECMA_SCRIPT_LC => {
-            let mut ecma = Box::new(ECMAScriptDatamodel::new());
+            let mut ecma = Box::new(ECMAScriptDatamodel::new(global_data));
             for p in processors {
                 for t in p.as_ref().get_types() {
                     ecma.io_processors.insert(t.to_string(), p.get_copy());

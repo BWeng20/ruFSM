@@ -18,7 +18,7 @@ use log::info;
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
 use crate::datamodel::Data;
 use crate::event_io_processor::EventIOProcessor;
-use crate::fsm::{Event, InvokeId, ScxmlSession, SessionId};
+use crate::fsm::{Event, FinishMode, InvokeId, ScxmlSession, SessionId};
 use crate::scxml_event_io_processor::ScxmlEventIOProcessor;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
@@ -181,6 +181,7 @@ impl FsmExecutor {
         data: &HashMap<String, Data>,
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
+        finish_mode: FinishMode,
         #[cfg(feature = "Trace")] trace: TraceMode,
     ) -> Result<ScxmlSession, String> {
         info!("Loading FSM from XML");
@@ -193,7 +194,12 @@ impl FsmExecutor {
                 fsm.tracer.enable_trace(trace);
                 fsm.caller_invoke_id = Some(invoke_id.clone());
                 fsm.parent_session_id = parent;
-                let session = fsm::start_fsm_with_data(fsm, Box::new(self.clone()), data);
+                let session = fsm::start_fsm_with_data_and_finish_mode(
+                    fsm,
+                    Box::new(self.clone()),
+                    data,
+                    finish_mode,
+                );
                 Ok(session)
             }
             Err(message) => {
@@ -202,6 +208,7 @@ impl FsmExecutor {
         }
     }
 
+    /// Called by FSM after session ends and FinishMode::DISPOSE.
     pub fn remove_session(&mut self, session_id: SessionId) {
         self.state.lock().unwrap().sessions.remove(&session_id);
     }
