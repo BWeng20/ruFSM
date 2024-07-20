@@ -9,7 +9,6 @@ name = "fsm"
 
 [[bin]]
 name = "test"
-required-features = ["Trace"]
 
 [lib]
 name = "rfsm"

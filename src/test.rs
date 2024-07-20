@@ -51,6 +51,7 @@ pub struct TestUseCase {
     pub name: String,
     pub specification: TestSpecification,
     pub fsm: Option<Box<Fsm>>,
+    #[cfg(feature = "Trace")]
     pub trace_mode: TraceMode,
     pub include_paths: Vec<PathBuf>,
 }
@@ -133,6 +134,7 @@ pub fn run_test(test: TestUseCase) {
         &test.name,
         fsm,
         &test.include_paths,
+        #[cfg(feature = "Trace")]
         test.trace_mode,
         timeout as u64,
         &final_expected_configuration,
@@ -144,6 +146,7 @@ pub fn run_test_manual(
     test_name: &str,
     fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
+    #[cfg(feature = "Trace")]
     trace_mode: TraceMode,
     timeout: u64,
     expected_final_configuration: &Vec<String>,
@@ -152,6 +155,7 @@ pub fn run_test_manual(
         test_name,
         fsm,
         include_paths,
+        #[cfg(feature = "Trace")]
         trace_mode,
         timeout,
         expected_final_configuration,
@@ -163,11 +167,13 @@ pub fn run_test_manual_with_send(
     test_name: &str,
     mut fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
+    #[cfg(feature = "Trace")]
     trace_mode: TraceMode,
     timeout: u64,
     expected_final_configuration: &Vec<String>,
     mut cb: impl FnMut(Sender<Box<Event>>),
 ) -> bool {
+    #[cfg(feature = "Trace")]
     fsm.tracer.enable_trace(trace_mode);
 
     let mut executor = FsmExecutor::new_without_io_processor();
