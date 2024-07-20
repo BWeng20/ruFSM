@@ -64,6 +64,8 @@ macro_rules! get_global_s {
     };
 }
 
+pub type GlobalDataLock<'a> = MutexGuard<'a, GlobalData>;
+
 /// Currently we assume that we need access to the global-data via a mutex.
 /// If not, change this type to "GlobalData" and adapt macros access_global and get_global above.
 #[derive(Clone)]
@@ -78,7 +80,7 @@ impl GlobalDataAccess {
         }
     }
 
-    pub fn lock(&self) -> MutexGuard<'_, GlobalData> {
+    pub fn lock(&self) -> GlobalDataLock {
         self.arc.lock().unwrap()
     }
 }
