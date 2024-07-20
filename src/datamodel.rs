@@ -56,6 +56,14 @@ macro_rules! get_global {
     };
 }
 
+/// Gets the global data store from datamodel.
+#[macro_export]
+macro_rules! get_global_s {
+    ($x:expr) => {
+        $x.global_s().lock()
+    };
+}
+
 /// Currently we assume that we need access to the global-data via a mutex.
 /// If not, change this type to "GlobalData" and adapt macros access_global and get_global above.
 #[derive(Clone)]
