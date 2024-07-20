@@ -29,7 +29,7 @@ use tokio::net::TcpListener;
 
 use crate::datamodel::{GlobalDataAccess, BASIC_HTTP_EVENT_PROCESSOR};
 use crate::event_io_processor::{EventIOProcessor, EventIOProcessorHandle};
-use crate::fsm::{Event, EventSender, SessionId};
+use crate::fsm::{Event, SessionId};
 
 pub const SCXML_EVENT_NAME: &str = "_scxmleventname";
 

@@ -33,7 +33,7 @@ use crate::executable_content::ExecutableContent;
 use crate::fsm_executor::FsmExecutor;
 #[cfg(feature = "Trace")]
 use crate::tracer::{DefaultTracer, TraceMode, Tracer};
-use crate::{get_global, get_global_s};
+use crate::get_global;
 
 /// Platform specific event to cancel the current session.
 pub const EVENT_CANCEL_SESSION: &str = "error.platform.cancel";
