@@ -17,7 +17,8 @@ See https://www.w3.org/TR/scxml/
 | Trace_State               | Enables tracing of state changes.                    |                                                           |
 | Trace_Event               | Enables tracing of events.                           |                                                           |
 
-The trace options <i>Trace_xxx</i> still needed to be activated during runtime by settings the trace-mode. 
+The trace options <i>Trace_xxx</i> still needed to be activated during runtime by settings the trace-mode.
+If none of the <i>Trace_xxx</i> features are used, "Tracer" module is completely removed. 
 
 ## To-Dos:
 
