@@ -254,10 +254,7 @@ impl Datamodel for ECMAScriptDatamodel {
             None => match &event.content {
                 None => JsValue::Null,
                 Some(c) => {
-                    match self.eval(c) {
-                        Ok(val) => { val }
-                        Err(_) => { JsValue::String(js_string!(c.clone())) }
-                    }
+                    JsValue::String(js_string!(c.clone()))
                 }
             },
             Some(pv) => {
