@@ -26,6 +26,8 @@ Trace_State = [ "Trace"  ]
 Trace_Event = [ "Trace"  ]
 # "Trace" combines the other trace features
 Trace = []
+# Enables debug output deom scxml-reader
+Debug_Reader = []
 
 [dependencies]
 log = "0.4"

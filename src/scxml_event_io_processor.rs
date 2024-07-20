@@ -6,7 +6,7 @@
 use std::fmt::Debug;
 #[cfg(test)]
 use std::println as info;
-use log::{debug, error};
+use log::error;
 
 #[cfg(not(test))]
 use log::info;

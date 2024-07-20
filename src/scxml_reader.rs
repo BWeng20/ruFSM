@@ -5,11 +5,17 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+
+#[cfg(feature = "Debug_Reader")]
+
 #[cfg(test)]
 use std::println as debug;
+
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{mem, str, string::String};
+
+#[cfg(feature = "Debug_Reader")]
 
 #[cfg(not(test))]
 use log::debug;
@@ -28,7 +34,10 @@ use crate::fsm::{
     HistoryType, Invoke, Parameter, SendParameters, State, StateId, Transition, TransitionId,
     TransitionType, ID_COUNTER,
 };
-use crate::fsm::{vec_to_string, CommonContent};
+#[cfg(feature = "Debug_Reader")]
+use crate::fsm::vec_to_string;
+
+use crate::fsm::CommonContent;
 
 pub type AttributeMap = HashMap<String, String>;
 pub type XReader<'a> = Reader<&'a [u8]>;
@@ -273,6 +282,8 @@ impl ReaderState {
 
     /// Process all events from current content
     fn process(&mut self) -> Result<&str, String> {
+        #[cfg(feature = "Debug_Reader")]
+
         debug!(">>> Reading {:?}", self.file);
 
         // @TODO: reader needs a mutable reference to "content", for processing user content we need a read-only-ref.
@@ -285,6 +296,8 @@ impl ReaderState {
         loop {
             match reader.read_event() {
                 Err(e) => {
+                    #[cfg(feature = "Debug_Reader")]
+
                     debug!("<<< {:?}", self.file);
                     return Err(format!(
                         "Error at position {}: {:?}",
@@ -305,12 +318,22 @@ impl ReaderState {
                     self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap());
                 }
                 Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
-                Ok(Event::Comment(e)) => debug!("Comment :{}", e.unescape().unwrap()),
+                Ok(Event::Comment(_e)) => {
+                    #[cfg(feature = "Debug_Reader")]
+
+                    debug!("Comment :{}", _e.unescape().unwrap())
+                },
 
                 // Ignore other
-                Ok(e) => debug!("Ignored SAX Event {:?}", e),
+                Ok(_e) => {
+                    #[cfg(feature = "Debug_Reader")]
+
+                    debug!("Ignored SAX Event {:?}", _e)
+                }
             }
         }
+        #[cfg(feature = "Debug_Reader")]
+
         debug!("<<< {:?}", self.file);
         Ok("ok")
     }
@@ -386,6 +409,8 @@ impl ReaderState {
         tag: &'static str,
     ) -> ExecutableContentId {
         if stack {
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(
                 " push executable content region #{} {}",
                 self.current_executable_content, tag
@@ -396,6 +421,8 @@ impl ReaderState {
             self.executable_content_stack.clear();
         }
         self.current_executable_content = ID_COUNTER.fetch_add(1, Ordering::Relaxed);
+        #[cfg(feature = "Debug_Reader")]
+
         debug!(
             " start executable content region #{}",
             self.current_executable_content
@@ -426,10 +453,14 @@ impl ReaderState {
             panic!("Try to get executable content in unsupported document part.");
         } else {
             let ec_id = self.current_executable_content;
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(" end executable content region #{}", ec_id);
             match self.executable_content_stack.pop() {
                 Some((oec_id, oec_tag)) => {
                     self.current_executable_content = oec_id;
+                    #[cfg(feature = "Debug_Reader")]
+
                     debug!(" pop executable content region #{} {}", oec_id, oec_tag);
                     if (!tag.is_empty()) && tag.ne(oec_tag) {
                         self.end_executable_content_region(tag);
@@ -452,6 +483,8 @@ impl ReaderState {
         if self.current_executable_content == 0 {
             panic!("Try to add executable content to unsupported document part.");
         } else {
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(
                 "Adding Executable Content '{}' to #{}",
                 ec.get_type(),
@@ -557,6 +590,8 @@ impl ReaderState {
                 t.source = id;
                 initial = t.id;
                 self.parse_state_specification(id_refs, &mut t.target);
+                #[cfg(feature = "Debug_Reader")]
+
                 debug!(
                     " {}#{}.initial = {} -> {}",
                     sname,
@@ -577,6 +612,8 @@ impl ReaderState {
         if parent != 0 {
             state.parent = parent;
             let parent_state = self.get_state_by_id_mut(parent);
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(
                 " state #{} {}{} parent {}",
                 id,
@@ -588,6 +625,8 @@ impl ReaderState {
                 parent_state.states.push(id);
             }
         } else {
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(
                 " state #{} {}{} no parent",
                 id,
@@ -611,6 +650,8 @@ impl ReaderState {
         let url_result = reqwest::Url::parse(uri);
         match url_result {
             Ok(url) => {
+                #[cfg(feature = "Debug_Reader")]
+
                 debug!("read from URL {}", url);
 
                 match url.scheme().to_ascii_lowercase().as_str() {
@@ -628,6 +669,8 @@ impl ReaderState {
                 }
             }
             Err(e) => {
+                #[cfg(feature = "Debug_Reader")]
+
                 debug!(
                     "{} is not a URI ({}). Try loading as relative path...",
                     uri, e
@@ -752,6 +795,8 @@ impl ReaderState {
 
             match self.read_from_uri(src.unwrap()) {
                 Ok(source) => {
+                    #[cfg(feature = "Debug_Reader")]
+
                     debug!("src='{}':\n{}", src.unwrap(), source);
                     self.get_current_state()
                         .data
@@ -896,6 +941,8 @@ impl ReaderState {
             if state.initial > 0 {
                 panic!("<initial> must not be specified if initial-attribute was given")
             }
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(" {}#{}.initial = {}", state.name, state.id, t.id);
             state.initial = t.id;
         } else {
@@ -937,6 +984,8 @@ impl ReaderState {
             // the document is considered non-conformant, and the platform must reject it.
             match self.read_from_uri(file_src) {
                 Ok(source) => {
+                    #[cfg(feature = "Debug_Reader")]
+
                     debug!("src='{}':\n{}", file_src, source);
                     s.content = source;
                 }
@@ -1314,6 +1363,8 @@ impl ReaderState {
         match reader.read_to_end_into(end.name(), &mut buf) {
             Ok(span) => {
                 content = self.content[(span.start as usize)..(span.end as usize)].trim().to_string();
+                #[cfg(feature = "Debug_Reader")]
+
                 debug!("{} content {} - {}: {}", tag, span.start, span.end, content);
             }
             Err(e) => {
@@ -1546,6 +1597,8 @@ impl ReaderState {
         }
         let datamodel = attr.get(ATTR_DATAMODEL);
         if datamodel.is_some() {
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(" scxml.datamodel = {}", datamodel.unwrap());
             self.fsm.datamodel = datamodel.unwrap().to_string();
         }
@@ -1564,6 +1617,8 @@ impl ReaderState {
         let version = attr.get(TAG_VERSION);
         if version.is_some() {
             self.fsm.version = version.unwrap().clone();
+            #[cfg(feature = "Debug_Reader")]
+
             debug!(" scxml.version = {}", version.unwrap());
         }
         self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
@@ -1603,6 +1658,8 @@ impl ReaderState {
         let n = e.local_name();
         let name = str::from_utf8(n.as_ref()).unwrap();
         self.push(name);
+
+        #[cfg(feature = "Debug_Reader")]
 
         debug!("Start Element {}", name);
 
@@ -1691,6 +1748,8 @@ impl ReaderState {
                 self.start_else_if(attr);
             }
             _ => {
+                #[cfg(feature = "Debug_Reader")]
+
                 debug!("Ignored tag {}", name)
             }
         }
@@ -1771,6 +1830,8 @@ impl ReaderState {
                 &name, &self.current.current_tag
             );
         }
+        #[cfg(feature = "Debug_Reader")]
+
         debug!("End Element {}", name);
         match name {
             TAG_SCXML => {
