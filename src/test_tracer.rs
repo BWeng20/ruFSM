@@ -123,7 +123,6 @@ impl Tracer for TestTracer {
     }
 
     fn trace_exit_state(&self, s: &State) {
-        self.trace_state("Exit", s);
         let mut guard = self.current_config.lock().unwrap();
         guard.remove(s.name.as_str());
         self.default_tracer.trace_exit_state(s);
