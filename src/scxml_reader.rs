@@ -279,7 +279,7 @@ impl ReaderState {
         // How we can share instead of "clone"?
         let ct = self.content.clone();
         let mut reader = Reader::from_str(ct.as_str());
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
 
         let mut txt = Vec::new();
         loop {
@@ -1304,7 +1304,7 @@ impl ReaderState {
         self.add_executable_content(Box::new(send_params));
     }
 
-    /// Reads the content until a end-tag is encountered.
+    /// Reads the content until an end-tag is encountered.
     fn read_content(&mut self, tag: &str, reader: &mut XReader) -> String {
         let start = BytesStart::new(tag.to_string());
         let end = start.to_end().into_owned();
@@ -1313,7 +1313,7 @@ impl ReaderState {
         let mut buf = Vec::new();
         match reader.read_to_end_into(end.name(), &mut buf) {
             Ok(span) => {
-                content = self.content[span.start..span.end].trim().to_string();
+                content = self.content[(span.start as usize)..(span.end as usize)].trim().to_string();
                 debug!("{} content {} - {}: {}", tag, span.start, span.end, content);
             }
             Err(e) => {
@@ -1817,7 +1817,7 @@ fn decode_attributes(reader: &XReader, attr: &mut Attributes) -> AttributeMap {
                     key.err()
                 );
             }
-            let value = a.decode_and_unescape_value(&reader);
+            let value = a.decode_and_unescape_value(reader.decoder());
             if value.is_err() {
                 panic!(
                     "unable to read attribute value  {:?}, utf8 error {:?}",
