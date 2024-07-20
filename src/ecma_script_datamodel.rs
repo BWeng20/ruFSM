@@ -71,11 +71,11 @@ fn log_js(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> Result<JsValu
 }
 
 impl ECMAScriptDatamodel {
-    pub fn new() -> ECMAScriptDatamodel {
+    pub fn new(global_data: GlobalDataAccess) -> ECMAScriptDatamodel {
         let e = ECMAScriptDatamodel {
             data: DataStore::new(),
             context_id: CONTEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
-            global_data: GlobalDataAccess::new(),
+            global_data,
             context: ContextBuilder::new().build().unwrap(),
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
             io_processors: HashMap::new(),
@@ -253,9 +253,7 @@ impl Datamodel for ECMAScriptDatamodel {
         let data_value = match &event.param_values {
             None => match &event.content {
                 None => JsValue::Null,
-                Some(c) => {
-                    JsValue::String(js_string!(c.clone()))
-                }
+                Some(c) => JsValue::String(js_string!(c.clone())),
             },
             Some(pv) => {
                 let mut data_object_initializer = ObjectInitializer::new(&mut self.context);
@@ -319,9 +317,8 @@ impl Datamodel for ECMAScriptDatamodel {
 
     fn assign(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str) {
         let exp = format!("{}={}", left_expr, right_expr);
-        match  self.eval(exp.as_str()) {
-            Ok(_) => {
-            }
+        match self.eval(exp.as_str()) {
+            Ok(_) => {}
             Err(error) => {
                 // W3C says:\
                 // If the location expression does not denote a valid location in the data model or
@@ -329,7 +326,11 @@ impl Datamodel for ECMAScriptDatamodel {
                 // location specified, the SCXML Processor must place the error 'error.execution'
                 // in the internal event queue.
                 self.log(
-                    format!("Could not be assign: {}={}, '{}'.", left_expr, right_expr, error).as_str(),
+                    format!(
+                        "Could not be assign: {}={}, '{}'.",
+                        left_expr, right_expr, error
+                    )
+                    .as_str(),
                 );
 
                 self.internal_error_execution();
