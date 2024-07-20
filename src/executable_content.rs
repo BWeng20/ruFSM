@@ -40,9 +40,8 @@ pub trait ExecutableContent: ToAny + Debug + Send {
 
 pub fn get_safe_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> &mut T {
     let va = ec.as_any();
-    va.downcast_mut::<T>().unwrap_or_else(|| {
-        panic!("Failed to cast executable content")
-    })
+    va.downcast_mut::<T>()
+        .unwrap_or_else(|| panic!("Failed to cast executable content"))
 }
 
 pub fn get_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> Option<&mut T> {
@@ -263,16 +262,13 @@ impl If {
 
 impl ExecutableContent for If {
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
-        let r =
-            match datamodel.execute_condition(&self.condition) {
-                Ok(r) => {
-                    r
-                }
-                Err(e) => {
-                    warn!("Condition {} can't be evaluated. {}", self.condition, e);
-                    false
-                }
-            };
+        let r = match datamodel.execute_condition(&self.condition) {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("Condition {} can't be evaluated. {}", self.condition, e);
+                false
+            }
+        };
         if r {
             if self.content != 0 {
                 for e in fsm.executableContent.get(&self.content).unwrap() {
@@ -286,7 +282,6 @@ impl ExecutableContent for If {
                 }
             }
         }
-
     }
 
     fn get_type(&self) -> &str {
