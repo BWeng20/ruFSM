@@ -6,11 +6,12 @@
 use std::fmt::Debug;
 #[cfg(test)]
 use std::println as info;
+use log::{debug, error};
 
 #[cfg(not(test))]
 use log::info;
 
-use crate::datamodel::{GlobalDataAccess, SCXML_EVENT_PROCESSOR};
+use crate::datamodel::{GlobalDataAccess, GlobalDataLock, SCXML_EVENT_PROCESSOR};
 /// See /doc/W3C_SCXML_2024_07_13/index.html#SCXMLEventProcessor
 use crate::event_io_processor::{EventIOProcessor, EventIOProcessorHandle};
 use crate::fsm::{Event, EventType, SessionId};
@@ -54,6 +55,29 @@ impl ScxmlEventIOProcessor {
         };
         e
     }
+
+    fn send_to_session(&mut self, global_data_lock: &mut GlobalDataLock, session_id: SessionId, event: Event ) {
+        match &global_data_lock.executor {
+            None => {
+                panic!("Executor not available");
+            }
+            Some(executor) => {
+                info!("Send '{}' to Session {}", event, session_id);
+                match executor
+                    .send_to_session(session_id, event)
+                {
+                    Ok(_) => {
+                        // TODO
+                    }
+                    Err(error) => {
+                        error!("Can't send to session {}. {}", session_id, error );
+                        global_data_lock.enqueue_internal(Event::error_communication());
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 const TYPES: &[&str] = &[SCXML_EVENT_PROCESSOR, SCXML_TYPE];
@@ -112,35 +136,40 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                 global_lock.enqueue_internal(event);
             }
             SCXML_TARGET_PARENT => {
-                match &global_lock.executor {
-                    None => {
-                        panic!("Executor not set");
-                    }
-                    Some(executor) => {
-                        match executor
-                            .send_to_session(global_lock.parent_session_id.unwrap(), event)
-                        {
-                            Ok(_) => {
-                                // TODO
-                            }
-                            Err(_error) => {
-                                todo!("Send Error");
-                            }
-                        }
-                    }
-                };
+                let sid = global_lock.parent_session_id.unwrap();
+                self.send_to_session(&mut global_lock, sid, event);
             }
             _ => {
                 // W3C: If the sending SCXML session specifies a session that does not exist or is inaccessible,
-                //      the SCXML Processor must place the error error.communication on the internal event queue of the sending session.
+                //      the SCXML Processor must place the error "error.communication" on the internal event queue of the sending session.
                 if target.starts_with(SCXML_TARGET_SESSION_ID_PREFIX) {
                     todo!()
                 } else if target.starts_with(SCXML_TARGET_INVOKE_ID_PREFIX) {
-                    todo!()
+                    match  target.get(2..) {
+                        None => {
+                            error!("Send target '{}' has wrong format.", target);
+                            global_lock.enqueue_internal(Event::error_communication());
+                        }
+                        Some(invokeid) => {
+
+                            let session_id =
+                            match  global_lock.child_sessions.get(&invokeid.to_string()) {
+                                None => {
+                                    error!("InvokeId of target {} '{}' is not available.", invokeid, target);
+                                    global_lock.enqueue_internal(Event::error_communication());
+                                    return;
+                                }
+                                Some(session) => {
+                                    session.session_id
+                                }
+                            };
+                            self.send_to_session(&mut global_lock, session_id, event);
+                        }
+                    }
                 } else {
                     // TODO: Clarify the case, that the format is illegal.
+                    global_lock.enqueue_internal(Event::error_communication());
                 }
-                global_lock.enqueue_internal(Event::error_communication());
             }
         }
     }
@@ -151,4 +180,6 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
         info!("Scxml Event IO Processor shutdown...");
         self.handle.shutdown();
     }
+
+
 }
