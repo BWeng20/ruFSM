@@ -1,7 +1,6 @@
 //! Implementation of the SCXML I/O Event Processor.\
-//! I/O Processor implementation for type "http://www.w3.org/TR/scxml/#BasicHTTPEventProcessor".
-//! Included if feature "BasicHttpEventIOProcessor" is enabled.\
-//! See [W3C:SCXML - Basic HTTP Event I/O Processor](/doc/W3C_SCXML_2024_07_13/index.html#BasicHTTPEventProcessor).
+//! I/O Processor implementation for type "http://www.w3.org/TR/scxml/#SCXMLEventProcessor" (or short-cut "scxml").
+//! See [W3C:SCXML - SCXML Event I/O Processor](/doc/W3C_SCXML_2024_07_13/index.html#/#SCXMLEventProcessor).
 
 use std::fmt::Debug;
 #[cfg(test)]
@@ -12,7 +11,6 @@ use log::error;
 use log::info;
 
 use crate::datamodel::{GlobalDataAccess, GlobalDataLock, SCXML_EVENT_PROCESSOR};
-/// See /doc/W3C_SCXML_2024_07_13/index.html#SCXMLEventProcessor
 use crate::event_io_processor::{EventIOProcessor, EventIOProcessorHandle};
 use crate::fsm::{Event, EventType, SessionId};
 
