@@ -25,7 +25,7 @@
 | test189.txml.scxml   | OK       |
 | test190.txml.scxml   | OK       |
 | test191.txml.scxml   | OK       |
-| test192.txml.scxml   | OK       |
+| test192.txml.scxml   | _Failed_ |
 | test194.txml.scxml   | OK       |
 | test198.txml.scxml   | OK       |
 | test199.txml.scxml   | OK       |
@@ -58,7 +58,7 @@
 | test245.txml.scxml   | OK       |
 | test247.txml.scxml   | OK       |
 | test252.txml.scxml   | OK       |
-| test253.txml.scxml   | OK       |
+| test253.txml.scxml   | _Failed_ |
 | test276.txml.scxml   | OK       |
 | test277.txml.scxml   | OK       |
 | test279.txml.scxml   | OK       |
@@ -96,7 +96,7 @@
 | test343.txml.scxml   | OK       |
 | test344.txml.scxml   | OK       |
 | test346.txml.scxml   | OK       |
-| test347.txml.scxml   | OK       |
+| test347.txml.scxml   | _Failed_ |
 | test348.txml.scxml   | OK       |
 | test349.txml.scxml   | OK       |
 | test350.txml.scxml   | OK       |
@@ -104,7 +104,7 @@
 | test352.txml.scxml   | OK       |
 | test354.txml.scxml   | OK       |
 | test355.txml.scxml   | OK       |
-| test364.txml.scxml   | _Failed_ |
+| test364.txml.scxml   | OK       |
 | test372.txml.scxml   | OK       |
 | test375.txml.scxml   | OK       |
 | test376.txml.scxml   | OK       |
@@ -137,14 +137,14 @@
 | test487.txml.scxml   | OK       |
 | test488.txml.scxml   | OK       |
 | test495.txml.scxml   | OK       |
-| test496.txml.scxml   | OK       |
+| test496.txml.scxml   | _Failed_ |
 | test500.txml.scxml   | OK       |
 | test501.txml.scxml   | OK       |
 | test503.txml.scxml   | OK       |
 | test504.txml.scxml   | OK       |
-| test505.txml.scxml   | _Failed_ |
+| test505.txml.scxml   | OK       |
 | test506.txml.scxml   | OK       |
-| test521.txml.scxml   | OK       |
+| test521.txml.scxml   | _Failed_ |
 | test525.txml.scxml   | OK       |
 | test527.txml.scxml   | OK       |
 | test528.txml.scxml   | OK       |
@@ -160,4 +160,4 @@
 | test576.txml.scxml   | OK       |
 | test579.txml.scxml   | OK       |
 | test580.txml.scxml   | OK       |
-__Result__: 157 of 160 tests succeeded
+__Result__: 154 of 160 tests succeeded
