@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A Simple FSM that test if the first child-state of a compound states is entered per default -->
+<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0" datamodel="ecmascript">
+
+    <state id="s0">
+        <state id="s1">
+            <transition target="pass"/>
+        </state>
+    </state>
+
+    <final id="pass">
+        <onentry>
+            <log label="Outcome" expr="'pass'"/>
+        </onentry>
+    </final>
+
+</scxml>
