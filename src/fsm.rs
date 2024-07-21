@@ -160,6 +160,13 @@ impl<T: Clone + PartialEq> List<T> {
         self.data.push(t);
     }
 
+    /// Extension to merge the specified list into this list.
+    pub fn push_set(&mut self, l: &OrderedSet<T>) {
+        for i in l.data.iter() {
+            self.data.push((*i).clone());
+        }
+    }
+
     /// *W3C says:* Returns the head of the list
     pub fn head(&self) -> &T {
         self.data.first().unwrap()
@@ -269,6 +276,7 @@ impl<T: Clone + PartialEq> List<T> {
     pub fn last_mut(&mut self) -> &mut T {
         self.data.last_mut().unwrap()
     }
+
 }
 
 /// Set datatype used by the algorithm,
@@ -1236,8 +1244,8 @@ impl Fsm {
     }
 
     fn state_exit_order(&self, s1: &StateId, s2: &StateId) -> std::cmp::Ordering {
-        // Same as Document order
-        self.state_document_order(s1, s2)
+        // Reverse Document order
+        self.state_document_order(s2, s1)
     }
 
     fn transition_document_order(&self, t1: &&Transition, t2: &&Transition) -> std::cmp::Ordering {
@@ -1742,7 +1750,7 @@ impl Fsm {
         for sid in atomicStates.iterator() {
             let mut states: List<StateId> = List::new();
             states.push(*sid);
-            states.append_set(&self.getProperAncestors(*sid, 0));
+            states.push_set(&self.getProperAncestors(*sid, 0));
             let mut condT = Vec::new();
             for s in states.iterator() {
                 let state = self.get_state_by_id(*s);
@@ -2024,30 +2032,25 @@ impl Fsm {
         get_global!(datamodel).historyValue.put_all(&ahistory);
 
         for sid in statesToExitSorted.iterator() {
-            let mut exe: List<ExecutableContentId> = List::new();
-            {
-                let s = self.get_state_by_id(*sid);
-                #[cfg(feature = "Trace_State")]
-                self.tracer.trace_exit_state(s);
-                exe.push(s.onexit);
-            }
-
-            for content in exe.iterator() {
-                self.executeContent(datamodel, *content);
-            }
-
+            let onExitId;
             let mut invokeList: List<InvokeId> = List::new();
             {
                 let s = self.get_state_by_id(*sid);
+
+                #[cfg(feature = "Trace_State")]
+                self.tracer.trace_exit_state(s);
+
+                onExitId = s.onexit;
                 for inv in s.invoke.iterator() {
                     invokeList.push(inv.invoke_id.clone());
                 }
             }
-
+            if onExitId != 0 {
+                self.executeContent(datamodel, onExitId);
+            }
             for invokeId in invokeList.iterator() {
                 self.cancelInvokeId(invokeId.clone());
             }
-
             get_global!(datamodel).configuration.delete(sid)
         }
         #[cfg(feature = "Trace_Method")]
