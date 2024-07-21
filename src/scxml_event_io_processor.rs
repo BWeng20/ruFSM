@@ -141,9 +141,25 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                 // W3C: If the sending SCXML session specifies a session that does not exist or is inaccessible,
                 //      the SCXML Processor must place the error "error.communication" on the internal event queue of the sending session.
                 if target.starts_with(SCXML_TARGET_SESSION_ID_PREFIX) {
-                    todo!()
+                    match  target.get(SCXML_TARGET_SESSION_ID_PREFIX.len()..) {
+                        None => {
+                            error!("Send target '{}' has wrong format.", target);
+                            global_lock.enqueue_internal(Event::error_communication());
+                        }
+                        Some(session_id_s) => {
+                            match session_id_s.parse::<SessionId>() {
+                                Ok(session_id) => {
+                                    self.send_to_session(&mut global_lock,session_id, event);
+                                }
+                                Err(err) => {
+                                    error!("Send target '{}' has wrong format.", target);
+                                    global_lock.enqueue_internal(Event::error_communication());
+                                }
+                            }
+                        }
+                    }
                 } else if target.starts_with(SCXML_TARGET_INVOKE_ID_PREFIX) {
-                    match  target.get(2..) {
+                    match  target.get(SCXML_TARGET_INVOKE_ID_PREFIX.len()..) {
                         None => {
                             error!("Send target '{}' has wrong format.", target);
                             global_lock.enqueue_internal(Event::error_communication());
