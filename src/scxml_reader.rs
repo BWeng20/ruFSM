@@ -668,12 +668,11 @@ impl ReaderState {
                     }
                 }
             }
-            Err(e) => {
+            Err(_e) => {
                 #[cfg(feature = "Debug_Reader")]
-
                 debug!(
                     "{} is not a URI ({}). Try loading as relative path...",
-                    uri, e
+                    uri, _e
                 );
                 self.read_from_relative_path(uri.as_str())
             }
