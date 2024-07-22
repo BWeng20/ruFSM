@@ -63,6 +63,8 @@ if [ ! -f saxon/$SAXON_JAR ]; then
   cd ..
 fi
 
+mkdir -p manual_txml
+mkdir -p manual_scxml
 mkdir -p txml
 mkdir -p scxml
 mkdir -p dependencies/scxml
@@ -96,8 +98,27 @@ for TEST_URI in $(xmllint --xpath "//assert/test[@conformance='mandatory' and @m
   fi
 done
 
+# Select all mandatory, manual txml-test-files.
+for TEST_URI in $(xmllint --xpath "//assert/test[@conformance='mandatory' and @manual='true']/start[contains(@uri,'.txml')]/@uri"  txml/manifest.xml | cut '-d"' -f2); do
+  TEST_FILE=$(cut '-d/' -f2 <<< "$TEST_URI")
+  if [ ! -f manual_txml/$TEST_FILE ]; then
+    if [ -f manual_scxml/$TEST_FILE.scxml ]; then
+      # Remove transformed version to force update
+      rm manual_scxml/$TEST_FILE.scxml
+    fi
+    echo Fetching $TEST_SOURCE_URL$TEST_URI
+    curl -o manual_txml/$TEST_FILE $TEST_SOURCE_URL$TEST_URI
+  fi
+
+  if [ ! -f manual_scxml/$TEST_FILE.scxml ]; then
+    echo xsl processing $TEST_FILE
+    java -jar saxon/$SAXON_JAR -o:manual_scxml/$TEST_FILE.scxml -xsl:txml/$XSL_FILE -s:manual_txml/$TEST_FILE
+  fi
+done
+
+
 # Get all dependencies
-for DEP_URI in $(xmllint --xpath "//assert/test[@conformance='mandatory' and @manual='false']/dep/@uri"  txml/manifest.xml | cut '-d"' -f2); do
+for DEP_URI in $(xmllint --xpath "//assert/test[@conformance='mandatory']/dep/@uri"  txml/manifest.xml | cut '-d"' -f2); do
   DEP_FILE=$(cut '-d/' -f2 <<< "$DEP_URI")
   if [[ $DEP_FILE == *.txml ]]; then
     DEP_TARGET_FILE="${DEP_FILE%.txml}.scxml"
