@@ -481,7 +481,7 @@ impl ExecutableContent for SendParameters {
 
                 let mut iopc = iop.get_copy();
 
-                info!("schedule {} for {}", event, delay_ms);
+                info!("schedule '{}' for {}", event, delay_ms);
 
                 fsm.schedule(delay_ms, move || {
                     info!("send '{}' to '{}'", event, target );
