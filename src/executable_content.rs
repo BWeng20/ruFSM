@@ -262,10 +262,12 @@ impl If {
 
 impl ExecutableContent for If {
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
-        let r = datamodel.execute_condition(&self.condition).unwrap_or_else(|e| {
-            warn!("Condition {} can't be evaluated. {}", self.condition, e);
-            false
-        });
+        let r = datamodel
+            .execute_condition(&self.condition)
+            .unwrap_or_else(|e| {
+                warn!("Condition {} can't be evaluated. {}", self.condition, e);
+                false
+            });
         if r {
             if self.content != 0 {
                 for e in fsm.executableContent.get(&self.content).unwrap() {
@@ -484,7 +486,7 @@ impl ExecutableContent for SendParameters {
                 info!("schedule '{}' for {}", event, delay_ms);
 
                 fsm.schedule(delay_ms, move || {
-                    info!("send '{}' to '{}'", event, target );
+                    info!("send '{}' to '{}'", event, target);
                     let _ignored = iopc.send(&global_clone, &target, event.clone());
                 });
             }

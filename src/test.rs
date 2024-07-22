@@ -146,8 +146,7 @@ pub fn run_test_manual(
     test_name: &str,
     fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
-    #[cfg(feature = "Trace")]
-    trace_mode: TraceMode,
+    #[cfg(feature = "Trace")] trace_mode: TraceMode,
     timeout: u64,
     expected_final_configuration: &Vec<String>,
 ) -> bool {
@@ -167,8 +166,7 @@ pub fn run_test_manual_with_send(
     test_name: &str,
     mut fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
-    #[cfg(feature = "Trace")]
-    trace_mode: TraceMode,
+    #[cfg(feature = "Trace")] trace_mode: TraceMode,
     timeout: u64,
     expected_final_configuration: &Vec<String>,
     mut cb: impl FnMut(Sender<Box<Event>>),

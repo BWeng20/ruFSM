@@ -7,7 +7,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "Debug_Reader")]
-
 #[cfg(test)]
 use std::println as debug;
 
@@ -16,7 +15,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::{mem, str, string::String};
 
 #[cfg(feature = "Debug_Reader")]
-
 #[cfg(not(test))]
 use log::debug;
 use quick_xml::events::attributes::Attributes;
@@ -29,13 +27,13 @@ use crate::executable_content::{
     Assign, ExecutableContent, Expression, ForEach, If, Log, Raise,
 };
 use crate::fsm::push_param;
+#[cfg(feature = "Debug_Reader")]
+use crate::fsm::vec_to_string;
 use crate::fsm::{
     map_history_type, map_transition_type, BindingType, Cancel, DoneData, ExecutableContentId, Fsm,
     HistoryType, Invoke, Parameter, SendParameters, State, StateId, Transition, TransitionId,
     TransitionType, ID_COUNTER,
 };
-#[cfg(feature = "Debug_Reader")]
-use crate::fsm::vec_to_string;
 
 use crate::fsm::CommonContent;
 
@@ -320,14 +318,12 @@ impl ReaderState {
                 Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
                 Ok(Event::Comment(_e)) => {
                     #[cfg(feature = "Debug_Reader")]
-
                     debug!("Comment :{}", _e.unescape().unwrap())
-                },
+                }
 
                 // Ignore other
                 Ok(_e) => {
                     #[cfg(feature = "Debug_Reader")]
-
                     debug!("Ignored SAX Event {:?}", _e)
                 }
             }
@@ -1361,7 +1357,9 @@ impl ReaderState {
         let mut buf = Vec::new();
         match reader.read_to_end_into(end.name(), &mut buf) {
             Ok(span) => {
-                content = self.content[(span.start as usize)..(span.end as usize)].trim().to_string();
+                content = self.content[(span.start as usize)..(span.end as usize)]
+                    .trim()
+                    .to_string();
                 #[cfg(feature = "Debug_Reader")]
 
                 debug!("{} content {} - {}: {}", tag, span.start, span.end, content);
@@ -1748,7 +1746,6 @@ impl ReaderState {
             }
             _ => {
                 #[cfg(feature = "Debug_Reader")]
-
                 debug!("Ignored tag {}", name)
             }
         }

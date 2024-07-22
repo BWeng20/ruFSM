@@ -31,9 +31,9 @@ use crate::ecma_script_datamodel::{ECMAScriptDatamodel, ECMA_SCRIPT_LC};
 use crate::event_io_processor::EventIOProcessor;
 use crate::executable_content::ExecutableContent;
 use crate::fsm_executor::FsmExecutor;
+use crate::get_global;
 #[cfg(feature = "Trace")]
 use crate::tracer::{DefaultTracer, TraceMode, Tracer};
-use crate::get_global;
 
 /// Platform specific event to cancel the current session.
 pub const EVENT_CANCEL_SESSION: &str = "error.platform.cancel";
@@ -276,7 +276,6 @@ impl<T: Clone + PartialEq> List<T> {
     pub fn last_mut(&mut self) -> &mut T {
         self.data.last_mut().unwrap()
     }
-
 }
 
 /// Set datatype used by the algorithm,
@@ -2022,7 +2021,7 @@ impl Fsm {
                         .toList()
                         .filter_by(&|s0| -> bool { self.get_state_by_id(*s0).parent == s.id })
                         .to_set();
-                    ahistory.put( h.id, fl );
+                    ahistory.put(h.id, fl);
                 }
             }
         }
