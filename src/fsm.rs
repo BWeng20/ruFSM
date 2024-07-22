@@ -1205,13 +1205,13 @@ impl Fsm {
     }
 
     /// Gets a state by id.
-    /// The id MUST exists.
+    /// The id MUST exist.
     pub fn get_state_by_id(&self, state_id: StateId) -> &State {
         self.states.get((state_id - 1) as usize).unwrap()
     }
 
     /// Gets a mutable state by id.
-    /// The id MUST exists.
+    /// The id MUST exist.
     pub fn get_state_by_id_mut(&mut self, state_id: StateId) -> &mut State {
         self.states.get_mut((state_id - 1) as usize).unwrap()
     }
@@ -2017,14 +2017,12 @@ impl Fsm {
                         }));
                     ahistory.put_move(h.id, stateIdList);
                 } else {
-                    ahistory.put(
-                        h.id,
-                        &get_global!(datamodel)
-                            .configuration
-                            .toList()
-                            .filter_by(&|s0| -> bool { self.get_state_by_id(*s0).parent == s.id })
-                            .to_set(),
-                    );
+                    let fl = &get_global!(datamodel)
+                        .configuration
+                        .toList()
+                        .filter_by(&|s0| -> bool { self.get_state_by_id(*s0).parent == s.id })
+                        .to_set();
+                    ahistory.put( h.id, fl );
                 }
             }
         }
@@ -2145,11 +2143,8 @@ impl Fsm {
             let mut exe = Vec::new();
             {
                 let state_s: &State = self.get_state_by_id(*s);
-                if state_s.onentry != 0 {
-                    exe.push(state_s.onentry);
-                }
+                exe.push(state_s.onentry);
                 if statesForDefaultEntry.isMember(&s) {
-                    let state_s: &State = self.get_state_by_id(*s);
                     if state_s.initial > 0 {
                         exe.push(self.get_transition_by_id(state_s.initial).content);
                     }
@@ -2540,18 +2535,16 @@ impl Fsm {
                         )
                     }
                 }
-            } else {
-                if self.isParallelState(sid) {
-                    for child in self.getChildStates(sid).iterator() {
-                        if !statesToEnter.some(&|s| self.isDescendant(*s, *child)) {
-                            self.addDescendantStatesToEnter(
-                                datamodel,
-                                *child,
-                                statesToEnter,
-                                statesForDefaultEntry,
-                                defaultHistoryContent,
-                            )
-                        }
+            } else if self.isParallelState(sid) {
+                for child in self.getChildStates(sid).iterator() {
+                    if !statesToEnter.some(&|s| self.isDescendant(*s, *child)) {
+                        self.addDescendantStatesToEnter(
+                            datamodel,
+                            *child,
+                            statesToEnter,
+                            statesForDefaultEntry,
+                            defaultHistoryContent,
+                        )
                     }
                 }
             }
@@ -3300,7 +3293,7 @@ impl Transition {
             cond: None,
             source: 0,
             target: vec![],
-            transition_type: TransitionType::Internal,
+            transition_type: TransitionType::External,
             content: 0,
         }
     }
