@@ -152,7 +152,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                             Ok(session_id) => {
                                 self.send_to_session(&mut global_lock, session_id, event);
                             }
-                            Err(err) => {
+                            Err(_err) => {
                                 error!("Send target '{}' has wrong format.", target);
                                 global_lock.enqueue_internal(Event::error_communication());
                             }

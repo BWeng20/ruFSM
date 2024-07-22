@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -182,7 +181,7 @@ pub fn run_test_manual_with_send(
     let session = fsm::start_fsm_with_data_and_finish_mode(
         fsm,
         Box::new(executor),
-        &HashMap::new(),
+        &Vec::new(),
         FinishMode::KEEP_CONFIGURATION,
     );
 

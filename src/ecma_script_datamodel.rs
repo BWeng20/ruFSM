@@ -257,10 +257,10 @@ impl Datamodel for ECMAScriptDatamodel {
             },
             Some(pv) => {
                 let mut data_object_initializer = ObjectInitializer::new(&mut self.context);
-                for (key, value) in pv.iter() {
+                for pair in pv.iter() {
                     data_object_initializer.property(
-                        js_string!(key.clone()),
-                        js_string!(value.to_string()),
+                        js_string!(pair.name.clone()),
+                        js_string!(pair.value.to_string()),
                         Attribute::all(),
                     );
                 }

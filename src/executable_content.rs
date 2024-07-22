@@ -1,7 +1,6 @@
 //! Implementation of "executable content" elements.\
 //! See [W3C:Executable Content](/doc/W3C_SCXML_2024_07_13/index.html#executable).
 
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 #[cfg(test)]
@@ -417,8 +416,8 @@ impl ExecutableContent for SendParameters {
             }
         };
 
-        let mut data_map = HashMap::new();
-        datamodel.evaluate_params(&self.params, &mut data_map);
+        let mut data_vec = Vec::new();
+        datamodel.evaluate_params(&self.params, &mut data_vec);
 
         let content = datamodel.evaluate_content(&self.content);
 
@@ -473,10 +472,10 @@ impl ExecutableContent for SendParameters {
                     origin: None,
                     origin_type: None,
                     invoke_id: fsm.caller_invoke_id.clone(),
-                    param_values: if data_map.is_empty() {
+                    param_values: if data_vec.is_empty() {
                         None
                     } else {
-                        Some(data_map.clone())
+                        Some(data_vec.clone())
                     },
                     content,
                 };

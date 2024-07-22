@@ -16,9 +16,8 @@ use log::info;
 
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
-use crate::datamodel::Data;
 use crate::event_io_processor::EventIOProcessor;
-use crate::fsm::{Event, FinishMode, InvokeId, ScxmlSession, SessionId};
+use crate::fsm::{Event, FinishMode, InvokeId, ParamPair, ScxmlSession, SessionId};
 use crate::scxml_event_io_processor::ScxmlEventIOProcessor;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
@@ -138,7 +137,7 @@ impl FsmExecutor {
     ) -> Result<ScxmlSession, String> {
         self.execute_with_data(
             uri,
-            &HashMap::new(),
+            &Vec::new(),
             None,
             &"".to_string(),
             #[cfg(feature = "Trace")]
@@ -150,7 +149,7 @@ impl FsmExecutor {
     pub fn execute_with_data(
         &mut self,
         uri: &str,
-        data: &HashMap<String, Data>,
+        data: &Vec<ParamPair>,
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
         #[cfg(feature = "Trace")] trace: TraceMode,
@@ -178,7 +177,7 @@ impl FsmExecutor {
     pub fn execute_with_data_from_xml(
         &mut self,
         xml: &String,
-        data: &HashMap<String, Data>,
+        data: &Vec<ParamPair>,
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
         finish_mode: FinishMode,

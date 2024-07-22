@@ -44,13 +44,13 @@ static PLATFORM_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 /// Starts the FSM inside a worker thread.
 ///
 pub fn start_fsm(sm: Box<Fsm>, executor: Box<FsmExecutor>) -> ScxmlSession {
-    start_fsm_with_data(sm, executor, &HashMap::new())
+    start_fsm_with_data(sm, executor, &Vec::new())
 }
 
 pub fn start_fsm_with_data(
     sm: Box<crate::fsm::Fsm>,
     executor: Box<FsmExecutor>,
-    data: &HashMap<String, Data>,
+    data: &Vec<ParamPair>,
 ) -> crate::fsm::ScxmlSession {
     start_fsm_with_data_and_finish_mode(sm, executor, data, FinishMode::DISPOSE)
 }
@@ -58,7 +58,7 @@ pub fn start_fsm_with_data(
 pub fn start_fsm_with_data_and_finish_mode(
     mut sm: Box<Fsm>,
     executor: Box<FsmExecutor>,
-    data: &HashMap<String, Data>,
+    data: &Vec<ParamPair>,
     finish_mode: FinishMode,
 ) -> ScxmlSession {
     #![allow(non_snake_case)]
@@ -117,7 +117,7 @@ pub fn start_fsm_with_data_and_finish_mode(
                 }
 
                 for val in data_copy {
-                    datamodel.set(val.0.as_str(), val.1.clone());
+                    datamodel.set(val.name.as_str(), val.value.clone());
                 }
                 sm.interpret(datamodel.deref_mut());
             }
@@ -584,6 +584,24 @@ impl EventType {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ParamPair {
+    pub name: String,
+    pub value: Data,
+}
+
+impl ParamPair {
+    pub fn new_moved(name: String, value: Data) -> ParamPair {
+        ParamPair { name, value }
+    }
+    pub fn new(name: &String, value: &Data) -> ParamPair {
+        ParamPair {
+            name: name.clone(),
+            value: value.clone(),
+        }
+    }
+}
+
 /// *W3C says*:
 /// ##The Internal Structure of Events.
 /// Events have an internal structure which is reflected in the _event variable. This variable can be accessed to condition transitions (via boolean expressions in the 'cond' attribute) or to update the data model (via <assign>), etc.
@@ -608,7 +626,7 @@ pub struct Event {
     pub invoke_id: Option<InvokeId>,
 
     /// Name-Value pairs from \<param\> elements.
-    pub param_values: Option<HashMap<String, Data>>,
+    pub param_values: Option<Vec<ParamPair>>,
 
     /// Content from \<content\> element.
     pub content: Option<String>,
@@ -637,7 +655,7 @@ impl Event {
     pub fn new(
         prefix: &str,
         id: &String,
-        data_params: Option<HashMap<String, Data>>,
+        data_params: Option<Vec<ParamPair>>,
         data_content: Option<String>,
     ) -> Event {
         Event {
@@ -2166,7 +2184,7 @@ impl Fsm {
                     get_global!(datamodel).running = false;
                 } else {
                     let parentS = self.get_state_by_id(parent);
-                    let mut name_values = HashMap::new();
+                    let mut name_values = Vec::new();
                     let mut content = None;
                     match &state_s.donedata {
                         None => {}
@@ -2917,12 +2935,12 @@ impl Fsm {
             }
             Ok(value) => value,
         };
-        let mut name_values: HashMap<String, Data> = HashMap::new();
+        let mut name_values: Vec<ParamPair> = Vec::new();
         for name in inv.name_list.as_slice() {
             match datamodel.get_by_location(name) {
                 None => {}
                 Some(value) => {
-                    name_values.insert(name.clone(), value.clone());
+                    name_values.push(ParamPair::new(name, &value));
                 }
             }
         }

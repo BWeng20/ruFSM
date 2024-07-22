@@ -12,7 +12,9 @@ use log::error;
 use log::info;
 
 use crate::event_io_processor::EventIOProcessor;
-use crate::fsm::{CommonContent, Event, ExecutableContentId, Fsm, GlobalData, Parameter, StateId};
+use crate::fsm::{
+    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, ParamPair, Parameter, StateId,
+};
 
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
@@ -230,11 +232,7 @@ pub trait Datamodel {
         }
     }
 
-    fn evaluate_params(
-        &mut self,
-        params: &Option<Vec<Parameter>>,
-        values: &mut HashMap<String, Data>,
-    ) {
+    fn evaluate_params(&mut self, params: &Option<Vec<Parameter>>, values: &mut Vec<ParamPair>) {
         match &params {
             None => {}
             Some(params) => {
@@ -251,7 +249,7 @@ pub trait Datamodel {
                                 self.internal_error_execution();
                             }
                             Some(value) => {
-                                values.insert(param.name.clone(), value.clone());
+                                values.push(ParamPair::new_moved(param.name.clone(), value));
                             }
                         }
                     } else if !param.expr.is_empty() {
@@ -265,7 +263,10 @@ pub trait Datamodel {
                                 self.internal_error_execution();
                             }
                             Some(value) => {
-                                values.insert(param.name.clone(), Data::new_moved(value));
+                                values.push(ParamPair::new_moved(
+                                    param.name.clone(),
+                                    Data::new_moved(value),
+                                ));
                             }
                         }
                     }
