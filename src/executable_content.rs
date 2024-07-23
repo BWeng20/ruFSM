@@ -13,9 +13,7 @@ use log::{info, warn};
 use regex::Regex;
 
 use crate::datamodel::{Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
-use crate::fsm::opt_vec_to_string;
-#[cfg(feature = "BasicHttpEventIOProcessor")]
-use crate::fsm::{vec_to_string, Cancel, ExecutableContentId, Fsm, Parameter, SendParameters};
+use crate::fsm::{opt_vec_to_string, vec_to_string, Cancel, ExecutableContentId, Fsm, Parameter, SendParameters};
 use crate::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
 use crate::{get_global, Event, EventType};
 

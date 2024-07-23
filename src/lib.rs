@@ -41,7 +41,6 @@ mod event_io_processor;
 #[cfg(feature = "Trace")]
 pub mod tracer;
 
-#[cfg(feature = "Trace")]
 pub mod test;
 
 #[cfg(feature = "Trace")]
