@@ -48,10 +48,10 @@ pub fn start_fsm(sm: Box<Fsm>, executor: Box<FsmExecutor>) -> ScxmlSession {
 }
 
 pub fn start_fsm_with_data(
-    sm: Box<crate::fsm::Fsm>,
+    sm: Box<Fsm>,
     executor: Box<FsmExecutor>,
     data: &Vec<ParamPair>,
-) -> crate::fsm::ScxmlSession {
+) -> ScxmlSession {
     start_fsm_with_data_and_finish_mode(sm, executor, data, FinishMode::DISPOSE)
 }
 
@@ -3237,11 +3237,30 @@ impl PartialEq for State {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[repr(u8)]
 pub enum HistoryType {
     Shallow,
     Deep,
     None,
+}
+
+impl HistoryType {
+    pub fn ordinal(&self) -> u8 {
+        match self {
+            HistoryType::Shallow => 1u8,
+            HistoryType::Deep => 2u8,
+            HistoryType::None => 3u8,
+        }
+    }
+
+    pub fn from_ordinal(v: u8) -> HistoryType {
+        match v {
+            1 => HistoryType::Shallow,
+            2 => HistoryType::Deep,
+            _ => HistoryType::None,
+        }
+    }
 }
 
 pub fn map_history_type(ts: &String) -> HistoryType {
@@ -3254,6 +3273,7 @@ pub fn map_history_type(ts: &String) -> HistoryType {
 }
 
 #[derive(Debug, PartialEq)]
+#[repr(u8)]
 pub enum TransitionType {
     Internal,
     External,
