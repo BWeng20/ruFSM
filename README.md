@@ -7,6 +7,8 @@ See https://www.w3.org/TR/scxml/
 Currently, the project passed all 160 mandatory automated tests from the W3C test-suite.<br/>
 See [Test Readme](test/w3c/README.md) and the [Test Report](test/w3c/REPORT.MD).
 
+![Test Status](https://github.com/BWeng20/rFSM/actions/workflows/rust.yml/badge.svg)
+
 ## To-Dos:
 
 + Implement BasicHttpEvent I/O Processor _(ongoing, see [basic_http_event_io_processor.rs](src/basic_http_event_io_processor.rs))_.
