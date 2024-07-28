@@ -221,7 +221,7 @@ pub trait Tracer: Send + Debug {
 
     /// Helper method to trace a vector of ids.
     fn trace_id_vec(&self, what: &str, l: &Vec<u32>) {
-        self.trace(format!("{}=[{}]", what, fsm::vec_to_string(&l)).as_str());
+        self.trace(format!("{}=[{}]", what, &fsm::vec_to_string(l)).as_str());
     }
 
     /// Helper method to trace a OrderedSet of ids.
@@ -246,7 +246,7 @@ impl Tracer for DefaultTracer {
 
     fn leave(&self) {
         let mut prefix = DefaultTracer::get_prefix();
-        if prefix.len() > 0 {
+        if !prefix.is_empty() {
             prefix.remove(0);
             DefaultTracer::set_prefix(prefix);
         }
@@ -282,6 +282,13 @@ impl Tracer for DefaultTracer {
 #[derive(Debug)]
 pub struct DefaultTracer {
     pub trace_flags: HashSet<TraceMode>,
+}
+
+
+impl Default for DefaultTracer {
+    fn default() -> Self {
+        DefaultTracer::new()
+    }
 }
 
 impl DefaultTracer {

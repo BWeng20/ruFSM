@@ -17,13 +17,8 @@ pub trait ProtocolWriter<W: Write> {
     /// Writes an optional string
     fn write_option_string(&mut self, value: &Option<String>);
 
-    /// Writes a string
-    fn write_string(&mut self, value: &String);
-
     /// Writes a str
-    fn write_str(&mut self, value: &str) {
-        self.write_string(&value.to_string());
-    }
+    fn write_str(&mut self, value: &str);
 
     /// Writes an usize values. Implementations can assume that the value are in u32 range.
     fn write_usize(&mut self, value: usize);

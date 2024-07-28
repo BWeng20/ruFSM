@@ -387,7 +387,7 @@ impl ExecutableContent for SendParameters {
         let global_clone = datamodel.global().clone();
 
         let target =
-            match datamodel.get_expression_alternative_value(&self.target, &self.target_expr) {
+            match datamodel.get_expression_alternative_value( self.target.as_str(), self.target_expr.as_str()) {
                 Ok(value) => value,
                 Err(_) => {
                     // Error -> abort
@@ -396,7 +396,7 @@ impl ExecutableContent for SendParameters {
             };
 
         let event_name =
-            match datamodel.get_expression_alternative_value(&self.event, &self.event_expr) {
+            match datamodel.get_expression_alternative_value(self.event.as_str(), &self.event_expr.as_str()) {
                 Ok(value) => value,
                 Err(_) => {
                     // Error -> abort
@@ -447,7 +447,7 @@ impl ExecutableContent for SendParameters {
             return;
         }
         let type_result =
-            datamodel.get_expression_alternative_value(&self.type_value, &self.type_expr);
+            datamodel.get_expression_alternative_value(self.type_value.as_str(), self.type_expr.as_str());
 
         let type_val = match type_result {
             Ok(val) => val,
@@ -486,7 +486,7 @@ impl ExecutableContent for SendParameters {
 
                 fsm.schedule(delay_ms, move || {
                     info!("send '{}' to '{}'", event, target);
-                    let _ignored = iopc.send(&global_clone, &target, event.clone());
+                    let _ignored = iopc.send(&global_clone, target.as_str(), event.clone());
                 });
             }
             None => {

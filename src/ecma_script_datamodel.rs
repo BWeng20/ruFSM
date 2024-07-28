@@ -72,7 +72,7 @@ fn log_js(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> Result<JsValu
 
 impl ECMAScriptDatamodel {
     pub fn new(global_data: GlobalDataAccess) -> ECMAScriptDatamodel {
-        let e = ECMAScriptDatamodel {
+        ECMAScriptDatamodel {
             data: DataStore::new(),
             context_id: CONTEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
             global_data,
@@ -80,8 +80,7 @@ impl ECMAScriptDatamodel {
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
             io_processors: HashMap::new(),
             id_to_state_names: HashMap::new(),
-        };
-        e
+        }
     }
 
     fn execute_internal(&mut self, script: &str, handle_error: bool) -> Option<String> {
@@ -113,7 +112,7 @@ impl ECMAScriptDatamodel {
             }
             Err(e) => {
                 // Pretty print the error
-                error!("Script Error: {} => {} ", script, e.to_string());
+                error!("Script Error: {} => {} ", script, e);
                 None
             }
         }
@@ -171,8 +170,8 @@ impl Datamodel for ECMAScriptDatamodel {
         &self.global_data
     }
 
-    fn get_name(self: &Self) -> &str {
-        return ECMA_SCRIPT;
+    fn get_name(&self) -> &str {
+        ECMA_SCRIPT
     }
 
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
@@ -222,7 +221,7 @@ impl Datamodel for ECMAScriptDatamodel {
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, fsm: &mut Fsm, data_state: StateId) {
         let mut s = Vec::new();
-        for (sn, _sid) in &fsm.statesNames {
+        for sn in fsm.statesNames.keys() {
             s.push(sn.clone());
         }
         let state_obj: &State = fsm.get_state_by_id_mut(data_state);
@@ -349,7 +348,7 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
-        return &mut self.io_processors;
+        &mut self.io_processors
     }
 
     fn get_mut(&mut self, name: &str) -> Option<&mut Data> {
@@ -387,7 +386,7 @@ impl Datamodel for ECMAScriptDatamodel {
                         let ob = obj.borrow();
                         let p = ob.properties();
                         let mut idx: i64 = 1;
-                        let _reg_item = self.set_js_property(item_name, JsValue::Null);
+                        self.set_js_property(item_name, JsValue::Null);
                         let item_declaration = self.context.eval(Source::from_bytes(item_name));
                         match item_declaration {
                             Ok(_) => {
@@ -412,7 +411,7 @@ impl Datamodel for ECMAScriptDatamodel {
                                                 warn!("ForEach: #{} - failed to get value", idx,);
                                             }
                                         }
-                                        idx = idx + 1;
+                                        idx += 1;
                                     }
                                 }
                             }
@@ -425,7 +424,7 @@ impl Datamodel for ECMAScriptDatamodel {
                         }
                     }
                     _ => {
-                        self.log(&"Resulting value is not a supported collection.".to_string());
+                        self.log("Resulting value is not a supported collection.");
                         self.internal_error_execution();
                     }
                 }
@@ -454,7 +453,7 @@ impl Datamodel for ECMAScriptDatamodel {
     #[allow(non_snake_case)]
     fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) {
         let ec = fsm.executableContent.get(&content_id);
-        for (_idx, e) in ec.unwrap().iter().enumerate() {
+        for e in ec.unwrap().iter() {
             self.execute_content(fsm, e.as_ref());
         }
     }
@@ -507,14 +506,13 @@ mod tests {
                 .to_string(),
         );
 
-        assert!(!sm.is_err(), "FSM shall be parsed");
+        assert!(sm.is_ok(), "FSM shall be parsed");
 
         let fsm = sm.unwrap();
-        let mut final_expected_configuration = Vec::new();
-        final_expected_configuration.push("pass".to_string());
+        let final_expected_configuration = vec!("pass".to_string());
 
         assert!(run_test_manual(
-            &"In_function",
+            "In_function",
             fsm,
             &Vec::new(),
             TraceMode::STATES,

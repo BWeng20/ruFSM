@@ -58,7 +58,7 @@ pub fn start_fsm_with_data(
 pub fn start_fsm_with_data_and_finish_mode(
     mut sm: Box<Fsm>,
     executor: Box<FsmExecutor>,
-    data: &Vec<ParamPair>,
+    data: &[ParamPair],
     finish_mode: FinishMode,
 ) -> ScxmlSession {
     #![allow(non_snake_case)]
@@ -74,7 +74,7 @@ pub fn start_fsm_with_data_and_finish_mode(
         }
     }
 
-    let data_copy = data.clone();
+    let data_copy = data.to_vec();
     let session_id: SessionId = SESSION_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
     let mut session = ScxmlSession::new_without_join_handle(session_id, sender.clone());
 
@@ -133,7 +133,7 @@ pub fn start_fsm_with_data_and_finish_mode(
 // Structs and methods are designed to match the signatures in the W3c-Pseudo-code.
 
 /// ## General Purpose List type, as used in the W3C algorithm.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct List<T: Clone> {
     data: Vec<T>,
 }
@@ -285,7 +285,7 @@ impl<T: Clone + PartialEq> List<T> {
 ///
 /// The notation [...] is used as a list constructor, so that '[t]' denotes a list whose only member
 /// is the object t.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OrderedSet<T> {
     pub(crate) data: Vec<T>,
 }
@@ -325,7 +325,7 @@ impl<T: Clone + PartialEq> OrderedSet<T> {
     /// (s must also be an OrderedSet)
     pub fn union(&mut self, s: &OrderedSet<T>) {
         for si in &s.data {
-            if !self.isMember(&si) {
+            if !self.isMember(si) {
                 self.add(si.clone());
             }
         }
@@ -424,7 +424,7 @@ impl<T: Clone + PartialEq> OrderedSet<T> {
 }
 
 /// Queue datatype used by the algorithm
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Queue<T> {
     data: VecDeque<T>,
 }
@@ -467,6 +467,12 @@ pub struct BlockingQueue<T> {
     pub receiver: Arc<Mutex<Receiver<T>>>,
 }
 
+impl<T> Default for BlockingQueue<T> {
+    fn default() -> Self {
+        BlockingQueue::new()
+    }
+}
+
 impl<T> BlockingQueue<T> {
     fn new() -> BlockingQueue<T> {
         let (sender, receiver) = channel();
@@ -494,7 +500,7 @@ impl<T> BlockingQueue<T> {
 /// table[foo] = bar sets the value associated with foo to be bar.
 /// #Actual implementation:
 /// Instead of the Operators, methods are used.
-#[derive(Debug)]
+#[derive(Debug,Default)]
 pub struct HashTable<K, T> {
     data: HashMap<K, T>,
 }
@@ -545,8 +551,9 @@ pub type StateNameMap = HashMap<Name, StateId>;
 pub type TransitionMap = HashMap<TransitionId, Transition>;
 
 /// Datamodel binding type. See [W3C SCXML Data Binding](/doc/W3C_SCXML_2024_07_13/index.html#DataBinding)
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum BindingType {
+    #[default]
     Early,
     Late,
 }
@@ -564,12 +571,14 @@ impl FromStr for BindingType {
 }
 
 /// Event type.
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum EventType {
     /// for events raised by the platform itself, such as error events
     platform,
     /// for events raised by \<raise\> and \<send\> with target '_internal'
     internal,
+
+    #[default]
     /// for all other events
     external,
 }
@@ -594,9 +603,9 @@ impl ParamPair {
     pub fn new_moved(name: String, value: Data) -> ParamPair {
         ParamPair { name, value }
     }
-    pub fn new(name: &String, value: &Data) -> ParamPair {
+    pub fn new(name: &str, value: &Data) -> ParamPair {
         ParamPair {
-            name: name.clone(),
+            name: name.to_string(),
             value: value.clone(),
         }
     }
@@ -616,7 +625,7 @@ impl ParamPair {
 /// - invokeid. If this event is generated from an invoked child process, the SCXML Processor must set this field to the invoke id of the invocation that triggered the child process. Otherwise it must leave it blank.
 /// - data. This field contains whatever data the sending entity chose to include in this event. The receiving SCXML Processor should reformat this data to match its data model, but must not otherwise modify it. If the conversion is not possible, the Processor must leave the field blank and must place an error 'error.execution' in the internal event queue.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Event {
     pub name: String,
     pub etype: EventType,
@@ -634,7 +643,7 @@ pub struct Event {
 
 impl Display for Event {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name.to_string())
+        write!(f, "{}", self.name)
     }
 }
 
@@ -756,7 +765,7 @@ pub type InvokeId = String;
 
 pub type EventSender = Sender<Box<Event>>;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct CommonContent {
     /// content inside \<content\> child
     pub content: Option<String>,
@@ -784,7 +793,7 @@ pub fn push_param(params: &mut OptionalParams, param: Parameter) {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Default)]
 /// *W3C says*:
 /// The \<invoke\> element is used to create an instance of an external service.
 pub struct Invoke {
@@ -888,12 +897,14 @@ pub struct Parameter {
     pub location: String,
 }
 
+#[derive(Default)]
 pub struct Cancel {
     pub send_id: String,
     pub send_id_expr: String,
 }
 
 /// Holds all parameters of a \<send\> call.
+#[derive(Default)]
 pub struct SendParameters {
     /// SCXML \<send\> attribute 'idlocation'
     pub name_location: String,
@@ -976,6 +987,7 @@ impl Debug for Cancel {
 /// accessing data of parents from inside a member, most global data is moved to
 /// this struct that is owned by the datamodel.
 #[allow(non_snake_case)]
+#[derive(Default)]
 pub struct GlobalData {
     pub executor: Option<Box<FsmExecutor>>,
     pub configuration: OrderedSet<StateId>,
@@ -1124,6 +1136,12 @@ pub struct Fsm {
     pub timer: timer::Timer,
 
     pub generate_id_count: u32,
+}
+
+impl Default for Fsm {
+    fn default() -> Self {
+        Fsm::new()
+    }
 }
 
 impl Debug for Fsm {
@@ -2928,7 +2946,7 @@ impl Fsm {
             invokeId = inv.invoke_id.clone()
         }
 
-        let src = match datamodel.get_expression_alternative_value(&inv.src, &inv.src_expr) {
+        let src = match datamodel.get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str()) {
             Err(_) => {
                 // Error -> Abort
                 return;
@@ -2940,7 +2958,7 @@ impl Fsm {
             match datamodel.get_by_location(name) {
                 None => {}
                 Some(value) => {
-                    name_values.push(ParamPair::new(name, &value));
+                    name_values.push(ParamPair::new(name.as_str(), &value));
                 }
             }
         }
@@ -2972,7 +2990,7 @@ impl Fsm {
                         .as_mut()
                         .unwrap()
                         .execute_with_data_from_xml(
-                            &content,
+                            content.as_str(),
                             &name_values,
                             Some(session_id),
                             &invokeId,
@@ -3535,7 +3553,7 @@ mod tests {
 
         let m = l.some(&|s| -> bool { *s == "Abc".to_string() });
 
-        assert_eq!(m, true);
+        assert!(m);
     }
 
     #[test]
@@ -3547,10 +3565,10 @@ mod tests {
         l.push("xyz".to_string());
 
         let mut m = l.every(&|_s| -> bool { true });
-        assert_eq!(m, true);
+        assert!(m);
 
         m = l.every(&|s| -> bool { !s.eq(&"ghi".to_string()) });
-        assert_eq!(m, false);
+        assert!(!m);
     }
 
     #[test]
@@ -3597,7 +3615,7 @@ mod tests {
             let h = l2.head().clone();
             l2 = l2.tail();
             println!(" {}", h);
-            assert_eq!(h.eq(l1v.get(i).unwrap()), true);
+            assert!(h.eq(l1v.get(i).unwrap()));
             i += 1;
         }
         println!("=============");
@@ -3639,8 +3657,8 @@ mod tests {
         os1.union(&os2);
 
         assert_eq!(os1.size(), 7);
-        assert_eq!(os1.isMember(&"def2".to_string()), true);
-        assert_eq!(os1.isMember(&"Abc".to_string()), true);
+        assert!(os1.isMember(&"def2".to_string()));
+        assert!(os1.isMember(&"Abc".to_string()));
     }
 
     #[test]
@@ -3665,9 +3683,9 @@ mod tests {
         os.add("ghi".to_string());
         os.add("xyz".to_string());
 
-        let m = os.some(&|s| -> bool { *s == "Abc".to_string() });
+        let m = os.some(&|s| -> bool { *s == "Abc" });
 
-        assert_eq!(m, true);
+        assert!(m);
     }
 
     #[test]
@@ -3679,10 +3697,10 @@ mod tests {
         os.add("xyz".to_string());
 
         let mut m = os.every(&|_s| -> bool { true });
-        assert_eq!(m, true);
+        assert!(m);
 
         m = os.every(&|s| -> bool { !s.eq(&"ghi".to_string()) });
-        assert_eq!(m, false);
+        assert!(!m);
     }
 
     #[test]
@@ -3697,50 +3715,50 @@ mod tests {
         let mut os2: OrderedSet<String> = OrderedSet::new();
 
         let mut m = os1.hasIntersection(&os2);
-        assert_eq!(m, false);
+        assert!(!m);
 
         // One common elements
         os2.add("Abc".to_string());
         m = os1.hasIntersection(&os2);
-        assert_eq!(m, true);
+        assert!(m);
 
         // Same other un-common elements
         os2.add("Def".to_string());
         os2.add("Ghi".to_string());
         os2.add("Xyz".to_string());
         m = os1.hasIntersection(&os2);
-        assert_eq!(m, true);
+        assert!(m);
 
         // Same with TWO common elements
         os2.add("def".to_string());
         m = os1.hasIntersection(&os2);
-        assert_eq!(m, true);
+        assert!(m);
 
         // Remove common elements from first
         os1.delete(&"Abc".to_string());
         os1.delete(&"def".to_string());
         m = os1.hasIntersection(&os2);
-        assert_eq!(m, false);
+        assert!(!m);
 
         // Always common with itself
         m = os1.hasIntersection(&os1);
-        assert_eq!(m, true);
+        assert!(m);
 
         // but not if empty
         os1.clear();
         m = os1.hasIntersection(&os1);
         // Shall return false
-        assert_eq!(m, false);
+        assert!(!m);
     }
 
     #[test]
     #[allow(non_snake_case)]
     fn ordered_set_can_isEmpty() {
         let mut os1: OrderedSet<String> = OrderedSet::new();
-        assert_eq!(os1.isEmpty(), true);
+        assert!(os1.isEmpty());
 
         os1.add("Abc".to_string());
-        assert_eq!(os1.isEmpty(), false);
+        assert!(!os1.isEmpty());
     }
 
     #[test]
@@ -3748,7 +3766,7 @@ mod tests {
         let mut os1: OrderedSet<String> = OrderedSet::new();
         os1.add("Abc".to_string());
         os1.clear();
-        assert_eq!(os1.isEmpty(), true);
+        assert!(os1.isEmpty());
     }
 
     #[test]
@@ -3786,8 +3804,7 @@ mod tests {
 
         let fsm = sm.unwrap();
 
-        let mut expected_config = Vec::new();
-        expected_config.push("OuterFinal".to_string());
+        let expected_config = vec!("OuterFinal".to_string());
 
         assert!(
             run_test_manual_with_send(

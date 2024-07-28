@@ -32,7 +32,7 @@ async fn main() {
     #[cfg(not(feature = "xml"))]
     let include_paths = Vec::new();
 
-    if final_args.len() < 1 {
+    if final_args.is_empty() {
         abort_test("Missing argument. Please specify one or more test file(s)".to_string());
     }
 
@@ -40,8 +40,8 @@ async fn main() {
     let mut config: Option<TestSpecification> = None;
     let mut fsm: Option<Box<Fsm>> = None;
 
-    for arg in final_args {
-        let ext: String;
+    for arg in &final_args {
+        let ext;
         match Path::new(arg.as_str()).extension() {
             None => ext = String::new(),
             Some(oext) => {

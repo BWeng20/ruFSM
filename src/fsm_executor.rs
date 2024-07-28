@@ -25,6 +25,7 @@ use crate::scxml_reader::include_path_from_arguments;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
 
+#[derive(Default)]
 pub struct ExecuteState {
     pub processors: Vec<Box<dyn EventIOProcessor>>,
     pub sessions: HashMap<SessionId, ScxmlSession>,
@@ -32,11 +33,10 @@ pub struct ExecuteState {
 
 impl ExecuteState {
     pub fn new() -> ExecuteState {
-        let e = ExecuteState {
+        ExecuteState {
             processors: Vec::new(),
             sessions: HashMap::new(),
-        };
-        e
+        }
     }
 }
 
@@ -101,12 +101,8 @@ impl FsmExecutor {
     pub fn shutdown(&mut self) {
         let mut guard = self.state.lock().unwrap();
         while !guard.processors.is_empty() {
-            let p = guard.processors.pop();
-            match p {
-                Some(mut pp) => {
+            if let Some(mut pp) = guard.processors.pop() {
                     pp.shutdown();
-                }
-                None => {}
             }
         }
     }
@@ -155,7 +151,7 @@ impl FsmExecutor {
                 Ok(session)
             }
             Err(message) => {
-                return Err(message);
+                Err(message)
             }
         }
     }
@@ -163,7 +159,7 @@ impl FsmExecutor {
     /// Loads and starts the specified FSM with some data set.
     pub fn execute_with_data_from_xml(
         &mut self,
-        xml: &String,
+        xml: &str,
         data: &Vec<ParamPair>,
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
@@ -174,7 +170,7 @@ impl FsmExecutor {
 
         // Use reader to parse the XML:
         #[cfg(feature = "xml")]
-        let sm = scxml_reader::parse_from_xml_with_includes(xml.clone(), &self.include_paths);
+        let sm = scxml_reader::parse_from_xml_with_includes(xml.to_string(), &self.include_paths);
         #[cfg(not(feature = "xml"))]
         let sm = Ok(Box::new(Fsm::new()));
 

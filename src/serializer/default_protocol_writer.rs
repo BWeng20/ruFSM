@@ -20,8 +20,7 @@ pub const FSM_WRITER_INT_52BIT: u8 = 0x80;
 pub const FSM_WRITER_INT_60BIT: u8 = 0x90;
 pub const FSM_WRITER_INT_68BIT: u8 = 0xA0;
 pub const FSM_WRITER_STRING_LENGTH_4BIT: u8 = 0xB0;
-pub const FSM_WRITER_STRING_LENGTH_8BIT: u8 = 0xC0;
-pub const FSM_WRITER_STRING_LENGTH_16BIT: u8 = 0xD0;
+pub const FSM_WRITER_STRING_LENGTH_12BIT: u8 = 0xC0;
 
 pub struct DefaultProtocolWriter<W: Write> {
     writer: BufWriter<W>,
@@ -30,11 +29,10 @@ pub struct DefaultProtocolWriter<W: Write> {
 
 impl<W: Write> DefaultProtocolWriter<W> {
     pub fn new(writer: BufWriter<W>) -> DefaultProtocolWriter<W> {
-        let d = DefaultProtocolWriter {
+        DefaultProtocolWriter {
             writer,
             in_error: false,
-        };
-        d
+        }
     }
 
     fn eval_result(&mut self, result: std::io::Result<()>) {
@@ -87,16 +85,30 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
 
     fn write_option_string(&mut self, value: &Option<String>) {
         if value.is_some() {
-            self.write_string(&value.as_ref().unwrap());
+            self.write_str(value.as_ref().unwrap().as_str());
         } else if !self.in_error {
             let r = self.writer.write_u8(FSM_WRITER_OPT_STRING_NONE);
             self.eval_result(r);
         }
     }
 
-    fn write_string(&mut self, value: &String) {
-        let _len = value.len();
-        todo!()
+    fn write_str(&mut self, value: &str) {
+        if !self.in_error {
+            let mut len = value.len();
+            if len < (2 ^ 4) {
+                self.write_type_and_value(FSM_WRITER_STRING_LENGTH_4BIT, len as u64, 4);
+            } else {
+                self.write_type_and_value(FSM_WRITER_STRING_LENGTH_12BIT, len as u64, 12);
+                len &= 0x0FFFusize;
+            }
+            let r = self.writer.write(value[0..len].as_bytes());
+            match r {
+                Ok(_) => {}
+                Err(error) => {
+                    self.eval_result(Result::Err(error));
+                }
+            }
+        }
     }
 
     fn write_usize(&mut self, value: usize) {

@@ -75,6 +75,13 @@ pub struct GlobalDataAccess {
     arc: Arc<Mutex<GlobalData>>,
 }
 
+impl Default for GlobalDataAccess {
+    fn default() -> Self {
+        GlobalDataAccess::new()
+    }
+}
+
+
 impl GlobalDataAccess {
     pub fn new() -> GlobalDataAccess {
         GlobalDataAccess {
@@ -107,7 +114,7 @@ pub trait Datamodel {
     fn global_s(&self) -> &GlobalDataAccess;
 
     /// Get the name of the data model as defined by the \<scxml\> attribute "datamodel".
-    fn get_name(self: &Self) -> &str;
+    fn get_name(&self) -> &str;
 
     /// Adds the "In" function.
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm);
@@ -138,13 +145,13 @@ pub trait Datamodel {
     /// See [internal_error_execution](Datamodel::internal_error_execution).
     fn get_expression_alternative_value(
         &mut self,
-        value: &String,
-        value_expression: &String,
+        value: &str,
+        value_expression: &str,
     ) -> Result<String, String> {
         if value_expression.is_empty() {
-            Ok(value.clone())
+            Ok(value.to_string())
         } else {
-            match self.execute(value_expression.as_str()) {
+            match self.execute(value_expression) {
                 None => {
                     // Error -> Abort
                     Err("execution failed".to_string())
@@ -207,11 +214,10 @@ pub trait Datamodel {
     fn evaluate_content(&mut self, content: &Option<CommonContent>) -> Option<String> {
         match content {
             None => None,
-            Some(content) => {
-                match &content.content_expr {
-                    None => match &content.content {
-                        None => None,
-                        Some(c) => Some(c.clone()),
+            Some(ct) => {
+                match &ct.content_expr {
+                    None => {
+                        ct.content.as_ref().map(|c| { c.clone() })
                     },
                     Some(expr) => {
                         match self.execute(expr.as_str()) {
@@ -326,20 +332,20 @@ impl Datamodel for NullDatamodel {
         &self.global
     }
 
-    fn get_name(self: &Self) -> &str {
-        return NULL_DATAMODEL;
+    fn get_name(&self) -> &str {
+        NULL_DATAMODEL
     }
 
-    fn implement_mandatory_functionality(self: &mut Self, _fsm: &mut Fsm) {
+    fn implement_mandatory_functionality(&mut self, _fsm: &mut Fsm) {
         // TODO
     }
 
     #[allow(non_snake_case)]
-    fn initializeDataModel(self: &mut Self, _fsm: &mut Fsm, _dataState: StateId) {
+    fn initializeDataModel(&mut self, _fsm: &mut Fsm, _dataState: StateId) {
         // nothing to do
     }
 
-    fn set(self: &mut NullDatamodel, _name: &str, _data: Data) {
+    fn set(&mut self, _name: &str, _data: Data) {
         // nothing to do
     }
 
@@ -347,16 +353,16 @@ impl Datamodel for NullDatamodel {
         // nothing to do
     }
 
-    fn assign(self: &mut NullDatamodel, _left_expr: &str, _right_expr: &str) {
+    fn assign(&mut self, _left_expr: &str, _right_expr: &str) {
         // nothing to do
     }
 
-    fn get_by_location(self: &mut NullDatamodel, _name: &str) -> Option<Data> {
+    fn get_by_location(&mut self, _name: &str) -> Option<Data> {
         None
     }
 
     fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
-        return &mut self.io_processors;
+        &mut self.io_processors
     }
 
     fn get_mut(&mut self, _name: &str) -> Option<&mut Data> {
@@ -455,6 +461,13 @@ impl Display for Data {
 pub struct DataStore {
     pub values: HashMap<String, Data>,
 }
+
+impl Default for DataStore {
+    fn default() -> Self {
+        DataStore::new()
+    }
+}
+
 
 impl DataStore {
     pub fn new() -> DataStore {

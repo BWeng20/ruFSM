@@ -118,7 +118,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     /// <li>#_invokeid. If the target is the special term '#_invokeid', where invokeid is the invokeid of an SCXML session that the sending session has created by <invoke>, the Processor must add the event to the external queue of that session. See 6.4 <invoke> for details.</li>
     /// <li>If neither the 'target' nor the 'targetexpr' attribute is specified, the SCXML Processor must add the event to the external event queue of the sending session.</li>
     /// </ul>
-    fn send(&mut self, global: &GlobalDataAccess, target: &String, mut event: Event) {
+    fn send(&mut self, global: &GlobalDataAccess, target: &str, mut event: Event) {
         let mut global_lock = global.lock();
         event.origin_type = Some(SCXML_TYPE.to_string());
         if event.origin.is_none() {
@@ -126,7 +126,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
         }
         // For SCXMLEventProcessor: Target is an SCXML session.
 
-        match target.as_str() {
+        match target {
             "" => {
                 global_lock.externalQueue.enqueue(Box::new(event));
             }

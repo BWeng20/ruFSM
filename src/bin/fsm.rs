@@ -30,7 +30,7 @@ async fn main() {
     #[cfg(feature = "Trace")]
     let trace = TraceMode::from_arguments(&named_opt);
 
-    if final_args.len() < 1 {
+    if final_args.is_empty() {
         println!("Missing argument. Please specify one or more scxml file");
         process::exit(1);
     }
@@ -47,10 +47,10 @@ async fn main() {
         )
         .unwrap();
 
-    for fi in 1..final_args.len() {
+    for fi in &final_args[1..final_args.len()] {
         let _ = executor
             .execute(
-                final_args[fi].as_str(),
+                fi.as_str(),
                 #[cfg(feature = "Trace")]
                 trace,
             )

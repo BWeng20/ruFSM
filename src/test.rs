@@ -138,7 +138,7 @@ pub fn run_test(test: TestUseCase) {
     let fsm = test.fsm.unwrap();
 
     let timeout = test.specification.timeout_milliseconds.unwrap_or(0);
-    let final_expected_configuration = test.specification.final_configuration.unwrap_or(Vec::new());
+    let final_expected_configuration = test.specification.final_configuration.unwrap_or_default();
 
     run_test_manual(
         &test.name,
@@ -300,7 +300,7 @@ pub fn disable_watchdog(watchdog_sender: &Box<Sender<String>>) {
 /// + fsm_config - The final FSM configuration to verify. May contain more than the required states.
 pub fn verify_final_configuration(
     expected_states: &Vec<String>,
-    fsm_config: &Vec<String>,
+    fsm_config: &[String],
 ) -> Result<String, String> {
     for fc_name in expected_states {
         if !fsm_config.contains(fc_name) {

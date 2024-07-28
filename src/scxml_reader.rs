@@ -398,7 +398,7 @@ impl ReaderState {
 
     fn get_current_state(&mut self) -> &mut State {
         let id = self.current.current_state;
-        if id <= 0 {
+        if id == 0 {
             panic!("Internal error: Current State is unknown");
         }
         self.get_state_by_id_mut(id)
@@ -406,7 +406,7 @@ impl ReaderState {
 
     fn get_current_transition(&mut self) -> &mut Transition {
         let id = self.current.current_transition;
-        if id <= 0 {
+        if id == 0 {
             panic!("Internal error: Current Transition is unknown");
         }
         self.fsm.get_transition_by_id_mut(id)

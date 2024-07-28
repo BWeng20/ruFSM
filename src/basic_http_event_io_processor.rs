@@ -77,7 +77,7 @@ impl BasicHTTPEvent {
         let mut path = parts.uri.path().to_string();
 
         // Path without leading "/" addresses the session to notify.
-        if path.starts_with("/") {
+        if path.starts_with('/') {
             path.remove(0);
         }
         debug!("Path {:?}", path);
@@ -139,7 +139,7 @@ async fn handle_request(
     debug!("Serve {:?}", req);
 
     let rs = async { BasicHTTPEvent::from_request(req).await }.await;
-    return match rs {
+    match rs {
         Ok(event) => {
             let sr = tx.send(Box::new(event));
             match sr {
@@ -160,10 +160,10 @@ async fn handle_request(
             }
         }
         Err(status) => Ok(hyper::Response::builder()
-            .status(status.clone())
+            .status(status)
             .body(Full::new(Bytes::from("Error".to_string())))
             .unwrap()),
-    };
+    }
 }
 
 impl BasicHTTPEventIOProcessor {
@@ -182,7 +182,7 @@ impl BasicHTTPEventIOProcessor {
             debug!("Message server started");
             while !inner_terminate_flag.load(Ordering::Relaxed) {
                 let event_opt = receiver_server.recv();
-                c = c + 1;
+                c += 1;
                 match event_opt {
                     Ok(event) => {
                         match event.deref() {
@@ -237,12 +237,11 @@ impl BasicHTTPEventIOProcessor {
             location: format!("https://{}:{}", location_name, port),
             local_adr: addr,
         };
-        let e = BasicHTTPEventIOProcessor {
+        BasicHTTPEventIOProcessor {
             terminate_flag,
             state: Arc::new(Mutex::new(state)),
             handle: EventIOProcessorHandle::new(),
-        };
-        e
+        }
     }
 }
 
@@ -271,7 +270,7 @@ impl EventIOProcessor for BasicHTTPEventIOProcessor {
         Box::new(b)
     }
 
-    fn send(&mut self, _global: &GlobalDataAccess, _target: &String, _event: Event) {
+    fn send(&mut self, _global: &GlobalDataAccess, _target: &str, _event: Event) {
         // W3C basic html processor:
         // If neither the 'target' nor the 'targetexpr' attribute is specified, the SCXML Processor must add the event error.communication to the internal event queue of the sending session.
 
