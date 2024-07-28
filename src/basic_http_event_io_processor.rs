@@ -51,6 +51,7 @@ pub struct BasicHTTPEventIOProcessorServerData {
 
 /// The parsed payload of a http request
 #[derive(Debug, Clone)]
+#[allow(unused)]
 struct Message {
     pub event: String,
     pub session: String,
@@ -66,7 +67,7 @@ enum BasicHTTPEvent {
 impl BasicHTTPEvent {
     /// Parse a Http request and created  the resulting message to the message thread.
     pub async fn from_request(
-        request: hyper::Request<hyper::body::Incoming>,
+        request: Request<hyper::body::Incoming>,
     ) -> Result<BasicHTTPEvent, hyper::StatusCode> {
         let (parts, body) = request.into_parts();
         debug!("Method {:?}", parts.method);
@@ -237,7 +238,7 @@ impl BasicHTTPEventIOProcessor {
             local_adr: addr,
         };
         let e = BasicHTTPEventIOProcessor {
-            terminate_flag: terminate_flag,
+            terminate_flag,
             state: Arc::new(Mutex::new(state)),
             handle: EventIOProcessorHandle::new(),
         };

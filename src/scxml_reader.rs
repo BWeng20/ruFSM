@@ -12,8 +12,9 @@ use std::println as debug;
 
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::{mem, str, string::String};
+use std::{env, mem, str, string::String};
 
+use crate::ArgOption;
 #[cfg(feature = "Debug_Reader")]
 #[cfg(not(test))]
 use log::debug;
@@ -41,6 +42,27 @@ pub type AttributeMap = HashMap<String, String>;
 pub type XReader<'a> = Reader<&'a [u8]>;
 
 static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+pub static INCLUDE_PATH_ARGUMENT_OPTION: ArgOption = ArgOption {
+    name: "includePaths",
+    with_value: true,
+    required: false,
+};
+
+pub fn include_path_from_arguments(
+    named_arguments: &HashMap<&'static str, String>,
+) -> Vec<PathBuf> {
+    let mut include_paths = Vec::new();
+    match named_arguments.get(INCLUDE_PATH_ARGUMENT_OPTION.name) {
+        None => {}
+        Some(paths) => {
+            for pa in env::split_paths(&paths) {
+                include_paths.push(pa.to_owned());
+            }
+        }
+    }
+    include_paths
+}
 
 /// *W3C says*:
 /// The top-level wrapper element, which carries version information. The actual state machine consists of its children.
@@ -1615,7 +1637,6 @@ impl ReaderState {
         if version.is_some() {
             self.fsm.version = version.unwrap().clone();
             #[cfg(feature = "Debug_Reader")]
-
             debug!(" scxml.version = {}", version.unwrap());
         }
         self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);

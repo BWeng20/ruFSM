@@ -16,13 +16,16 @@ use serde::Deserialize;
 #[cfg(feature = "yaml-config")]
 use yaml_rust::YamlLoader;
 
+use crate::fsm;
 use crate::fsm::{Event, FinishMode, Fsm};
 use crate::fsm_executor::FsmExecutor;
+#[cfg(feature = "xml")]
+use crate::scxml_reader;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
-use crate::{fsm, scxml_reader};
 
 #[cfg_attr(feature = "json-config", derive(Deserialize))]
+#[allow(unused)]
 pub struct EventSpecification {
     /// Mandatory event name to send.
     name: String,
@@ -39,6 +42,7 @@ pub struct EventSpecification {
 }
 
 #[cfg_attr(feature = "json-config", derive(Deserialize))]
+#[allow(unused)]
 pub struct TestSpecification {
     pub file: Option<String>,
     events: Vec<EventSpecification>,
@@ -56,7 +60,14 @@ pub struct TestUseCase {
 }
 
 pub fn load_fsm(file_path: &str, include_paths: &Vec<PathBuf>) -> Result<Box<Fsm>, String> {
-    scxml_reader::parse_from_xml_file(Path::new(file_path), include_paths)
+    #[cfg(feature = "xml")]
+    return scxml_reader::parse_from_xml_file(Path::new(file_path), include_paths);
+    #[cfg(not(feature = "xml"))]
+    {
+        let sm = Ok(Box::new(Fsm::new()));
+        todo!();
+        sm
+    }
 }
 
 #[cfg(feature = "yaml-config")]

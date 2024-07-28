@@ -3,7 +3,6 @@
 extern crate core;
 
 use std::collections::HashMap;
-use std::env;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 #[cfg(test)]
@@ -17,11 +16,14 @@ use log::info;
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
 use crate::event_io_processor::EventIOProcessor;
+use crate::fsm;
 use crate::fsm::{Event, FinishMode, InvokeId, ParamPair, ScxmlSession, SessionId};
 use crate::scxml_event_io_processor::ScxmlEventIOProcessor;
+#[cfg(feature = "xml")]
+use crate::scxml_reader;
+use crate::scxml_reader::include_path_from_arguments;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
-use crate::{fsm, scxml_reader, ArgOption};
 
 pub struct ExecuteState {
     pub processors: Vec<Box<dyn EventIOProcessor>>,
@@ -44,27 +46,6 @@ impl ExecuteState {
 pub struct FsmExecutor {
     pub state: Arc<Mutex<ExecuteState>>,
     pub include_paths: Vec<PathBuf>,
-}
-
-pub static INCLUDE_PATH_ARGUMENT_OPTION: ArgOption = ArgOption {
-    name: "includePaths",
-    with_value: true,
-    required: false,
-};
-
-pub fn include_path_from_arguments(
-    named_arguments: &HashMap<&'static str, String>,
-) -> Vec<PathBuf> {
-    let mut include_paths = Vec::new();
-    match named_arguments.get(INCLUDE_PATH_ARGUMENT_OPTION.name) {
-        None => {}
-        Some(paths) => {
-            for pa in env::split_paths(&paths) {
-                include_paths.push(pa.to_owned());
-            }
-        }
-    }
-    include_paths
 }
 
 impl FsmExecutor {
@@ -102,6 +83,7 @@ impl FsmExecutor {
         e
     }
 
+    #[cfg(feature = "xml")]
     pub fn set_include_paths_from_arguments(
         &mut self,
         named_arguments: &HashMap<&'static str, String>,
@@ -157,7 +139,12 @@ impl FsmExecutor {
         info!("Loading FSM from {}", uri);
 
         // Use reader to parse the scxml file:
+        #[cfg(feature = "xml")]
         let sm = scxml_reader::parse_from_uri(uri.to_string(), &self.include_paths);
+
+        #[cfg(not(feature = "xml"))]
+        let sm = Ok(Box::new(Fsm::new()));
+
         match sm {
             Ok(mut fsm) => {
                 #[cfg(feature = "Trace")]
@@ -186,7 +173,11 @@ impl FsmExecutor {
         info!("Loading FSM from XML");
 
         // Use reader to parse the XML:
+        #[cfg(feature = "xml")]
         let sm = scxml_reader::parse_from_xml_with_includes(xml.clone(), &self.include_paths);
+        #[cfg(not(feature = "xml"))]
+        let sm = Ok(Box::new(Fsm::new()));
+
         match sm {
             Ok(mut fsm) => {
                 #[cfg(feature = "Trace")]

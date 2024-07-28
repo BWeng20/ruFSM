@@ -7,9 +7,10 @@ use std::io::{stdout, Write};
 use std::{io, process, thread, time};
 
 use rfsm::fsm::{Event, EventType};
-use rfsm::fsm_executor::{FsmExecutor, INCLUDE_PATH_ARGUMENT_OPTION};
+use rfsm::fsm_executor::FsmExecutor;
 #[cfg(feature = "Trace")]
 use rfsm::handle_trace;
+use rfsm::scxml_reader::INCLUDE_PATH_ARGUMENT_OPTION;
 #[cfg(feature = "Trace")]
 use rfsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
 
@@ -22,6 +23,7 @@ async fn main() {
     let (named_opt, final_args) = rfsm::get_arguments(&[
         #[cfg(feature = "Trace")]
         &TRACE_ARGUMENT_OPTION,
+        #[cfg(feature = "xml")]
         &INCLUDE_PATH_ARGUMENT_OPTION,
     ]);
 
@@ -34,6 +36,7 @@ async fn main() {
     }
 
     let mut executor = FsmExecutor::new_with_io_processor().await;
+    #[cfg(feature = "xml")]
     executor.set_include_paths_from_arguments(&named_opt);
 
     let mut session = executor

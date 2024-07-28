@@ -1,8 +1,10 @@
 use std::path::Path;
 
 use rfsm::fsm::Fsm;
-use rfsm::fsm_executor;
-use rfsm::fsm_executor::INCLUDE_PATH_ARGUMENT_OPTION;
+#[cfg(feature = "xml")]
+use rfsm::scxml_reader;
+#[cfg(feature = "xml")]
+use rfsm::scxml_reader::INCLUDE_PATH_ARGUMENT_OPTION;
 #[cfg(feature = "json-config")]
 use rfsm::test::load_json_config;
 #[cfg(feature = "yaml-config")]
@@ -16,21 +18,26 @@ async fn main() {
     #[cfg(feature = "EnvLog")]
     env_logger::init();
 
-    let (named_opt, final_args) =
-        rfsm::get_arguments(&[
-            #[cfg(feature = "Trace")] &TRACE_ARGUMENT_OPTION,
-                &INCLUDE_PATH_ARGUMENT_OPTION]);
+    let (named_opt, final_args) = rfsm::get_arguments(&[
+        #[cfg(feature = "Trace")]
+        &TRACE_ARGUMENT_OPTION,
+        &INCLUDE_PATH_ARGUMENT_OPTION,
+    ]);
 
     #[cfg(feature = "Trace")]
     let trace = TraceMode::from_arguments(&named_opt);
-    let include_paths = fsm_executor::include_path_from_arguments(&named_opt);
+
+    #[cfg(feature = "xml")]
+    let include_paths = scxml_reader::include_path_from_arguments(&named_opt);
+    #[cfg(not(feature = "xml"))]
+    let include_paths = Vec::new();
 
     if final_args.len() < 1 {
         abort_test("Missing argument. Please specify one or more test file(s)".to_string());
     }
 
     let mut test_spec_file = "".to_string();
-    let mut config: Option<TestSpecification> = Option::None;
+    let mut config: Option<TestSpecification> = None;
     let mut fsm: Option<Box<Fsm>> = None;
 
     for arg in final_args {
