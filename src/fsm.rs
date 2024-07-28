@@ -1434,16 +1434,7 @@ impl Fsm {
     /// processing to it. Secondly, if any \<invoke\> elements have autoforwarding set, forward the
     /// event to them. These steps apply before the transitions are taken.
     ///
-    /// This event loop thus enforces run-to-completion semantics, in which the system process an
-    /// external event and then takes all the 'follow-up' transitions that the processing has
-    /// enabled before looking for another external event. For example, suppose that the external
-    /// event queue contains events ext1 and ext2 and the machine is in state s1. If processing
-    /// ext1 takes the machine to s2 and generates internal event int1, and s2 contains a transition
-    /// t triggered by int1, the system is guaranteed to take t, no matter what transitions s2 or
-    /// other states have that would be triggered by ext2. Note that this is true even though ext2
-    /// was already in the external event queue when int1 was generated. In effect, the algorithm
-    /// treats the processing of int1 as finishing up the processing of ext1.
-    ///
+    /// This event loop thus enforces run-to-completion semantics, in which the system process an external event and then takes all the 'follow-up' transitions that the processing has enabled before looking for another external event. For example, suppose that the external event queue contains events ext1 and ext2 and the machine is in state s1. If processing ext1 takes the machine to s2 and generates internal event int1, and s2 contains a transition t triggered by int1, the system is guaranteed to take t, no matter what transitions s2 or other states have that would be triggered by ext2. Note that this is true even though ext2 was already in the external event queue when int1 was generated. In effect, the algorithm treats the processing of int1 as finishing up the processing of ext1.
     /// ```ignore
     /// procedure mainEventLoop():
     ///     while running:
