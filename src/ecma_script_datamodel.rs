@@ -509,7 +509,7 @@ mod tests {
         assert!(sm.is_ok(), "FSM shall be parsed");
 
         let fsm = sm.unwrap();
-        let final_expected_configuration = vec!("pass".to_string());
+        let final_expected_configuration = vec!["pass".to_string()];
 
         assert!(run_test_manual(
             "In_function",

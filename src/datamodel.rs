@@ -81,7 +81,6 @@ impl Default for GlobalDataAccess {
     }
 }
 
-
 impl GlobalDataAccess {
     pub fn new() -> GlobalDataAccess {
         GlobalDataAccess {
@@ -216,9 +215,7 @@ pub trait Datamodel {
             None => None,
             Some(ct) => {
                 match &ct.content_expr {
-                    None => {
-                        ct.content.as_ref().map(|c| { c.clone() })
-                    },
+                    None => ct.content.as_ref().map(|c| c.clone()),
                     Some(expr) => {
                         match self.execute(expr.as_str()) {
                             None => {
@@ -467,7 +464,6 @@ impl Default for DataStore {
         DataStore::new()
     }
 }
-
 
 impl DataStore {
     pub fn new() -> DataStore {

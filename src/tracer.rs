@@ -284,7 +284,6 @@ pub struct DefaultTracer {
     pub trace_flags: HashSet<TraceMode>,
 }
 
-
 impl Default for DefaultTracer {
     fn default() -> Self {
         DefaultTracer::new()

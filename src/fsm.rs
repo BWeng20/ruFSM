@@ -50,7 +50,7 @@ pub fn start_fsm(sm: Box<Fsm>, executor: Box<FsmExecutor>) -> ScxmlSession {
 pub fn start_fsm_with_data(
     sm: Box<Fsm>,
     executor: Box<FsmExecutor>,
-    data: &Vec<ParamPair>,
+    data: &[ParamPair],
 ) -> ScxmlSession {
     start_fsm_with_data_and_finish_mode(sm, executor, data, FinishMode::DISPOSE)
 }
@@ -500,7 +500,7 @@ impl<T> BlockingQueue<T> {
 /// table[foo] = bar sets the value associated with foo to be bar.
 /// #Actual implementation:
 /// Instead of the Operators, methods are used.
-#[derive(Debug,Default)]
+#[derive(Debug, Default)]
 pub struct HashTable<K, T> {
     data: HashMap<K, T>,
 }
@@ -890,7 +890,7 @@ impl Debug for Invoke {
 }
 
 /// Stores \<param\> elements for \<send\>, \<donedata\> or \<invoke\>
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Parameter {
     pub name: String,
     pub expr: String,
@@ -2946,7 +2946,9 @@ impl Fsm {
             invokeId = inv.invoke_id.clone()
         }
 
-        let src = match datamodel.get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str()) {
+        let src = match datamodel
+            .get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str())
+        {
             Err(_) => {
                 // Error -> Abort
                 return;
@@ -3804,7 +3806,7 @@ mod tests {
 
         let fsm = sm.unwrap();
 
-        let expected_config = vec!("OuterFinal".to_string());
+        let expected_config = vec!["OuterFinal".to_string()];
 
         assert!(
             run_test_manual_with_send(

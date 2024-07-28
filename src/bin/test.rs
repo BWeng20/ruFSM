@@ -41,13 +41,10 @@ async fn main() {
     let mut fsm: Option<Box<Fsm>> = None;
 
     for arg in &final_args {
-        let ext;
-        match Path::new(arg.as_str()).extension() {
-            None => ext = String::new(),
-            Some(oext) => {
-                ext = oext.to_string_lossy().to_string();
-            }
-        }
+        let ext = match Path::new(arg.as_str()).extension() {
+            None => String::new(),
+            Some(oext) => oext.to_string_lossy().to_string(),
+        };
         match ext.to_lowercase().as_str() {
             "yaml" | "yml" => {
                 #[cfg(feature = "yaml-config")]

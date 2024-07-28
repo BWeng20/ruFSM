@@ -79,9 +79,7 @@ async fn main() {
             }
         }
         print!("\nEnter Event >>");
-        match stdout().flush() {
-            _ => {}
-        }
+        let _ = stdout().flush();
         line.clear();
         match stdin.read_line(&mut line) {
             Ok(_s) => {

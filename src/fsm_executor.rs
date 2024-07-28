@@ -102,7 +102,7 @@ impl FsmExecutor {
         let mut guard = self.state.lock().unwrap();
         while !guard.processors.is_empty() {
             if let Some(mut pp) = guard.processors.pop() {
-                    pp.shutdown();
+                pp.shutdown();
             }
         }
     }
@@ -150,9 +150,7 @@ impl FsmExecutor {
                 let session = fsm::start_fsm_with_data(fsm, Box::new(self.clone()), data);
                 Ok(session)
             }
-            Err(message) => {
-                Err(message)
-            }
+            Err(message) => Err(message),
         }
     }
 
