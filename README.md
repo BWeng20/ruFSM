@@ -1,6 +1,6 @@
 # Finite State Machine (FSM) Implementation in Rust
 
-![Test Status](https://github.com/BWeng20/rFSM/actions/workflows/rust.yml/badge.svg) ![Rust-Slippy](https://github.com/BWeng20/rFSM/actions/workflows/rust-clippy.yml/badge.svg)
+[![Test Status](https://github.com/BWeng20/rFSM/actions/workflows/rust.yml/badge.svg)](https://github.com/BWeng20/rFSM/actions/workflows/rust.yml) [![Rust-Slippy](https://github.com/BWeng20/rFSM/actions/workflows/rust-clippy.yml/badge.svg)](https://github.com/BWeng20/rFSM/actions/workflows/rust-clippy.yml)
 
 According to W3C Recommendations, reading and executing State Chart XML (SCXML).
 
