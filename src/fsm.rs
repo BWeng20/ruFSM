@@ -2179,10 +2179,8 @@ impl Fsm {
             {
                 let state_s: &State = self.get_state_by_id(*s);
                 exe.push(state_s.onentry);
-                if statesForDefaultEntry.isMember(&s) {
-                    if state_s.initial > 0 {
-                        exe.push(self.get_transition_by_id(state_s.initial).content);
-                    }
+                if statesForDefaultEntry.isMember(&s) && state_s.initial > 0 {
+                    exe.push(self.get_transition_by_id(state_s.initial).content);
                 }
                 if defaultHistoryContent.has(*s) {
                     exe.push(*defaultHistoryContent.get(*s));
@@ -2222,17 +2220,16 @@ impl Fsm {
                     );
                     let stateParent = self.get_state_by_id(parent);
                     let grandparent: StateId = stateParent.parent;
-                    if self.isParallelState(grandparent) {
-                        if self
+                    if self.isParallelState(grandparent)
+                        && self
                             .getChildStates(grandparent)
                             .every(&|s: &StateId| -> bool { self.isInFinalState(datamodel, *s) })
-                        {
-                            let grandparentS = self.get_state_by_id(grandparent);
-                            self.enqueue_internal(
-                                datamodel,
-                                Event::new("done.state.", &grandparentS.name, None, None),
-                            );
-                        }
+                    {
+                        let grandparentS = self.get_state_by_id(grandparent);
+                        self.enqueue_internal(
+                            datamodel,
+                            Event::new("done.state.", &grandparentS.name, None, None),
+                        );
                     }
                 }
             }
@@ -2924,9 +2921,7 @@ impl Fsm {
         }
 
         #[allow(non_snake_case)]
-        let invokeId;
-
-        if inv.invoke_id.is_empty() {
+        let invokeId = if inv.invoke_id.is_empty() {
             // W3C:
             // A conformant SCXML document may specify either the 'id' or 'idlocation' attribute, but
             // must not specify both. If the 'idlocation' attribute is present, the SCXML Processor
@@ -2937,14 +2932,14 @@ impl Fsm {
             // the form stateid.platformid, where stateid is the id of the state containing this
             // element and platformid is automatically generated. platformid must be unique within
             // the current session.
-            invokeId = format!(
+            format!(
                 "{}.{}",
                 &inv.parent_state_name,
                 PLATFORM_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
             )
         } else {
-            invokeId = inv.invoke_id.clone()
-        }
+            inv.invoke_id.clone()
+        };
 
         let src = match datamodel
             .get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str())
