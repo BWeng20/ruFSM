@@ -21,6 +21,7 @@ use tracer::TraceMode;
 
 use crate::fsm::{Event, EventType};
 
+#[cfg(feature = "xml")]
 pub mod scxml_reader;
 
 pub mod executable_content;
@@ -35,6 +36,8 @@ pub mod basic_http_event_io_processor;
 
 pub mod scxml_event_io_processor;
 
+pub mod serializer;
+
 mod datamodel;
 mod event_io_processor;
 
@@ -42,7 +45,6 @@ mod event_io_processor;
 pub mod tracer;
 
 pub mod test;
-
 #[cfg(feature = "Trace")]
 pub fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
     match TraceMode::from_str(opt) {
@@ -74,7 +76,7 @@ impl ArgOption {
     /// Creates a new option with the specified name.
     pub fn new(name: &'static str) -> ArgOption {
         ArgOption {
-            name: name,
+            name,
             required: false,
             with_value: false,
         }

@@ -1,0 +1,35 @@
+//! Protocol to write a persistent binary version of a Fsm.
+
+use std::io::Write;
+
+/// Trait for writing binary data in some platform independent way.\
+/// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).
+pub trait ProtocolWriter<W: Write> {
+    /// Writes the protocol version
+    fn write_version(&mut self);
+
+    /// Flush and close the underlying stream
+    fn close(&mut self);
+
+    /// Writes a boolean
+    fn write_boolean(&mut self, value: bool);
+
+    /// Writes an optional string
+    fn write_option_string(&mut self, value: &Option<String>);
+
+    /// Writes a string
+    fn write_string(&mut self, value: &String);
+
+    /// Writes a str
+    fn write_str(&mut self, value: &str) {
+        self.write_string(&value.to_string());
+    }
+
+    /// Writes an usize values. Implementations can assume that the value are in u32 range.
+    fn write_usize(&mut self, value: usize);
+
+    /// Writes an unsigned values
+    fn write_uint(&mut self, value: u64);
+
+    fn has_error(&self) -> bool;
+}
