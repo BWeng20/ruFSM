@@ -70,10 +70,10 @@ pub fn include_path_from_arguments(
 /// *Attributes:*
 /// + __initial__ A legal state specification. See 3.11 Legal State Configurations and Specifications for details. If not specified, the default initial state is the first child state in document order.
 /// + __name__ Any valid NMTOKEN. The name of this state machine. It is for purely informational purposes.
-/// + __xmlns__   The value MUST be "http://www.w3.org/2005/07/scxml".
-/// + __version__   Decimal, The value MUST be "1.0".
+/// + __xmlns__ The value MUST be "http://www.w3.org/2005/07/scxml".
+/// + __version__ Decimal, The value MUST be "1.0".
 /// + __datamodel__ NMTOKEN, platform-specific, "null", "ecmascript", "xpath" or other platform-defined values.
-/// + __binding__  "early" or "late", default is "early". See 5.3.3 Data Binding for details.
+/// + __binding__ "early" or "late", default is "early". See 5.3.3 Data Binding for details.
 ///
 /// *Children:*
 /// + __state__ A compound or atomic state. Occurs zero or more times. See 3.3 \<state\> for details.
@@ -98,7 +98,7 @@ pub const ATTR_ID: &str = "id";
 ///
 /// *Attributes*:
 /// + __id__  valid id as defined in [XML Schema].The identifier for this state. See 3.14 IDs for details.
-/// + __initial__	The id of the default initial state (or states) for this state. MUST NOT be specified in conjunction with the \<initial\> element. MUST NOT occur in atomic states.
+/// + __initial__ The id of the default initial state (or states) for this state. MUST NOT be specified in conjunction with the \<initial\> element. MUST NOT occur in atomic states.
 ///
 /// *Children*:
 /// + __onentry__ Optional element holding executable content to be run upon entering this state. Occurs 0 or more times.
@@ -151,31 +151,31 @@ pub const TAG_RAISE: &str = "raise";
 /// __\<send\>__ is used to send events and data to external systems, including external SCXML Interpreters, or to raise events in the current SCXML session.
 ///
 /// *Attributes*:
-/// + __event__	A string indicating the name of message being generated. Must not occur with 'eventexpr'. If the type is *http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*, either
-///             this attribute or 'eventexpr' must be present.
-/// + __eventexpr__	A dynamic alternative to 'event'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat
-///                 the result as if it had been entered as the value of 'event'.
-///                 If the type is "*http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*", either this attribute or 'event' must be present. Must not occur with 'event'.
-/// + __target__	A valid target URI. The unique identifier of the message target that the platform should send the event to. Must not occur with 'targetexpr'.
-///                 See [6.2.4 The Target of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTargets) for details.
-///                 See [SCXMLEventProcessor](/doc/W3C_SCXML_2024_07_13/index.html#SCXMLEventProcessor) for details about predefined targets.
-/// + __targetexpr__ An expression evaluating to a valid target URI	A dynamic alternative to 'target'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it
+/// + __event__      A string indicating the name of message being generated. Must not occur with 'eventexpr'. If the type is *http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*, either
+///                  this attribute or 'eventexpr' must be present.
+/// + __eventexpr__  A dynamic alternative to 'event'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat
+///                  the result as if it had been entered as the value of 'event'.
+///                  If the type is "*http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*", either this attribute or 'event' must be present. Must not occur with 'event'.
+/// + __target__     A valid target URI. The unique identifier of the message target that the platform should send the event to. Must not occur with 'targetexpr'.
+///                  See [6.2.4 The Target of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTargets) for details.
+///                  See [SCXMLEventProcessor](/doc/W3C_SCXML_2024_07_13/index.html#SCXMLEventProcessor) for details about predefined targets.
+/// + __targetexpr__ An expression evaluating to a valid target URI A dynamic alternative to 'target'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it
 ///                  had been entered as the value of 'target'. Must not occur with 'target'.
-/// + __type__	    The URI that identifies the transport mechanism for the message. Must not occur with 'typeexpr'.
-///                 See [6.2.5 The Type of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTypes).
-/// + __typeexpr__	A dynamic alternative to 'type'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been
-///                 entered as the value of 'type'. Must not occur with 'type'.
-/// + __id__	Any valid token	A string literal to be used as the identifier for this instance of <send>. Must not occur with 'idlocation'.
+/// + __type__       The URI that identifies the transport mechanism for the message. Must not occur with 'typeexpr'.
+///                  See [6.2.5 The Type of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTypes).
+/// + __typeexpr__   A dynamic alternative to 'type'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been
+///                  entered as the value of 'type'. Must not occur with 'type'.
+/// + __id__         Any valid token A string literal to be used as the identifier for this instance of <send>. Must not occur with 'idlocation'.
 /// + __idlocation__ Any location expression evaluating to a data model location in which a system-generated id can be stored. See below for details. Must not occur with 'id'.
-/// + __delay__	A time designation as defined in CSS2 format (RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
-///             Indicates how long the processor should wait before dispatching the message.
-///             Must not occur with 'delayexpr' or when the attribute 'target' has the value "_internal".
-/// + __delayexpr__	A value expression which returns a time designation as defined in CSS2 format. A dynamic alternative to 'delay'. If this attribute is present, the SCXML
-///                 Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been entered as the value of 'delay'.
-///                 Must not occur with 'delay' or when the attribute 'target' has the value "_internal".
-/// + __namelist__	A space-separated list of one or more data model locations to be included as attribute/value pairs with the message. (The name of the location is the attribute
-///                 and the value stored at the location is the value.).
-///                 Must not be specified in conjunction with \<content\> element.
+/// + __delay__      A time designation as defined in CSS2 format (RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
+///                  Indicates how long the processor should wait before dispatching the message.
+///                  Must not occur with 'delayexpr' or when the attribute 'target' has the value "_internal".
+/// + __delayexpr__  A value expression which returns a time designation as defined in CSS2 format. A dynamic alternative to 'delay'. If this attribute is present, the SCXML
+///                  Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been entered as the value of 'delay'.
+///                  Must not occur with 'delay' or when the attribute 'target' has the value "_internal".
+/// + __namelist__   A space-separated list of one or more data model locations to be included as attribute/value pairs with the message. (The name of the location is the attribute
+///                  and the value stored at the location is the value.).
+///                  Must not be specified in conjunction with \<content\> element.
 ///
 /// *Children*
 /// + __param__ The SCXML Processor must evaluate this element when the parent \<send\> element is evaluated and pass the resulting data to the external service when the message
@@ -521,7 +521,7 @@ impl ReaderState {
         if !self.stack.is_empty() {
             r = self
                 .stack
-                .get(self.stack.len() - 1)
+                .last()
                 .as_ref()
                 .unwrap()
                 .current_tag
