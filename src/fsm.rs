@@ -111,7 +111,8 @@ pub fn start_fsm_with_data_and_finish_mode(
                     let mut global = get_global!(datamodel);
                     global.externalQueue = externalQueue;
                     global.session_id = session_id;
-                    global.caller_invoke_id = sm.caller_invoke_id.clone();
+                    global.caller_invoke_id =
+                        Option::map(sm.caller_invoke_id.as_ref(), |x| x.clone());
                     global.parent_session_id = sm.parent_session_id;
                     global.executor = Some(executor);
                 }
@@ -215,7 +216,7 @@ impl<T: Clone + PartialEq> List<T> {
         let mut t = List::new();
 
         for i in self.data.iter() {
-            if f(&(*i)) {
+            if f(i) {
                 t.data.push((*i).clone());
             }
         }
@@ -1264,12 +1265,10 @@ impl Fsm {
         let s1 = self.get_state_by_id(*sid1);
         let s2 = self.get_state_by_id(*sid2);
 
-        if s1.doc_id > s2.doc_id {
-            std::cmp::Ordering::Greater
-        } else if s1.doc_id == s2.doc_id {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Less
+        match s1.doc_id {
+            di if di > s2.doc_id => std::cmp::Ordering::Greater,
+            di if di == s2.doc_id => std::cmp::Ordering::Equal,
+            _ => std::cmp::Ordering::Less,
         }
     }
 
@@ -1284,22 +1283,18 @@ impl Fsm {
     }
 
     fn transition_document_order(&self, t1: &&Transition, t2: &&Transition) -> std::cmp::Ordering {
-        if t1.doc_id > t2.doc_id {
-            std::cmp::Ordering::Greater
-        } else if t1.doc_id == t2.doc_id {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Less
+        match t1.doc_id {
+            ti if ti > t2.doc_id => std::cmp::Ordering::Greater,
+            ti if ti == t2.doc_id => std::cmp::Ordering::Equal,
+            _ => std::cmp::Ordering::Less,
         }
     }
 
     fn invoke_document_order(s1: &Invoke, s2: &Invoke) -> std::cmp::Ordering {
-        if s1.doc_id > s2.doc_id {
-            std::cmp::Ordering::Greater
-        } else if s1.doc_id == s2.doc_id {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Less
+        match s1.doc_id {
+            si if si > s2.doc_id => std::cmp::Ordering::Greater,
+            si if si == s2.doc_id => std::cmp::Ordering::Equal,
+            _ => std::cmp::Ordering::Less,
         }
     }
 
@@ -1380,7 +1375,7 @@ impl Fsm {
             if state.doc_id == 0 {
                 #[cfg(feature = "Trace")]
                 self.tracer
-                    .trace(&format!("Referenced state '{}' is not declared", state.name).as_str());
+                    .trace(format!("Referenced state '{}' is not declared", state.name).as_str());
                 return false;
             }
         }
@@ -1529,11 +1524,7 @@ impl Fsm {
                 .sort(&|s1, s2| self.state_entry_order(s1, s2));
             for sid in sortedStatesToInvoke.iterator() {
                 let state = self.get_state_by_id(*sid);
-                for inv in state
-                    .invoke
-                    .sort(&|i1, i2| Fsm::invoke_document_order(i1, i2))
-                    .iterator()
-                {
+                for inv in state.invoke.sort(&Fsm::invoke_document_order).iterator() {
                     self.invoke(datamodel, inv);
                 }
             }
@@ -1710,7 +1701,7 @@ impl Fsm {
         {
             let global = get_global!(datamodel);
             caller_invoke_id = global.caller_invoke_id.clone();
-            parent_session_id = global.parent_session_id.clone();
+            parent_session_id = global.parent_session_id;
         }
         match parent_session_id {
             None => {
@@ -1725,14 +1716,10 @@ impl Fsm {
                         // TODO: Evaluate done_data
                         let mut event = Event::new("done.invoke.", &invoke_id, None, None);
                         event.invoke_id = Some(invoke_id);
-                        match self.send_to_session(session_id, datamodel, event) {
-                            Err(_e) => {
-                                #[cfg(feature = "Trace")]
-                                self.tracer.trace(
-                                    format!("Failed to send 'done.invoke'. {}", _e).as_str(),
-                                );
-                            }
-                            _ => {}
+                        if let Err(_e) = self.send_to_session(session_id, datamodel, event) {
+                            #[cfg(feature = "Trace")]
+                            self.tracer
+                                .trace(format!("Failed to send 'done.invoke'. {}", _e).as_str());
                         }
                     }
                 }
@@ -2048,7 +2035,7 @@ impl Fsm {
                 if h.history_type == HistoryType::Deep {
                     let stateIdList =
                         self.state_list_to_id_set(&configStateList.filter_by(&|s0| -> bool {
-                            self.isAtomicState(*s0) && self.isDescendant(s0.id, s.id)
+                            self.isAtomicState(s0) && self.isDescendant(s0.id, s.id)
                         }));
                     ahistory.put_move(h.id, stateIdList);
                 } else {
@@ -2157,7 +2144,7 @@ impl Fsm {
         {
             #[cfg(feature = "Trace_State")]
             {
-                self.tracer.trace_enter_state(&self.get_state_by_id(*s));
+                self.tracer.trace_enter_state(self.get_state_by_id(*s));
             }
             {
                 let mut gd = get_global!(datamodel);
@@ -2179,7 +2166,7 @@ impl Fsm {
             {
                 let state_s: &State = self.get_state_by_id(*s);
                 exe.push(state_s.onentry);
-                if statesForDefaultEntry.isMember(&s) && state_s.initial > 0 {
+                if statesForDefaultEntry.isMember(s) && state_s.initial > 0 {
                     exe.push(self.get_transition_by_id(state_s.initial).content);
                 }
                 if defaultHistoryContent.has(*s) {
@@ -3053,7 +3040,7 @@ impl Fsm {
             cond = t.cond.clone();
         }
         match cond {
-            Some(c) => match datamodel.execute_condition(&c.as_str()) {
+            Some(c) => match datamodel.execute_condition(c.as_str()) {
                 Ok(v) => v,
                 Err(_e) => {
                     datamodel.internal_error_execution();
@@ -3104,7 +3091,7 @@ impl Fsm {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DoneData {
     /// content of \<content\> child
     pub content: Option<CommonContent>,
@@ -3217,11 +3204,11 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(name: &String) -> State {
+    pub fn new(name: &str) -> State {
         State {
             id: 0,
             doc_id: 0,
-            name: name.clone(),
+            name: name.to_string(),
             initial: 0,
             states: vec![],
             onentry: 0,
@@ -3287,10 +3274,11 @@ pub fn map_history_type(ts: &String) -> HistoryType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 #[repr(u8)]
 pub enum TransitionType {
     Internal,
+    #[default]
     External,
 }
 
@@ -3309,7 +3297,7 @@ pub(crate) static SESSION_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 pub type TransitionId = u32;
 
 /// A state to state transition with references to content that shall be executed with the transition.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Transition {
     pub id: TransitionId,
     pub doc_id: DocumentId,
@@ -3327,10 +3315,6 @@ pub struct Transition {
 impl PartialEq for Transition {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        self.id != other.id
     }
 }
 
@@ -3379,7 +3363,7 @@ pub fn create_datamodel(
 }
 
 ////////////////////////////////////////
-//// Display support
+/// Display support
 
 impl Display for Fsm {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -3443,12 +3427,11 @@ impl Display for OrderedSet<u32> {
     }
 }
 
-pub(crate) fn vec_to_string<T: Display>(v: &Vec<T>) -> String {
+pub(crate) fn vec_to_string<T: Display>(v: &[T]) -> String {
     let mut s = "[".to_string();
 
-    let len = v.len();
-    for i in 0..len {
-        s += format!("{}{}", if i > 0 { "," } else { "" }, v[i]).as_str();
+    for (i, vi) in v.iter().enumerate() {
+        s += format!("{}{}", if i > 0 { "," } else { "" }, vi).as_str();
     }
     s += "]";
     s
@@ -3460,9 +3443,8 @@ pub(crate) fn opt_vec_to_string<T: Display>(v: &Option<Vec<T>>) -> String {
         Some(v) => {
             let mut s = "[".to_string();
 
-            let len = v.len();
-            for i in 0..len {
-                s += format!("{}{}", if i > 0 { "," } else { "" }, v[i]).as_str();
+            for (i, vi) in v.iter().enumerate() {
+                s += format!("{}{}", if i > 0 { "," } else { "" }, vi).as_str();
             }
             s += "]";
             s
@@ -3548,7 +3530,7 @@ mod tests {
         l.push("ghi".to_string());
         l.push("xyz".to_string());
 
-        let m = l.some(&|s| -> bool { *s == "Abc".to_string() });
+        let m = l.some(&|s| -> bool { *s == "Abc" });
 
         assert!(m);
     }
@@ -3797,7 +3779,7 @@ mod tests {
                 .to_string(),
         );
 
-        assert!(!sm.is_err(), "FSM shall be parsed");
+        assert!(sm.is_ok(), "FSM shall be parsed");
 
         let fsm = sm.unwrap();
 

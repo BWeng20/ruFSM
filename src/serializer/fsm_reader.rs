@@ -38,14 +38,14 @@ where
 
             let states_len = self.reader.read_usize();
             for _idx in 0..states_len {
-                let mut state = State::new(&"".to_string());
+                let mut state = State::new("");
                 self.read_state(&mut state);
                 fsm.states.push(state);
             }
             Ok(fsm)
         } else {
             Err(format!(
-                "Version missmatch: {} is not {} as expected",
+                "Version mismatch: {} is not {} as expected",
                 version, FSM_WRITER_VERSION
             ))
         }

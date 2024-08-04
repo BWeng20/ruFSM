@@ -37,7 +37,7 @@ pub const SCXML_TARGET_INVOKE_ID_PREFIX: &str = "#_";
 /// Shortcut for SCXML I/O Processors type
 pub const SCXML_TYPE: &str = "scxml";
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ScxmlEventIOProcessor {
     pub location: String,
     pub handle: EventIOProcessorHandle,
@@ -47,11 +47,10 @@ impl ScxmlEventIOProcessor {
     pub fn new() -> ScxmlEventIOProcessor {
         info!("Scxml Event Processor starting");
 
-        let e = ScxmlEventIOProcessor {
+        ScxmlEventIOProcessor {
             location: "scxml-processor".to_string(),
             handle: EventIOProcessorHandle::new(),
-        };
-        e
+        }
     }
 
     fn send_to_session(
@@ -165,18 +164,17 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                             global_lock.enqueue_internal(Event::error_communication());
                         }
                         Some(invokeid) => {
-                            let session_id =
-                                match global_lock.child_sessions.get(&invokeid.to_string()) {
-                                    None => {
-                                        error!(
-                                            "InvokeId of target {} '{}' is not available.",
-                                            invokeid, target
-                                        );
-                                        global_lock.enqueue_internal(Event::error_communication());
-                                        return;
-                                    }
-                                    Some(session) => session.session_id,
-                                };
+                            let session_id = match global_lock.child_sessions.get(invokeid) {
+                                None => {
+                                    error!(
+                                        "InvokeId of target {} '{}' is not available.",
+                                        invokeid, target
+                                    );
+                                    global_lock.enqueue_internal(Event::error_communication());
+                                    return;
+                                }
+                                Some(session) => session.session_id,
+                            };
                             self.send_to_session(&mut global_lock, session_id, event);
                         }
                     }

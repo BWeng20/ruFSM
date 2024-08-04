@@ -127,7 +127,7 @@ impl FsmExecutor {
     pub fn execute_with_data(
         &mut self,
         uri: &str,
-        data: &Vec<ParamPair>,
+        data: &[ParamPair],
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
         #[cfg(feature = "Trace")] trace: TraceMode,
@@ -158,7 +158,7 @@ impl FsmExecutor {
     pub fn execute_with_data_from_xml(
         &mut self,
         xml: &str,
-        data: &Vec<ParamPair>,
+        data: &[ParamPair],
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
         finish_mode: FinishMode,
@@ -186,9 +186,7 @@ impl FsmExecutor {
                 );
                 Ok(session)
             }
-            Err(message) => {
-                return Err(message);
-            }
+            Err(message) => Err(message),
         }
     }
 

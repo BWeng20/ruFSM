@@ -215,7 +215,7 @@ pub trait Datamodel {
             None => None,
             Some(ct) => {
                 match &ct.content_expr {
-                    None => ct.content.as_ref().map(|c| c.clone()),
+                    None => ct.content.clone(),
                     Some(expr) => {
                         match self.execute(expr.as_str()) {
                             None => {

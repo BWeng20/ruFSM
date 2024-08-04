@@ -50,7 +50,7 @@ async fn main() {
                 #[cfg(feature = "yaml-config")]
                 {
                     config = Some(load_yaml_config(arg.as_str()));
-                    test_spec_file = arg.clone();
+                    test_spec_file.clone_from(arg);
                 }
                 #[cfg(not(feature = "yaml-config"))]
                 {
@@ -64,7 +64,7 @@ async fn main() {
                 #[cfg(feature = "json-config")]
                 {
                     config = Some(load_json_config(arg.as_str()));
-                    test_spec_file = arg.clone();
+                    test_spec_file.clone_from(arg);
                 }
                 #[cfg(not(feature = "json-config"))]
                 {

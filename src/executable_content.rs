@@ -533,23 +533,17 @@ mod tests {
 
     #[test]
     fn delay_parse() {
-        assert_eq!(parse_duration_to_milliseconds(&"6.7s".to_string()), 6700);
-        assert_eq!(
-            parse_duration_to_milliseconds(&"0.5d".to_string()),
-            12 * 60 * 60 * 1000
-        );
-        assert_eq!(parse_duration_to_milliseconds(&"1m".to_string()), 60 * 1000);
-        assert_eq!(parse_duration_to_milliseconds(&"0.001s".to_string()), 1);
-        assert_eq!(parse_duration_to_milliseconds(&"6.7S".to_string()), 6700);
-        assert_eq!(
-            parse_duration_to_milliseconds(&"0.5D".to_string()),
-            12 * 60 * 60 * 1000
-        );
-        assert_eq!(parse_duration_to_milliseconds(&"1M".to_string()), 60 * 1000);
-        assert_eq!(parse_duration_to_milliseconds(&"0.001S".to_string()), 1);
+        assert_eq!(parse_duration_to_milliseconds("6.7s"), 6700);
+        assert_eq!(parse_duration_to_milliseconds("0.5d"), 12 * 60 * 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("1m"), 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("0.001s"), 1);
+        assert_eq!(parse_duration_to_milliseconds("6.7S"), 6700);
+        assert_eq!(parse_duration_to_milliseconds("0.5D"), 12 * 60 * 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("1M"), 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("0.001S"), 1);
 
-        assert_eq!(parse_duration_to_milliseconds(&"x1S".to_string()), -1);
-        assert_eq!(parse_duration_to_milliseconds(&"1Sx".to_string()), -1);
+        assert_eq!(parse_duration_to_milliseconds("x1S"), -1);
+        assert_eq!(parse_duration_to_milliseconds("1Sx"), -1);
     }
 }
 
@@ -577,16 +571,16 @@ pub fn parse_duration_to_milliseconds(d: &str) -> i64 {
                 let mut v: f64 = value.parse::<f64>().unwrap();
                 match unit {
                     "D" | "d" => {
-                        v = v * 24.0 * 60.0 * 60.0 * 1000.0;
+                        v *= 24.0 * 60.0 * 60.0 * 1000.0;
                     }
                     "H" | "h" => {
-                        v = v * 60.0 * 60.0 * 1000.0;
+                        v *= 60.0 * 60.0 * 1000.0;
                     }
                     "M" | "m" => {
-                        v = v * 60000.0;
+                        v *= 60000.0;
                     }
                     "S" | "s" => {
-                        v = v * 1000.0;
+                        v *= 1000.0;
                     }
                     "MS" | "ms" => {}
                     _ => {
@@ -599,6 +593,7 @@ pub fn parse_duration_to_milliseconds(d: &str) -> i64 {
     }
 }
 
+#[derive(Default)]
 pub struct DefaultExecutableContentTracer {
     trace_depth: usize,
 }
@@ -630,7 +625,7 @@ impl ExecutableContentTracer for DefaultExecutableContentTracer {
                 buf.push_str(format!("{}:{}", name, value).as_str());
             }
         }
-        buf.push_str("]");
+        buf.push(']');
 
         self.trace(&buf);
     }
@@ -638,13 +633,10 @@ impl ExecutableContentTracer for DefaultExecutableContentTracer {
     fn print_sub_content(&mut self, name: &str, fsm: &Fsm, content_id: ExecutableContentId) {
         self.trace(format!("{:1$}{2} {{", " ", 2 * self.trace_depth, name).as_str());
         self.trace_depth += 1;
-        match fsm.executableContent.get(&content_id) {
-            Some(vec) => {
-                for ec in vec {
-                    ec.trace(self, fsm);
-                }
+        if let Some(vec) = fsm.executableContent.get(&content_id) {
+            for ec in vec {
+                ec.trace(self, fsm);
             }
-            None => {}
         }
         self.trace_depth -= 1;
         self.trace(format!("{:1$}}}", " ", 2 * self.trace_depth).as_str());

@@ -287,7 +287,7 @@ impl ReaderState {
     /// Process a XML file.
     /// For technical reasons (to handle user content) the file is read in a temporary buffer.
     fn process_file(&mut self, file: &Path) -> Result<&str, String> {
-        self.file = file.to_owned();
+        self.file.clone_from(&file.to_path_buf());
         match File::open(self.file.clone()) {
             Ok(mut f) => {
                 self.content.clear();
@@ -382,7 +382,7 @@ impl ReaderState {
     fn parse_state_specification(&mut self, target_name: &str, targets: &mut Vec<StateId>) {
         target_name
             .split_ascii_whitespace()
-            .for_each(|target| targets.push(self.get_or_create_state(&target.to_string(), false)));
+            .for_each(|target| targets.push(self.get_or_create_state(target, false)));
     }
 
     fn parse_boolean(&mut self, value: &Option<&String>, default: bool) -> bool {
@@ -519,13 +519,7 @@ impl ReaderState {
     fn get_parent_tag(&self) -> &str {
         let mut r = "";
         if !self.stack.is_empty() {
-            r = self
-                .stack
-                .last()
-                .as_ref()
-                .unwrap()
-                .current_tag
-                .as_str();
+            r = self.stack.last().as_ref().unwrap().current_tag.as_str();
         }
         r
     }
@@ -535,7 +529,7 @@ impl ReaderState {
         if !allowed_parents.contains(&parent_tag) {
             let mut allowed_parents_s = "".to_string();
             let len = allowed_parents.len();
-            for i in 0..allowed_parents.len() {
+            for (i, ai) in allowed_parents.iter().enumerate() {
                 allowed_parents_s += format!(
                     "{}<{}>",
                     if i > 0 {
@@ -547,7 +541,7 @@ impl ReaderState {
                     } else {
                         ""
                     },
-                    allowed_parents[i]
+                    ai
                 )
                 .as_str();
             }
@@ -559,7 +553,7 @@ impl ReaderState {
         parent_tag
     }
 
-    fn get_or_create_state(&mut self, name: &String, parallel: bool) -> StateId {
+    fn get_or_create_state(&mut self, name: &str, parallel: bool) -> StateId {
         let m = self.fsm.statesNames.get(name).cloned();
         match m {
             None => {
@@ -590,11 +584,10 @@ impl ReaderState {
         parallel: bool,
         parent: StateId,
     ) -> StateId {
-        let sname: String;
-        match attr.get(ATTR_ID) {
-            None => sname = self.generate_name(),
-            Some(id) => sname = id.clone(),
-        }
+        let sname = match attr.get(ATTR_ID) {
+            None => self.generate_name(),
+            Some(id) => id.clone(),
+        };
         let id = self.get_or_create_state(&sname, parallel);
 
         let initial;
@@ -699,7 +692,7 @@ impl ReaderState {
 
     fn read_from_relative_path(&mut self, path: &str) -> Result<String, String> {
         let file_src = self.get_resolved_path(path)?;
-        self.file = file_src.clone();
+        self.file.clone_from(&file_src);
         match File::open(file_src.clone()) {
             Ok(mut file) => {
                 let mut buf = String::with_capacity(file.metadata().unwrap().len() as usize);
@@ -710,8 +703,7 @@ impl ReaderState {
             }
             Err(e) => Err(format!(
                 "Failed to load relative path {:?}: {}",
-                file_src,
-                e.to_string()
+                file_src, e
             )),
         }
     }
@@ -766,8 +758,7 @@ impl ReaderState {
     // A new "state" element started
     fn start_state(&mut self, attr: &AttributeMap) -> StateId {
         self.verify_parent_tag(TAG_STATE, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
-        let sid =
-            self.get_or_create_state_with_attributes(&attr, false, self.current.current_state);
+        let sid = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
         self.current.current_state = sid;
         sid
     }
@@ -857,41 +848,36 @@ impl ReaderState {
             .to_string();
         let mut invoke = Invoke::new();
 
-        let type_opt = attr.get(ATTR_TYPE);
-        if type_opt.is_some() {
-            invoke.type_name = type_opt.unwrap().clone();
+        if let Some(type_opt) = attr.get(ATTR_TYPE) {
+            invoke.type_name.clone_from(type_opt);
         }
-        let typeexpr = attr.get(ATTR_TYPEEXPR);
-        if typeexpr.is_some() {
-            invoke.type_expr = typeexpr.unwrap().clone();
+        if let Some(typeexpr) = attr.get(ATTR_TYPEEXPR) {
+            invoke.type_expr.clone_from(typeexpr);
         }
 
         // W3c: Must not occur with the 'srcexpr' attribute or the <content> element.
-        let src = attr.get(ATTR_SRC);
-        if src.is_some() {
-            invoke.src = src.unwrap().clone();
+        if let Some(src) = attr.get(ATTR_SRC) {
+            invoke.src.clone_from(src);
         }
-        let srcexpr = attr.get(ATTR_SRCEXPR);
-        if srcexpr.is_some() {
-            invoke.src_expr = srcexpr.unwrap().clone();
+        if let Some(srcexpr) = attr.get(ATTR_SRCEXPR) {
+            invoke.src_expr.clone_from(srcexpr);
         }
 
         // TODO--
-        let id = attr.get(ATTR_ID);
-        if id.is_some() {
-            invoke.invoke_id = id.unwrap().clone();
+        if let Some(id) = attr.get(ATTR_ID) {
+            invoke.invoke_id.clone_from(id);
         }
 
-        invoke.parent_state_name = self.get_current_state().name.clone();
+        invoke
+            .parent_state_name
+            .clone_from(&self.get_current_state().name);
 
-        let idlocation = attr.get(ATTR_IDLOCATION);
-        if idlocation.is_some() {
-            invoke.external_id_location = idlocation.unwrap().clone();
+        if let Some(idlocation) = attr.get(ATTR_IDLOCATION) {
+            invoke.external_id_location.clone_from(idlocation);
         }
 
-        let namelist = attr.get(ATTR_NAMELIST);
-        if namelist.is_some() {
-            self.parse_location_expressions(namelist.unwrap(), &mut invoke.name_list);
+        if let Some(name_list) = attr.get(ATTR_NAMELIST) {
+            self.parse_location_expressions(name_list, &mut invoke.name_list);
         }
         invoke.autoforward = self.parse_boolean(&attr.get(ATTR_AUTOFORWARD), false);
 
@@ -1045,13 +1031,12 @@ impl ReaderState {
 
         let ec_id = self.current_executable_content;
         let mut fe = ForEach::new();
-        fe.array = Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr).clone();
-        fe.item = Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr).clone();
-        match attr.get(ATTR_INDEX) {
-            Some(index) => {
-                fe.index = index.clone();
-            }
-            None => {}
+        fe.array
+            .clone_from(Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr));
+        fe.item
+            .clone_from(Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr));
+        if let Some(index) = attr.get(ATTR_INDEX) {
+            fe.index.clone_from(index);
         }
         self.add_executable_content(Box::new(fe));
         let content_id = self.start_executable_content_region(true, TAG_FOR_EACH);
@@ -1091,16 +1076,16 @@ impl ReaderState {
 
         let mut cancel = Cancel::new();
 
-        if sendid.is_some() {
+        if let Some(sendid_value) = sendid {
             if sendidexpr.is_some() {
                 panic!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_CANCEL, ATTR_SENDID, ATTR_SENDIDEXPR
                 );
             }
-            cancel.send_id = sendid.unwrap().clone();
-        } else if sendidexpr.is_some() {
-            cancel.send_id_expr = sendidexpr.unwrap().clone();
+            cancel.send_id.clone_from(sendid_value);
+        } else if let Some(sendidexpr_value) = sendidexpr {
+            cancel.send_id_expr.clone_from(sendidexpr_value);
         } else {
             panic!(
                 "{}: attribute {} or {} must be given",
@@ -1272,71 +1257,71 @@ impl ReaderState {
         let event = attr.get(ATTR_EVENT);
         let eventexpr = attr.get(ATTR_EVENTEXPR);
 
-        if event.is_some() {
+        if let Some(event_value) = event {
             if eventexpr.is_some() {
                 panic!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR
                 );
             }
-            send_params.event = event.unwrap().clone();
-        } else if eventexpr.is_some() {
-            send_params.event_expr = eventexpr.unwrap().clone();
+            send_params.event.clone_from(event_value);
+        } else if let Some(eventexpr_value) = eventexpr {
+            send_params.event_expr.clone_from(eventexpr_value);
         }
 
         let target = attr.get(ATTR_TARGET);
         let targetexpr = attr.get(ATTR_TARGETEXPR);
-        if target.is_some() {
+        if let Some(target_val) = target {
             if targetexpr.is_some() {
                 panic!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR
                 );
             }
-            send_params.target = target.unwrap().clone();
-        } else if targetexpr.is_some() {
-            send_params.target_expr = targetexpr.unwrap().clone();
+            send_params.target.clone_from(target_val);
+        } else if let Some(targetexpr_value) = targetexpr {
+            send_params.target_expr.clone_from(targetexpr_value);
         }
 
         let type_attr = attr.get(ATTR_TYPE);
         let typeexpr = attr.get(ATTR_TYPEEXPR);
-        if type_attr.is_some() {
+        if let Some(type_attr_value) = type_attr {
             if typeexpr.is_some() {
                 panic!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR
                 );
             }
-            send_params.type_value = type_attr.unwrap().clone();
-        } else if typeexpr.is_some() {
-            send_params.type_expr = typeexpr.unwrap().clone();
+            send_params.type_value.clone_from(type_attr_value);
+        } else if let Some(typeexpr_value) = typeexpr {
+            send_params.type_expr.clone_from(typeexpr_value);
         }
 
         let id = attr.get(ATTR_ID);
         let idlocation = attr.get(ATTR_IDLOCATION);
-        if id.is_some() {
+        if let Some(id_value) = id {
             if idlocation.is_some() {
                 panic!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_ID, ATTR_IDLOCATION
                 );
             }
-            send_params.name = id.unwrap().clone();
-        } else if idlocation.is_some() {
-            send_params.name_location = idlocation.unwrap().clone();
+            send_params.name.clone_from(id_value);
+        } else if let Some(idlocation_value) = idlocation {
+            send_params.name_location.clone_from(idlocation_value);
         }
 
         let delay_attr = attr.get(ATTR_DELAY);
         let delay_expr_attr = attr.get(ATTR_DELAYEXPR);
 
-        if delay_expr_attr.is_some() {
+        if let Some(delay_expr_attr_value) = delay_expr_attr {
             if delay_attr.is_some() {
                 panic!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR
                 );
             }
-            send_params.delay_expr = delay_expr_attr.unwrap().clone();
+            send_params.delay_expr.clone_from(delay_expr_attr_value);
         } else if delay_attr.is_some() {
             if (!delay_attr.unwrap().is_empty())
                 && type_attr.is_some()
@@ -1363,9 +1348,8 @@ impl ReaderState {
             }
         }
 
-        let name_list = attr.get(ATTR_NAMELIST);
-        if name_list.is_some() {
-            send_params.name_list = name_list.unwrap().clone();
+        if let Some(name_list_value) = attr.get(ATTR_NAMELIST) {
+            send_params.name_list.clone_from(name_list_value);
         }
         self.add_executable_content(Box::new(send_params));
     }
@@ -1374,22 +1358,21 @@ impl ReaderState {
     fn read_content(&mut self, tag: &str, reader: &mut XReader) -> String {
         let start = BytesStart::new(tag.to_string());
         let end = start.to_end().into_owned();
-        let content;
 
         let mut buf = Vec::new();
-        match reader.read_to_end_into(end.name(), &mut buf) {
+        let content = match reader.read_to_end_into(end.name(), &mut buf) {
             Ok(span) => {
-                content = self.content[(span.start as usize)..(span.end as usize)]
+                let r = self.content[(span.start as usize)..(span.end as usize)]
                     .trim()
                     .to_string();
                 #[cfg(feature = "Debug_Reader")]
-
-                debug!("{} content {} - {}: {}", tag, span.start, span.end, content);
+                debug!("{} content {} - {}: {}", tag, span.start, span.end, r);
+                r
             }
             Err(e) => {
                 panic!("XML invalid. {}", e);
             }
-        }
+        };
         // Remove element from stack
         self.pop();
 
@@ -1424,10 +1407,7 @@ impl ReaderState {
                     Some(dd) => {
                         dd.content = Some(CommonContent {
                             content,
-                            content_expr: match expr {
-                                None => None,
-                                Some(_) => Some(expr.unwrap().to_string()),
-                            },
+                            content_expr: expr.map(|x| x.to_string()),
                         });
                     }
                     None => {
@@ -1440,10 +1420,7 @@ impl ReaderState {
                 let invoke = state.invoke.last_mut();
                 invoke.content = Some(CommonContent {
                     content,
-                    content_expr: match expr {
-                        Some(expr) => Some(expr.to_string()),
-                        None => None,
-                    },
+                    content_expr: expr.map(|x| x.to_string()),
                 });
             }
             TAG_SEND => {
@@ -1453,10 +1430,7 @@ impl ReaderState {
                     let send = get_safe_executable_content_as::<SendParameters>(ec.unwrap());
                     if expr.is_some() || content.is_some() {
                         send.content = Some(CommonContent {
-                            content_expr: match expr {
-                                None => None,
-                                Some(v) => Some(v.clone()),
-                            },
+                            content_expr: Option::map(expr, |v| v.clone()),
                             content,
                         });
                     }
@@ -1478,20 +1452,22 @@ impl ReaderState {
 
         let mut param = Parameter::new();
 
-        param.name = Self::get_required_attr(TAG_PARAM, ATTR_NAME, attr).clone();
+        param
+            .name
+            .clone_from(Self::get_required_attr(TAG_PARAM, ATTR_NAME, attr));
         let expr = attr.get(ATTR_EXPR);
-        if expr.is_some() {
-            param.expr = expr.unwrap().clone();
+        if let Some(expr_value) = expr {
+            param.expr.clone_from(expr_value);
         }
         let location = attr.get(ATTR_LOCATION);
-        if location.is_some() {
+        if let Some(location_value) = location {
             if expr.is_some() {
                 panic!(
                     "{} shall have only {} or {}, but not both.",
                     TAG_PARAM, ATTR_LOCATION, ATTR_EXPR
                 );
             }
-            param.location = location.unwrap().clone();
+            param.location.clone_from(location_value);
         }
 
         match parent_tag.as_str() {
@@ -1539,8 +1515,8 @@ impl ReaderState {
         );
         let label = attr.get(ATTR_LABEL);
         let expr = attr.get(ATTR_EXPR);
-        if expr.is_some() {
-            self.add_executable_content(Box::new(Log::new(&label, expr.unwrap().as_str())));
+        if let Some(exprs) = expr {
+            self.add_executable_content(Box::new(Log::new(&label, exprs.as_str())));
         }
     }
 
@@ -1558,11 +1534,13 @@ impl ReaderState {
         );
 
         let mut assign = Assign::new();
-        assign.location = Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr).clone();
+        assign
+            .location
+            .clone_from(Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr));
 
         let expr = attr.get(ATTR_EXPR);
-        if expr.is_some() {
-            assign.expr = expr.unwrap().clone();
+        if let Some(expr_value) = expr {
+            assign.expr.clone_from(expr_value);
         }
 
         let assign_text = if has_content {
@@ -1596,7 +1574,9 @@ impl ReaderState {
         );
 
         let mut raise = Raise::new();
-        raise.event = Self::get_required_attr(TAG_RAISE, ATTR_EVENT, attr).clone();
+        raise
+            .event
+            .clone_from(Self::get_required_attr(TAG_RAISE, ATTR_EVENT, attr));
 
         self.add_executable_content(Box::new(raise));
     }
@@ -1608,7 +1588,7 @@ impl ReaderState {
         self.in_scxml = true;
         match attr.get(ATTR_NAME) {
             Some(n) => {
-                self.fsm.name = n.clone();
+                self.fsm.name.clone_from(n);
             }
             None => {
                 // @TODO: Filename?
@@ -1634,12 +1614,12 @@ impl ReaderState {
             }
         }
         let version = attr.get(TAG_VERSION);
-        if version.is_some() {
-            self.fsm.version = version.unwrap().clone();
+        if let Some(version_value) = version {
+            self.fsm.version.clone_from(version_value);
             #[cfg(feature = "Debug_Reader")]
-            debug!(" scxml.version = {}", version.unwrap());
+            debug!(" scxml.version = {}", version_value);
         }
-        self.fsm.pseudo_root = self.get_or_create_state_with_attributes(&attr, false, 0);
+        self.fsm.pseudo_root = self.get_or_create_state_with_attributes(attr, false, 0);
         self.current.current_state = self.fsm.pseudo_root;
         self.start_executable_content_region(false, TAG_SCXML);
     }
@@ -1681,7 +1661,7 @@ impl ReaderState {
 
         debug!("Start Element {}", name);
 
-        let attr = &decode_attributes(&reader, &mut e.attributes());
+        let attr = &decode_attributes(reader, &mut e.attributes());
 
         match name {
             TAG_INCLUDE => {
@@ -1784,7 +1764,7 @@ impl ReaderState {
             let parent = self.file.parent();
             match parent {
                 Some(parent_path) => {
-                    let pp = parent_path.join(&src);
+                    let pp = parent_path.join(src);
                     pp.to_owned()
                 }
                 None => src.to_owned(),
@@ -1794,7 +1774,7 @@ impl ReaderState {
             return Ok(to_current);
         } else {
             for ip in &self.include_paths {
-                let rp = ip.join(&src);
+                let rp = ip.join(src);
                 if rp.exists() {
                     return Ok(rp);
                 }
@@ -1913,10 +1893,10 @@ fn decode_attributes(reader: &XReader, attr: &mut Attributes) -> AttributeMap {
 }
 
 /// Read and parse the FSM from an XML file
-pub fn parse_from_xml_file(file: &Path, include_paths: &Vec<PathBuf>) -> Result<Box<Fsm>, String> {
+pub fn parse_from_xml_file(file: &Path, include_paths: &[PathBuf]) -> Result<Box<Fsm>, String> {
     let mut rs = ReaderState::new();
-    rs.include_paths = include_paths.clone();
-    let r = rs.process_file(&file);
+    rs.include_paths = Vec::from(include_paths);
+    let r = rs.process_file(file);
     match r {
         Ok(_m) => Ok(rs.fsm),
         Err(e) => Err(e),
@@ -1924,9 +1904,9 @@ pub fn parse_from_xml_file(file: &Path, include_paths: &Vec<PathBuf>) -> Result<
 }
 
 /// Read and parse the FSM from an URI
-pub fn parse_from_uri(uri: String, include_paths: &Vec<PathBuf>) -> Result<Box<Fsm>, String> {
+pub fn parse_from_uri(uri: String, include_paths: &[PathBuf]) -> Result<Box<Fsm>, String> {
     let mut rs = ReaderState::new();
-    rs.include_paths = include_paths.clone();
+    rs.include_paths = Vec::from(include_paths);
     match rs.read_from_uri(&uri) {
         Ok(source) => {
             rs.content = source;
@@ -1954,10 +1934,10 @@ pub fn parse_from_xml(xml: String) -> Result<Box<Fsm>, String> {
 /// Reads the FSM from a XML String
 pub fn parse_from_xml_with_includes(
     xml: String,
-    include_paths: &Vec<PathBuf>,
+    include_paths: &[PathBuf],
 ) -> Result<Box<Fsm>, String> {
     let mut rs = ReaderState::new();
-    rs.include_paths = include_paths.clone();
+    rs.include_paths = Vec::from(include_paths);
     rs.content = xml;
     let r = rs.process();
     match r {
@@ -1994,7 +1974,7 @@ mod tests {
     <transition><script src='xml/example/script.js'></script></transition></state></scxml>"
                 .to_string(),
         );
-        assert_eq!(r.is_ok(), true);
+        assert!(r.is_ok());
 
         let fsm = r.unwrap();
 
@@ -2010,7 +1990,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(b, true);
+        assert!(b);
     }
 
     #[test]

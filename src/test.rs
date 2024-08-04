@@ -59,7 +59,7 @@ pub struct TestUseCase {
     pub include_paths: Vec<PathBuf>,
 }
 
-pub fn load_fsm(file_path: &str, include_paths: &Vec<PathBuf>) -> Result<Box<Fsm>, String> {
+pub fn load_fsm(file_path: &str, include_paths: &[PathBuf]) -> Result<Box<Fsm>, String> {
     #[cfg(feature = "xml")]
     return scxml_reader::parse_from_xml_file(Path::new(file_path), include_paths);
     #[cfg(not(feature = "xml"))]
@@ -238,7 +238,7 @@ pub fn run_test_manual_with_send(
                 }
                 Some(final_configuration) => {
                     match verify_final_configuration(
-                        &expected_final_configuration,
+                        expected_final_configuration,
                         final_configuration,
                     ) {
                         Ok(states) => {
@@ -288,7 +288,7 @@ pub fn start_watchdog(test_name: &str, timeout: u64) -> Box<Sender<String>> {
 /// Informs the watchdog that the test has finished.
 ///
 /// + watchdog_sender - the sender-channel to the watchdog.
-pub fn disable_watchdog(watchdog_sender: &Box<Sender<String>>) {
+pub fn disable_watchdog(watchdog_sender: &Sender<String>) {
     match watchdog_sender.send("finished".to_string()) {
         Ok(_) => {}
         Err(err) => {
@@ -310,7 +310,7 @@ pub fn verify_final_configuration(
             return Err(fc_name.clone());
         }
     }
-    return Ok(expected_states.join(","));
+    Ok(expected_states.join(","))
 }
 
 /// Aborts the test with 1 exit code.\

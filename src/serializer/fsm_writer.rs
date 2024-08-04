@@ -71,9 +71,9 @@ where
     }
 
     pub fn write_parameter(&mut self, value: &Parameter) {
-        self.writer.write_str(&value.name.as_str());
-        self.writer.write_str(&value.expr.as_str());
-        self.writer.write_str(&value.location.as_str());
+        self.writer.write_str(value.name.as_str());
+        self.writer.write_str(value.expr.as_str());
+        self.writer.write_str(value.location.as_str());
     }
 
     pub fn write_done_data(&mut self, value: &DoneData) {
@@ -100,7 +100,7 @@ where
     pub fn write_state(&mut self, state: &State) {
         self.write_state_id(state.id);
         self.write_doc_id(state.doc_id);
-        self.writer.write_str(&state.name.as_str());
+        self.writer.write_str(state.name.as_str());
         self.write_transition_id(state.initial);
 
         self.writer.write_usize(state.states.len());

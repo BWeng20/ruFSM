@@ -108,7 +108,7 @@ pub fn get_arguments(arguments: &[&ArgOption]) -> (HashMap<&'static str, String>
         let arg = &args[idx];
         idx += 1;
 
-        if arg.starts_with("-") {
+        if arg.starts_with('-') {
             let sarg = arg.trim_start_matches('-');
             let mut match_found = false;
             for opt in arguments {

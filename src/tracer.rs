@@ -220,7 +220,7 @@ pub trait Tracer: Send + Debug {
     }
 
     /// Helper method to trace a vector of ids.
-    fn trace_id_vec(&self, what: &str, l: &Vec<u32>) {
+    fn trace_id_vec(&self, what: &str, l: &[u32]) {
         self.trace(format!("{}=[{}]", what, &fsm::vec_to_string(l)).as_str());
     }
 
