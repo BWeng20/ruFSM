@@ -3138,7 +3138,7 @@ impl DoneData {
 /// - \<parallel\> Defines a parallel substate. Occurs 0 or more times. See 3.4 \<parallel\>
 /// - \<final\>. Defines a final substate. Occurs 0 or more times. See 3.7 \<final\>.
 /// - \<history\> A child pseudo-state which records the descendant state(s) that the parent state
-///   was in the last time the system transitioned from the parent.
+///   was in the last time the system transitioned from the parent.\
 ///   May occur 0 or more times. See 3.10 \<history\>.
 /// - \<datamodel\> Defines part or all of the data model. Occurs 0 or 1 times. See 5.2 \<datamodel\>
 /// - \<invoke> Invokes an external service. Occurs 0 or more times. See 6.4 \<invoke\> for details.
