@@ -3,6 +3,7 @@
 //! See [W3C:Algorithm for SCXML Interpretation](/doc/W3C_SCXML_2024_07_13/index.html#AlgorithmforSCXMLInterpretation)
 
 #![allow(non_camel_case_types)]
+#![allow(clippy::doc_lazy_continuation)]
 
 use std::collections::{HashMap, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
