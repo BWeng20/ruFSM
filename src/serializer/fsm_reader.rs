@@ -5,7 +5,7 @@ use std::io::Read;
 
 use crate::datamodel::{Data, DataStore};
 use crate::executable_content;
-use crate::executable_content::{ExecutableContent, Expression, If, Log, Script};
+use crate::executable_content::{ExecutableContent, Log };
 use crate::fsm::{
     BindingType, CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, HistoryType,
     Invoke, Parameter, State, StateId, Transition, TransitionId, TransitionType,
@@ -267,20 +267,20 @@ where
     }
 
     pub fn read_executable_content_if(&mut self) -> Box<dyn ExecutableContent> {
-        return Box::new(If::new(""));
+        todo!()
     }
 
     pub fn read_executable_content_expression(&mut self) -> Box<dyn ExecutableContent> {
-        return Box::new(Expression::new());
+        todo!()
     }
 
     pub fn read_executable_content_script(&mut self) -> Box<dyn ExecutableContent> {
-        return Box::new(Script::new());
+        todo!()
     }
     pub fn read_executable_content_log(&mut self) -> Box<dyn ExecutableContent> {
         let label = self.reader.read_string();
         let expression = self.reader.read_string();
-        return Box::new(Log::new(&Some(&label), &expression));
+        Box::new(Log::new(&Some(&label), &expression))
     }
     pub fn read_executable_content_for_each(&mut self) -> Box<dyn ExecutableContent> {
         todo!()

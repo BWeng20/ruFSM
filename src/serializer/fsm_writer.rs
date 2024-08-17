@@ -53,7 +53,7 @@ where
         }
 
         self.writer.write_usize(fsm.transitions.len());
-        for (_id, transition) in &fsm.transitions {
+        for transition in fsm.transitions.values() {
             self.write_transition(transition);
         }
 
@@ -62,7 +62,7 @@ where
             self.write_executable_content_id(*content_id);
             self.writer.write_usize(content.len());
             for executable_content in content {
-                self.write_executable_content(executable_content);
+                self.write_executable_content(executable_content.as_ref());
             }
         }
     }
@@ -219,10 +219,8 @@ where
 
     pub fn write_executable_content(
         &mut self,
-        executable_content_box: &Box<dyn ExecutableContent>,
+        executable_content: &dyn ExecutableContent,
     ) {
-        let executable_content = executable_content_box.as_ref();
-
         let ec_type = executable_content.get_type();
         self.writer.write_str(ec_type);
 

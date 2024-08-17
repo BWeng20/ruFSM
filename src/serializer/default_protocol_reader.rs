@@ -156,7 +156,7 @@ impl<R: Read> DefaultProtocolReader<R> {
                         self.type_and_value.number = 0;
                         let us = (val & 0x0F) as usize;
                         match self.reader.read_exact(&mut self.buffer[0..us]) {
-                            Ok(_) => match std::str::from_utf8(&mut self.buffer[0..us]) {
+                            Ok(_) => match std::str::from_utf8(&self.buffer[0..us]) {
                                 Ok(val) => {
                                     self.type_and_value.string.insert_str(0, val);
                                 }
@@ -233,15 +233,15 @@ impl<R: Read> ProtocolReader<R> for DefaultProtocolReader<R> {
                 }
             };
         }
-        return None;
+        None
     }
 
     fn read_string(&mut self) -> String {
         self.read_type_and_size();
         if self.verify_string_type() {
-            return self.type_and_value.string.clone();
+            self.type_and_value.string.clone()
         } else {
-            return "".to_string();
+            "".to_string()
         }
     }
 
