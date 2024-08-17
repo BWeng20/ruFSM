@@ -20,11 +20,16 @@ pub trait ProtocolWriter<W: Write> {
     /// Writes a str
     fn write_str(&mut self, value: &str);
 
-    /// Writes an usize values. Implementations can assume that the value are in u32 range.
+    /// Writes an usize value. Implementations can assume that the value are in u32 range.
     fn write_usize(&mut self, value: usize);
 
-    /// Writes an unsigned values
+    /// Writes an unsigned value
     fn write_uint(&mut self, value: u64);
+
+    /// Writes an unsigned byte
+    fn write_u8(&mut self, value: u8) {
+        self.write_uint(value as u64)
+    }
 
     fn has_error(&self) -> bool;
 }

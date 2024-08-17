@@ -32,17 +32,22 @@ async fn main() {
         process::exit(1);
     }
 
+    let source_file = final_args[0].clone();
+    let target_file = final_args[1].clone();
+
     let include_paths = include_path_from_arguments(&named_opt);
-    match scxml_reader::parse_from_uri(final_args[0].clone(), &include_paths) {
-        Ok(fsm) => match File::create(final_args[1].clone()) {
+    println!("Reading from {}", source_file);
+    match scxml_reader::parse_from_uri(source_file, &include_paths) {
+        Ok(fsm) => match File::create(target_file.clone()) {
             Ok(f) => {
+                println!("Writing to {}", &target_file);
                 let protocol = DefaultProtocolWriter::new(BufWriter::new(f));
                 let mut writer = FsmWriter::new(Box::new(protocol));
                 writer.write(&fsm);
                 writer.close();
             }
             Err(err) => {
-                error!("Failed to open FSM: {}", err);
+                error!("Failed to open output: {}", err);
                 process::exit(2);
             }
         },

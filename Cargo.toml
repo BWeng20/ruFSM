@@ -12,14 +12,14 @@ name = "test"
 
 [[bin]]
 name = "scxml_to_fsm"
-
+required-features = ["xml", "serializer"]
 
 [lib]
 name = "rfsm"
 path = "src/lib.rs"
 
 [features]
-default = ["xml", "BasicHttpEventIOProcessor", "ECMAScript", "EnvLog", "yaml-config", "json-config", "Trace_Method", "Trace_Event", "Trace_State"  ]
+default = [ "BasicHttpEventIOProcessor", "ECMAScript", "EnvLog", "yaml-config", "json-config", "xml", "serializer", "Trace_State" ]
 ECMAScript = ["boa_engine", "boa_gc"]
 EnvLog = ["env_logger"]
 BasicHttpEventIOProcessor = ["hyper", "http-body-util", "hyper-util", "form_urlencoded"]
@@ -28,6 +28,7 @@ json-config = ["serde", "serde_json", "serde/serde_derive"]
 Trace_Method = [ "Trace" ]
 Trace_State = [ "Trace"  ]
 Trace_Event = [ "Trace"  ]
+serializer = []
 # "Trace" combines the other trace features
 Trace = []
 # Enables debug output from scxml-reader

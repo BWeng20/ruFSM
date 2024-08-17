@@ -6,7 +6,8 @@ use std::io::Read;
 /// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).
 pub trait ProtocolReader<R: Read> {
     /// Reads and verify the protocol version
-    fn verify_version(&mut self) -> bool;
+    /// Goes to error state if version doesn't matchs.
+    fn verify_version(&mut self);
 
     /// Close the underlying stream
     fn close(&mut self);
@@ -20,7 +21,7 @@ pub trait ProtocolReader<R: Read> {
     /// Reads a string
     fn read_string(&mut self) -> String;
 
-    /// Writes an usize values. Implementations can assume that the value are in u32 range.
+    /// Reads an usize values.
     fn read_usize(&mut self) -> usize;
 
     /// Reads an unsigned values

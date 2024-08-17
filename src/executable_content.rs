@@ -14,7 +14,7 @@ use regex::Regex;
 
 use crate::datamodel::{Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
 use crate::fsm::{
-    opt_vec_to_string, vec_to_string, Cancel, ExecutableContentId, Fsm, Parameter, SendParameters,
+    opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, Parameter,
 };
 use crate::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
 use crate::{get_global, Event, EventType};
@@ -38,13 +38,13 @@ pub trait ExecutableContent: ToAny + Debug + Send {
 }
 
 pub fn get_safe_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> &mut T {
-    let va = ec.as_any();
+    let va = ec.as_any_mut();
     va.downcast_mut::<T>()
         .unwrap_or_else(|| panic!("Failed to cast executable content"))
 }
 
 pub fn get_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> Option<&mut T> {
-    let va = ec.as_any();
+    let va = ec.as_any_mut();
     match va.downcast_mut::<T>() {
         Some(v) => Some(v),
         None => None,
@@ -63,6 +63,86 @@ pub fn get_opt_executable_content_as<T: 'static>(
 pub trait ExecutableContentTracer {
     fn print_name_and_attributes(&mut self, ec: &dyn ExecutableContent, attrs: &[(&str, &String)]);
     fn print_sub_content(&mut self, name: &str, fsm: &Fsm, content: ExecutableContentId);
+}
+
+#[derive(Default)]
+pub struct Cancel {
+    pub send_id: String,
+    pub send_id_expr: String,
+}
+
+/// Holds all parameters of a \<send\> call.
+#[derive(Default)]
+pub struct SendParameters {
+    /// SCXML \<send\> attribute 'idlocation'
+    pub name_location: String,
+    /// SCXML \<send\> attribute 'id'.
+    pub name: String,
+    /// SCXML \<send\> attribute 'event'.
+    pub event: String,
+    /// SCXML \<send\> attribute 'eventexpr'.
+    pub event_expr: String,
+    /// SCXML \<send\> attribute 'target'.
+    pub target: String,
+    /// SCXML \<send\> attribute 'targetexpr'.
+    pub target_expr: String,
+    /// SCXML \<send\> attribute 'type'.
+    pub type_value: String,
+    /// SCXML \<send\> attribute 'typeexpr'.
+    pub type_expr: String,
+    /// SCXML \<send\> attribute 'delay' in milliseconds.
+    pub delay_ms: u64,
+    /// SCXML \<send\> attribute 'delayexpr'.
+    pub delay_expr: String,
+    /// SCXML \<send\> attribute 'namelist'. Must not be specified in conjunction with 'content'.
+    pub name_list: Vec<String>,
+    /// \<param\> children
+    pub params: Option<Vec<Parameter>>,
+    pub content: Option<CommonContent>,
+}
+
+impl SendParameters {
+    pub fn new() -> SendParameters {
+        SendParameters {
+            name_location: "".to_string(),
+            name: "".to_string(),
+            event: "".to_string(),
+            event_expr: "".to_string(),
+            target: "".to_string(),
+            target_expr: "".to_string(),
+            type_value: "".to_string(),
+            type_expr: "".to_string(),
+            delay_ms: 0,
+            delay_expr: "".to_string(),
+            name_list: Vec::new(),
+            params: None,
+            content: None,
+        }
+    }
+}
+
+impl Debug for SendParameters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Send").field("name", &self.name).finish()
+    }
+}
+
+impl Cancel {
+    pub fn new() -> Cancel {
+        Cancel {
+            send_id: String::new(),
+            send_id_expr: String::new(),
+        }
+    }
+}
+
+impl Debug for Cancel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Cancel")
+            .field("send_id", &self.send_id)
+            .field("send_id_expr", &self.send_id_expr)
+            .finish()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -519,7 +599,7 @@ impl ExecutableContent for SendParameters {
                 ("type_expr", &self.type_expr),
                 ("delay", &self.delay_ms.to_string()),
                 ("delay_expr", &self.delay_expr),
-                ("name_list", &self.name_list),
+                ("name_list", &vec_to_string(&self.name_list)),
                 ("content", &format!("{:?}", self.content)),
                 ("params", &opt_vec_to_string(&self.params)),
             ],

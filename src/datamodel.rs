@@ -402,11 +402,16 @@ impl Datamodel for NullDatamodel {
 }
 
 pub trait ToAny: 'static {
-    fn as_any(&mut self) -> &mut dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn as_any(&self) -> &dyn Any;
 }
 
 impl<T: Debug + 'static> ToAny for T {
-    fn as_any(&mut self) -> &mut dyn Any {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

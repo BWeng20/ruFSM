@@ -31,6 +31,7 @@ use crate::datamodel::{
 use crate::ecma_script_datamodel::{ECMAScriptDatamodel, ECMA_SCRIPT_LC};
 use crate::event_io_processor::EventIOProcessor;
 use crate::executable_content::ExecutableContent;
+use crate::fsm::BindingType::{Early, Late};
 use crate::fsm_executor::FsmExecutor;
 use crate::get_global;
 #[cfg(feature = "Trace")]
@@ -560,6 +561,25 @@ pub enum BindingType {
     Late,
 }
 
+impl BindingType {
+    pub fn from_ordinal(ordinal: u8) -> BindingType {
+        match ordinal {
+            1 => Early,
+            2 => Late,
+            _ => {
+                panic!("Unknown ordinal {} for BindingType", ordinal);
+            }
+        }
+    }
+
+    pub fn ordinal(&self) -> u8 {
+        match self {
+            Early => 1u8,
+            Late => 2u8,
+        }
+    }
+}
+
 impl FromStr for BindingType {
     type Err = ();
 
@@ -897,86 +917,6 @@ pub struct Parameter {
     pub name: String,
     pub expr: String,
     pub location: String,
-}
-
-#[derive(Default)]
-pub struct Cancel {
-    pub send_id: String,
-    pub send_id_expr: String,
-}
-
-/// Holds all parameters of a \<send\> call.
-#[derive(Default)]
-pub struct SendParameters {
-    /// SCXML \<send\> attribute 'idlocation'
-    pub name_location: String,
-    /// SCXML \<send\> attribute 'id'.
-    pub name: String,
-    /// SCXML \<send\> attribute 'event'.
-    pub event: String,
-    /// SCXML \<send\> attribute 'eventexpr'.
-    pub event_expr: String,
-    /// SCXML \<send\> attribute 'target'.
-    pub target: String,
-    /// SCXML \<send\> attribute 'targetexpr'.
-    pub target_expr: String,
-    /// SCXML \<send\> attribute 'type'.
-    pub type_value: String,
-    /// SCXML \<send\> attribute 'typeexpr'.
-    pub type_expr: String,
-    /// SCXML \<send\> attribute 'delay' in milliseconds.
-    pub delay_ms: u64,
-    /// SCXML \<send\> attribute 'delayexpr'.
-    pub delay_expr: String,
-    /// SCXML \<send\> attribute 'namelist'. Must not be specified in conjunction with 'content'.
-    pub name_list: String,
-    /// \<param\> children
-    pub params: Option<Vec<Parameter>>,
-    pub content: Option<CommonContent>,
-}
-
-impl SendParameters {
-    pub fn new() -> SendParameters {
-        SendParameters {
-            name_location: "".to_string(),
-            name: "".to_string(),
-            event: "".to_string(),
-            event_expr: "".to_string(),
-            target: "".to_string(),
-            target_expr: "".to_string(),
-            type_value: "".to_string(),
-            type_expr: "".to_string(),
-            delay_ms: 0,
-            delay_expr: "".to_string(),
-            name_list: "".to_string(),
-            params: None,
-            content: None,
-        }
-    }
-}
-
-impl Debug for SendParameters {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Send").field("name", &self.name).finish()
-    }
-}
-
-impl Cancel {
-    pub fn new() -> Cancel {
-        Cancel {
-            send_id: String::new(),
-            send_id_expr: String::new(),
-        }
-    }
-}
-
-impl Debug for Cancel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Cancel")
-            .field("send_id", &self.send_id)
-            .field("send_id_expr", &self.send_id_expr)
-            .finish()
-    }
 }
 
 /// *W3C says*:
@@ -3280,6 +3220,25 @@ pub enum TransitionType {
     Internal,
     #[default]
     External,
+}
+
+impl TransitionType {
+    pub fn from_ordinal(ordinal: u8) -> TransitionType {
+        match ordinal {
+            1 => TransitionType::Internal,
+            2 => TransitionType::External,
+            _ => {
+                panic!("Unknown ordinal {} for TransitionType", ordinal);
+            }
+        }
+    }
+
+    pub fn ordinal(&self) -> u8 {
+        match self {
+            TransitionType::Internal => 1u8,
+            TransitionType::External => 2u8,
+        }
+    }
 }
 
 pub fn map_transition_type(ts: &String) -> TransitionType {

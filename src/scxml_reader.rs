@@ -25,15 +25,15 @@ use quick_xml::Reader;
 use crate::datamodel::Data;
 use crate::executable_content::{
     get_opt_executable_content_as, get_safe_executable_content_as, parse_duration_to_milliseconds,
-    Assign, ExecutableContent, Expression, ForEach, If, Log, Raise,
+    Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, SendParameters,
 };
 use crate::fsm::push_param;
 #[cfg(feature = "Debug_Reader")]
 use crate::fsm::vec_to_string;
 use crate::fsm::{
-    map_history_type, map_transition_type, BindingType, Cancel, DoneData, ExecutableContentId, Fsm,
-    HistoryType, Invoke, Parameter, SendParameters, State, StateId, Transition, TransitionId,
-    TransitionType, ID_COUNTER,
+    map_history_type, map_transition_type, BindingType, DoneData, ExecutableContentId, Fsm,
+    HistoryType, Invoke, Parameter, State, StateId, Transition, TransitionId, TransitionType,
+    ID_COUNTER,
 };
 
 use crate::fsm::CommonContent;
@@ -1349,7 +1349,7 @@ impl ReaderState {
         }
 
         if let Some(name_list_value) = attr.get(ATTR_NAMELIST) {
-            send_params.name_list.clone_from(name_list_value);
+            self.parse_location_expressions(name_list_value, &mut send_params.name_list);
         }
         self.add_executable_content(Box::new(send_params));
     }

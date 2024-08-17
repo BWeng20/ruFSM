@@ -36,6 +36,7 @@ pub mod basic_http_event_io_processor;
 
 pub mod scxml_event_io_processor;
 
+#[cfg(feature = "serializer")]
 pub mod serializer;
 
 mod datamodel;

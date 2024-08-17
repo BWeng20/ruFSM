@@ -3,6 +3,8 @@
 extern crate core;
 
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 #[cfg(test)]
@@ -22,6 +24,8 @@ use crate::scxml_event_io_processor::ScxmlEventIOProcessor;
 #[cfg(feature = "xml")]
 use crate::scxml_reader;
 use crate::scxml_reader::include_path_from_arguments;
+use crate::serializer::default_protocol_reader::DefaultProtocolReader;
+use crate::serializer::fsm_reader::FsmReader;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
 
@@ -132,13 +136,31 @@ impl FsmExecutor {
         invoke_id: &InvokeId,
         #[cfg(feature = "Trace")] trace: TraceMode,
     ) -> Result<ScxmlSession, String> {
-        info!("Loading FSM from {}", uri);
+        let extension = uri.rsplit('.').next().unwrap_or_default();
+
+        let mut sm = Err("".to_string());
 
         // Use reader to parse the scxml file:
         #[cfg(feature = "xml")]
-        let sm = scxml_reader::parse_from_uri(uri.to_string(), &self.include_paths);
+        if extension.eq_ignore_ascii_case("scxml") || extension.eq_ignore_ascii_case("xml") {
+            info!("Loading FSM from XML {}", uri);
+            sm = scxml_reader::parse_from_uri(uri.to_string(), &self.include_paths);
+        }
 
-        #[cfg(not(feature = "xml"))]
+        #[cfg(feature = "serializer")]
+        if extension.eq_ignore_ascii_case("rfsm") {
+            info!("Loading FSM from binary {}", uri);
+            sm = match File::open(uri) {
+                Ok(f) => {
+                    let protocol = DefaultProtocolReader::new(BufReader::new(f));
+                    let mut reader = FsmReader::new(Box::new(protocol));
+                    reader.read()
+                }
+                Err(err) => Err(err.to_string()),
+            }
+        }
+
+        #[cfg(all(not(feature = "xml"), not(feature = "serializer")))]
         let sm = Ok(Box::new(Fsm::new()));
 
         match sm {

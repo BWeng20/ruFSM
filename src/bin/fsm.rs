@@ -3,6 +3,7 @@
 //!    rfsm \<scxml-file\> \[-trace flag\]
 extern crate core;
 
+use log::error;
 use std::io::{stdout, Write};
 use std::{io, process, thread, time};
 
@@ -39,13 +40,21 @@ async fn main() {
     #[cfg(feature = "xml")]
     executor.set_include_paths_from_arguments(&named_opt);
 
-    let mut session = executor
-        .execute(
-            final_args[0].as_str(),
-            #[cfg(feature = "Trace")]
-            trace,
-        )
-        .unwrap();
+    let mut session;
+
+    match executor.execute(
+        final_args[0].as_str(),
+        #[cfg(feature = "Trace")]
+        trace,
+    ) {
+        Ok(s) => {
+            session = s;
+        }
+        Err(err) => {
+            error!("Failed to execute {}: {}", final_args[0], err);
+            process::exit(1);
+        }
+    };
 
     for fi in &final_args[1..final_args.len()] {
         let _ = executor
