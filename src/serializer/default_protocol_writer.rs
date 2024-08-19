@@ -4,20 +4,17 @@
 use crate::serializer::default_protocol_definitions::*;
 use crate::serializer::protocol_writer::ProtocolWriter;
 use byteorder::WriteBytesExt;
-use log::error;
-use std::io::{BufWriter, Write};
+use log::{debug, error};
+use std::io::Write;
 
-pub struct DefaultProtocolWriter<W: Write> {
-    writer: BufWriter<W>,
-    in_error: bool,
+pub struct DefaultProtocolWriter<W> {
+    pub writer: W,
+    ok: bool,
 }
 
 impl<W: Write> DefaultProtocolWriter<W> {
-    pub fn new(writer: BufWriter<W>) -> DefaultProtocolWriter<W> {
-        DefaultProtocolWriter {
-            writer,
-            in_error: false,
-        }
+    pub fn new(writer: W) -> DefaultProtocolWriter<W> {
+        DefaultProtocolWriter { writer, ok: true }
     }
 
     fn eval_result(&mut self, result: std::io::Result<()>) {
@@ -25,20 +22,20 @@ impl<W: Write> DefaultProtocolWriter<W> {
             Ok(_v) => {}
             Err(err) => {
                 error!("Error writing: {}", err);
-                self.in_error = true;
+                self.ok = false;
             }
         }
     }
 
     fn write_type_and_value(&mut self, type_id: u8, value: u64, mut size: u8) {
-        if !self.in_error {
+        if self.ok {
             size = size.saturating_sub(4);
             let mut r = self
                 .writer
                 .write_u8(type_id | (((value >> size) as u8) & 0x0F));
             while size > 0 && r.is_ok() {
-                r = self.writer.write_u8((value >> size) as u8);
                 size = size.saturating_sub(8);
+                r = self.writer.write_u8((value >> size) as u8);
             }
             self.eval_result(r);
         }
@@ -51,14 +48,16 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
     }
 
     fn close(&mut self) {
-        if !self.in_error {
+        if self.ok {
             let r = self.writer.flush();
             self.eval_result(r);
         }
     }
 
     fn write_boolean(&mut self, value: bool) {
-        if !self.in_error {
+        if self.ok {
+            #[cfg(feature = "Debug_Serializer")]
+            debug!("BOOL {}", value);
             let r = self.writer.write_u8(if value {
                 FSM_PROTOCOL_TYPE_BOOLEAN_TRUE
             } else {
@@ -71,14 +70,16 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
     fn write_option_string(&mut self, value: &Option<String>) {
         if value.is_some() {
             self.write_str(value.as_ref().unwrap().as_str());
-        } else if !self.in_error {
+        } else if self.ok {
             let r = self.writer.write_u8(FSM_PROTOCOL_TYPE_OPT_STRING_NONE);
             self.eval_result(r);
         }
     }
 
     fn write_str(&mut self, value: &str) {
-        if !self.in_error {
+        if self.ok {
+            #[cfg(feature = "Debug_Serializer")]
+            debug!("String {}", value);
             let mut len = value.len();
             if len < (1usize << 4) {
                 self.write_type_and_value(FSM_PROTOCOL_TYPE_STRING_LENGTH_4BIT, len as u64, 4);
@@ -90,7 +91,7 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
             match r {
                 Ok(_) => {}
                 Err(error) => {
-                    self.eval_result(Result::Err(error));
+                    self.eval_result(Err(error));
                 }
             }
         }
@@ -101,6 +102,8 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
     }
 
     fn write_uint(&mut self, value: u64) {
+        #[cfg(feature = "Debug_Serializer")]
+        debug!("uint {}", value);
         if value < (1u64 << 4) {
             self.write_type_and_value(FSM_PROTOCOL_TYPE_INT_4BIT, value, 4);
         } else if value < (1u64 << 12) {
@@ -123,6 +126,10 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
     }
 
     fn has_error(&self) -> bool {
-        self.in_error
+        !self.ok
+    }
+
+    fn get_writer(&self) -> &W {
+        &self.writer
     }
 }

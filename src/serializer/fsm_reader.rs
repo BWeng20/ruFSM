@@ -1,14 +1,21 @@
 //! Module to write a persistent binary version of a Fsm.\
 //! The format is independent of the platform byte-order
 
+use log::debug;
 use std::io::Read;
 
 use crate::datamodel::{Data, DataStore};
 use crate::executable_content;
-use crate::executable_content::{ExecutableContent, Log };
+use crate::executable_content::{ExecutableContent, Log};
 use crate::fsm::{
     BindingType, CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, HistoryType,
     Invoke, Parameter, State, StateId, Transition, TransitionId, TransitionType,
+};
+use crate::serializer::default_protocol_definitions::{
+    FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY,
+    FSM_PROTOCOL_FLAG_HISTORY_TYPE_MASK, FSM_PROTOCOL_FLAG_INVOKE, FSM_PROTOCOL_FLAG_IS_FINAL,
+    FSM_PROTOCOL_FLAG_IS_PARALLEL, FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT,
+    FSM_PROTOCOL_FLAG_STATES,
 };
 use crate::serializer::fsm_writer::FSM_PROTOCOL_WRITER_VERSION;
 use crate::serializer::protocol_reader::ProtocolReader;
@@ -27,7 +34,7 @@ impl<'a, R> FsmReader<'a, R>
 where
     R: Read + 'a,
 {
-    pub fn new(reader: Box<dyn ProtocolReader<R>>) -> FsmReader<'a, R> {
+    pub fn new(reader: Box<dyn ProtocolReader<R> + 'a>) -> FsmReader<'a, R> {
         FsmReader { reader }
     }
 
@@ -177,11 +184,13 @@ where
     }
 
     pub fn read_transition(&mut self) -> Transition {
+        #[cfg(feature = "Debug_Serializer")]
+        debug!(">>Transition");
+
         let mut transition = Transition::new();
 
         transition.id = self.read_transition_id();
         transition.doc_id = self.read_doc_id();
-        transition.transition_type = TransitionType::from_ordinal(self.reader.read_u8());
         transition.source = self.read_state_id();
 
         let target_len = self.reader.read_usize();
@@ -189,68 +198,106 @@ where
             transition.target.push(self.read_state_id())
         }
 
-        transition.wildcard = self.reader.read_boolean();
-
         let events_len = self.reader.read_usize();
         for _idx in 0..events_len {
             transition.events.push(self.reader.read_string())
         }
-        transition.cond = self.reader.read_option_string();
-        transition.content = self.read_executable_content_id();
+
+        let flags = self.reader.read_u8();
+
+        transition.transition_type = TransitionType::from_ordinal(flags & 1);
+        transition.wildcard = (flags & 2) != 0;
+
+        transition.cond = if (flags & 4) != 0 {
+            Some(self.reader.read_string())
+        } else {
+            None
+        };
+        transition.content = if (flags & 8) != 0 {
+            self.read_executable_content_id()
+        } else {
+            0
+        };
+
+        #[cfg(feature = "Debug_Serializer")]
+        debug!("<<Transition");
 
         transition
     }
 
     pub fn read_state(&mut self, state: &mut State) {
+        #[cfg(feature = "Debug_Serializer")]
+        debug!(">>State");
+
         state.id = self.read_state_id();
         state.doc_id = self.read_doc_id();
         state.name = self.reader.read_string();
-        state.initial = self.read_transition_id();
 
-        let states_len = self.reader.read_usize();
-        for _si in 0..states_len {
-            state.states.push(self.read_state_id());
+        let flags = self.reader.read_u16();
+
+        state.history_type =
+            HistoryType::from_ordinal((flags & FSM_PROTOCOL_FLAG_HISTORY_TYPE_MASK) as u8);
+        state.is_parallel = (flags & FSM_PROTOCOL_FLAG_IS_PARALLEL) != 0;
+        state.is_final = (flags & FSM_PROTOCOL_FLAG_IS_FINAL) != 0;
+
+        if (flags & FSM_PROTOCOL_FLAG_STATES) != 0 {
+            state.initial = self.read_transition_id();
+            let states_len = self.reader.read_usize();
+            for _si in 0..states_len {
+                state.states.push(self.read_state_id());
+            }
         }
 
-        state.is_parallel = self.reader.read_boolean();
-        state.is_final = self.reader.read_boolean();
-        state.history_type = HistoryType::from_ordinal(self.reader.read_u8());
-        state.onentry = self.read_executable_content_id();
-        state.onexit = self.read_executable_content_id();
+        if (flags & FSM_PROTOCOL_FLAG_ON_ENTRY) != 0 {
+            state.onentry = self.read_executable_content_id();
+        }
+        if (flags & FSM_PROTOCOL_FLAG_ON_EXIT) != 0 {
+            state.onexit = self.read_executable_content_id();
+        }
 
         let transition_len = self.reader.read_usize();
         for _ti in 0..transition_len {
             state.transitions.push(self.read_transition_id());
         }
 
-        let invoke_len = self.reader.read_usize();
-        for _ii in 0..invoke_len {
-            let mut invoke = Invoke::new();
-            self.read_invoke(&mut invoke);
-            state.invoke.push(invoke);
+        if (flags & FSM_PROTOCOL_FLAG_INVOKE) != 0 {
+            let invoke_len = self.reader.read_usize();
+            for _ii in 0..invoke_len {
+                let mut invoke = Invoke::new();
+                self.read_invoke(&mut invoke);
+                state.invoke.push(invoke);
+            }
         }
 
-        let history_len = self.reader.read_usize();
-        for _hi in 0..history_len {
-            state.history.push(self.read_state_id());
+        if (flags & FSM_PROTOCOL_FLAG_HISTORY) != 0 {
+            let history_len = self.reader.read_usize();
+            for _hi in 0..history_len {
+                state.history.push(self.read_state_id());
+            }
         }
 
-        self.read_data_store(&mut state.data);
+        if (flags & FSM_PROTOCOL_FLAG_DATA) != 0 {
+            self.read_data_store(&mut state.data);
+        }
+
         state.parent = self.read_state_id();
 
-        if self.reader.read_boolean() {
+        if (flags & FSM_PROTOCOL_FLAG_DONE_DATA) != 0 {
             let mut donedata = DoneData::new();
             self.read_done_data(&mut donedata);
             let _ = state.donedata.insert(donedata);
         } else {
             state.donedata = None;
         }
+
+        #[cfg(feature = "Debug_Serializer")]
+        debug!("<<State");
     }
 
     pub fn read_executable_content(&mut self) -> Box<dyn ExecutableContent> {
-        let ec_type = self.reader.read_string();
+        let ec_type = self.reader.read_u8();
 
-        match ec_type.as_str() {
+        match ec_type {
             executable_content::TYPE_IF => self.read_executable_content_if(),
             executable_content::TYPE_EXPRESSION => self.read_executable_content_expression(),
             executable_content::TYPE_SCRIPT => self.read_executable_content_script(),
@@ -296,5 +343,68 @@ where
     }
     pub fn read_executable_content_assign(&mut self) -> Box<dyn ExecutableContent> {
         todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    pub const FSM_SRC: &str = r###"
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A Simple FSM that wait for some event -->
+<scxml xmlns="http://www.w3.org/2005/07/scxml" initial="s0" version="1.0" datamodel="ecmascript">
+ <state id="s0">
+  <transition event="go" target="s1"/>
+ </state>
+ <state id="s1">
+  <transition event="go" target="s2"/>
+ </state>
+ <state id="s2">
+  <transition event="go" target="end"/>
+ </state>
+ <final id="end">
+  <onentry>
+    <log expr="'Finished!!!'"/>
+  </onentry>
+ </final>
+</scxml>"###;
+
+    use super::*;
+    use crate::scxml_reader;
+    use crate::serializer::default_protocol_reader::DefaultProtocolReader;
+    use crate::serializer::default_protocol_writer::DefaultProtocolWriter;
+    use crate::serializer::fsm_writer::FsmWriter;
+    use hyper::body::Buf;
+
+    struct TestEnvironment {
+        fsm: Box<Fsm>,
+        buffer: Vec<u8>,
+    }
+
+    fn setup() -> TestEnvironment {
+        let fsm = scxml_reader::parse_from_xml(FSM_SRC.to_string()).unwrap();
+        let mut writer: FsmWriter<Vec<u8>> =
+            FsmWriter::new(Box::new(DefaultProtocolWriter::new(Vec::new())));
+        writer.write(&fsm);
+        writer.close();
+
+        let buffer = writer.get_writer();
+
+        TestEnvironment {
+            fsm,
+            buffer: buffer.clone(),
+        }
+    }
+
+    #[test]
+    fn shall_read_fsm<'a>() {
+        let env = setup();
+        let r = Box::new(DefaultProtocolReader::new(env.buffer.reader()));
+        let mut fsm_reader = FsmReader::new(r);
+        let result = fsm_reader.read();
+
+        assert!(result.is_ok());
+
+        assert!(env.fsm.compare_to(result.unwrap().as_ref()))
     }
 }

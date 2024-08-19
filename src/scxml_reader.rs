@@ -1658,7 +1658,6 @@ impl ReaderState {
         self.push(name);
 
         #[cfg(feature = "Debug_Reader")]
-
         debug!("Start Element {}", name);
 
         let attr = &decode_attributes(reader, &mut e.attributes());

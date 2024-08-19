@@ -1,6 +1,7 @@
 //! Module to write a persistent binary version of a Fsm.\
 //! The format is independent of the platform byte-order
 
+use log::debug;
 use std::io::Write;
 
 use crate::datamodel::DataStore;
@@ -11,6 +12,11 @@ use crate::executable_content::{
 use crate::fsm::{
     CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, Invoke, Parameter, State,
     StateId, Transition, TransitionId,
+};
+use crate::serializer::default_protocol_definitions::{
+    FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY,
+    FSM_PROTOCOL_FLAG_INVOKE, FSM_PROTOCOL_FLAG_IS_FINAL, FSM_PROTOCOL_FLAG_IS_PARALLEL,
+    FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT, FSM_PROTOCOL_FLAG_STATES,
 };
 use crate::serializer::protocol_writer::ProtocolWriter;
 
@@ -28,14 +34,18 @@ pub struct FsmWriter<'a, W>
 where
     W: Write + 'a,
 {
-    writer: Box<dyn ProtocolWriter<W> + 'a>,
+    pub writer: Box<dyn ProtocolWriter<W> + 'a>,
 }
 
 impl<'a, W> FsmWriter<'a, W>
 where
     W: Write + 'a,
 {
-    pub fn new(writer: Box<dyn ProtocolWriter<W>>) -> FsmWriter<'a, W> {
+    pub fn get_writer(&self) -> &W {
+        return self.writer.get_writer();
+    }
+
+    pub fn new(writer: Box<(dyn ProtocolWriter<W> + 'a)>) -> FsmWriter<'a, W> {
         FsmWriter { writer }
     }
 
@@ -159,70 +169,108 @@ where
     }
 
     pub fn write_transition(&mut self, transition: &Transition) {
+        #[cfg(feature = "Debug_Serializer")]
+        debug!(">>Transition #{}", transition.id);
         self.write_transition_id(transition.id);
         self.write_doc_id(transition.doc_id);
-        self.writer.write_u8(transition.transition_type.ordinal());
         self.write_state_id(transition.source);
         self.writer.write_usize(transition.target.len());
         for t in &transition.target {
             self.write_state_id(*t);
         }
-        self.writer.write_boolean(transition.wildcard);
         self.writer.write_usize(transition.events.len());
         for e in &transition.events {
             self.writer.write_str(e);
         }
-        self.writer.write_option_string(&transition.cond);
-        self.write_executable_content_id(transition.content);
+        self.writer.write_u8(
+            transition.transition_type.ordinal() // 0 - 1
+            | if transition.wildcard {2u8} else {0u8}
+            | if transition.cond.is_some() {4u8} else {0u8}
+            | if transition.content != 0 {8u8} else {0u8},
+        );
+
+        if transition.cond.is_some() {
+            self.writer.write_option_string(&transition.cond);
+        }
+        if transition.content != 0 {
+            self.write_executable_content_id(transition.content);
+        }
+
+        #[cfg(feature = "Debug_Serializer")]
+        debug!("<<Transition");
     }
 
     pub fn write_state(&mut self, state: &State) {
+        #[cfg(feature = "Debug_Serializer")]
+        debug!(">>State {}", state.name);
+
         self.write_state_id(state.id);
         self.write_doc_id(state.doc_id);
         self.writer.write_str(state.name.as_str());
-        self.write_transition_id(state.initial);
 
-        self.writer.write_usize(state.states.len());
-        for state_id in &state.states {
-            self.write_state_id(*state_id);
+        let flags = state.history_type.ordinal() as u16 // 0 - 2
+                | if state.onentry  > 0 {FSM_PROTOCOL_FLAG_ON_ENTRY} else {0}
+                | if state.onexit   > 0 {FSM_PROTOCOL_FLAG_ON_EXIT} else {0}
+                | if !state.states.is_empty() {FSM_PROTOCOL_FLAG_STATES} else {0}
+                | if state.is_final {FSM_PROTOCOL_FLAG_IS_FINAL} else {0}
+                | if state.is_parallel {FSM_PROTOCOL_FLAG_IS_PARALLEL} else {0}
+                | if state.donedata.is_some() {FSM_PROTOCOL_FLAG_DONE_DATA} else {0}
+                | if state.invoke.size()>0 {FSM_PROTOCOL_FLAG_INVOKE} else {0}
+                | if !state.data.values.is_empty()  {FSM_PROTOCOL_FLAG_DATA} else {0}
+                | if state.history.size() > 0 {FSM_PROTOCOL_FLAG_HISTORY} else {0};
+        self.writer.write_uint(flags as u64);
+
+        if !state.states.is_empty() {
+            self.write_transition_id(state.initial);
+            self.writer.write_usize(state.states.len());
+            for state_id in &state.states {
+                self.write_state_id(*state_id);
+            }
         }
 
-        self.writer.write_boolean(state.is_parallel);
-        self.writer.write_boolean(state.is_final);
-        self.writer.write_uint(state.history_type.ordinal() as u64);
-        self.write_executable_content_id(state.onentry);
-        self.write_executable_content_id(state.onexit);
+        if state.onentry > 0 {
+            self.write_executable_content_id(state.onentry);
+        }
+        if state.onexit > 0 {
+            self.write_executable_content_id(state.onexit);
+        }
 
         self.writer.write_usize(state.transitions.size());
         for transition_id in state.transitions.iterator() {
             self.write_transition_id(*transition_id);
         }
 
-        self.writer.write_usize(state.invoke.size());
-        for invoke in state.invoke.iterator() {
-            self.write_invoke(invoke);
+        if state.invoke.size() > 0 {
+            self.writer.write_usize(state.invoke.size());
+            for invoke in state.invoke.iterator() {
+                self.write_invoke(invoke);
+            }
         }
 
-        self.writer.write_usize(state.history.size());
-        for history in state.history.iterator() {
-            self.write_state_id(*history);
+        if state.history.size() > 0 {
+            self.writer.write_usize(state.history.size());
+            for history in state.history.iterator() {
+                self.write_state_id(*history);
+            }
         }
 
-        self.write_data_store(&state.data);
+        if !state.data.values.is_empty() {
+            self.write_data_store(&state.data);
+        }
+
         self.write_state_id(state.parent);
 
-        self.writer.write_boolean(state.donedata.is_some());
         if state.donedata.is_some() {
             self.write_done_data(state.donedata.as_ref().unwrap())
         }
+
+        #[cfg(feature = "Debug_Serializer")]
+        debug!("<<State");
     }
 
-    pub fn write_executable_content(
-        &mut self,
-        executable_content: &dyn ExecutableContent,
-    ) {
+    pub fn write_executable_content(&mut self, executable_content: &dyn ExecutableContent) {
         let ec_type = executable_content.get_type();
-        self.writer.write_str(ec_type);
+        self.writer.write_u8(ec_type);
 
         match ec_type {
             executable_content::TYPE_IF => self

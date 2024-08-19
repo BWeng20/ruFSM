@@ -32,4 +32,6 @@ pub trait ProtocolWriter<W: Write> {
     }
 
     fn has_error(&self) -> bool;
+
+    fn get_writer(&self) -> &W;
 }

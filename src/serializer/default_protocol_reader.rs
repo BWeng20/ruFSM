@@ -4,11 +4,14 @@
 use crate::serializer::default_protocol_definitions::*;
 use crate::serializer::protocol_reader::ProtocolReader;
 use byteorder::ReadBytesExt;
-use log::error;
-use std::io::{BufReader, Read};
+use log::{debug, error};
+use std::io::Read;
 
-pub struct DefaultProtocolReader<R: Read> {
-    reader: BufReader<R>,
+pub struct DefaultProtocolReader<R>
+where
+    R: Read,
+{
+    reader: R,
     ok: bool,
     type_and_value: TypeAndValue,
     buffer: [u8; 4096],
@@ -22,7 +25,7 @@ pub struct TypeAndValue {
 }
 
 impl<R: Read> DefaultProtocolReader<R> {
-    pub fn new(reader: BufReader<R>) -> DefaultProtocolReader<R> {
+    pub fn new(reader: R) -> DefaultProtocolReader<R> {
         DefaultProtocolReader {
             reader,
             ok: true,
@@ -45,7 +48,7 @@ impl<R: Read> DefaultProtocolReader<R> {
                 | FSM_PROTOCOL_TYPE_INT_68BIT => true,
                 _ => {
                     self.error(
-                        format!("Expected numeric tyoe, got {}", self.type_and_value.type_id)
+                        format!("Expected numeric type, got {}", self.type_and_value.type_id)
                             .as_str(),
                     );
                     false
@@ -175,6 +178,33 @@ impl<R: Read> DefaultProtocolReader<R> {
                     FSM_PROTOCOL_TYPE_STRING_LENGTH_12BIT => {
                         self.type_and_value.type_id = FSM_PROTOCOL_TYPE_STRING_LENGTH_12BIT;
                         self.type_and_value.number = 0;
+                        let mut us = (val & 0x0F) as usize;
+
+                        match self.reader.read_u8() {
+                            Ok(value) => {
+                                us = (us << 8) | (value as usize);
+                                match self.reader.read_exact(&mut self.buffer[0..us]) {
+                                    Ok(_) => match std::str::from_utf8(&self.buffer[0..us]) {
+                                        Ok(val) => {
+                                            self.type_and_value.string.insert_str(0, val);
+                                        }
+                                        Err(err_utf) => {
+                                            self.error(
+                                                format!("Error in utf8 sequence: {}", err_utf)
+                                                    .as_str(),
+                                            );
+                                        }
+                                    },
+                                    Err(err) => {
+                                        self.error(format!("Error reading: {}", err).as_str());
+                                        self.ok = false;
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                self.error(format!("Error reading: {}", err).as_str());
+                            }
+                        }
                     }
                     _ => {}
                 },
@@ -238,6 +268,8 @@ impl<R: Read> ProtocolReader<R> for DefaultProtocolReader<R> {
 
     fn read_string(&mut self) -> String {
         self.read_type_and_size();
+        #[cfg(feature = "Debug_Serializer")]
+        debug!("String {}", self.type_and_value.string);
         if self.verify_string_type() {
             self.type_and_value.string.clone()
         } else {

@@ -1,24 +1,14 @@
 extern crate core;
 
 use log::error;
-use rfsm::fsm::Fsm;
 use rfsm::scxml_reader;
 use rfsm::scxml_reader::include_path_from_arguments;
 use rfsm::scxml_reader::INCLUDE_PATH_ARGUMENT_OPTION;
 use rfsm::serializer::default_protocol_writer::DefaultProtocolWriter;
 use rfsm::serializer::fsm_writer::FsmWriter;
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::BufWriter;
 use std::process;
-
-pub fn write<W>(fsm: &Fsm, w: BufWriter<W>)
-where
-    W: Write + 'static,
-{
-    let mut wr = FsmWriter::new(Box::new(DefaultProtocolWriter::new(w)));
-    wr.write(fsm);
-    wr.close();
-}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {

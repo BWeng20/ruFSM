@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
@@ -21,6 +21,8 @@ use crate::fsm::{Event, FinishMode, Fsm};
 use crate::fsm_executor::FsmExecutor;
 #[cfg(feature = "xml")]
 use crate::scxml_reader;
+use crate::serializer::default_protocol_reader::DefaultProtocolReader;
+use crate::serializer::fsm_reader::FsmReader;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
 
@@ -60,14 +62,24 @@ pub struct TestUseCase {
 }
 
 pub fn load_fsm(file_path: &str, include_paths: &[PathBuf]) -> Result<Box<Fsm>, String> {
+    let extension = file_path.rsplit('.').next().unwrap_or_default();
+
     #[cfg(feature = "xml")]
-    return scxml_reader::parse_from_xml_file(Path::new(file_path), include_paths);
-    #[cfg(not(feature = "xml"))]
-    {
-        let sm = Ok(Box::new(Fsm::new()));
-        todo!();
-        sm
+    if extension.eq_ignore_ascii_case("scxml") || extension.eq_ignore_ascii_case("xml") {
+        return scxml_reader::parse_from_uri(file_path.to_string(), include_paths);
     }
+    #[cfg(feature = "serializer")]
+    if extension.eq_ignore_ascii_case("rfsm") {
+        return match File::open(file_path) {
+            Ok(f) => {
+                let protocol = DefaultProtocolReader::new(BufReader::new(f));
+                let mut reader = FsmReader::new(Box::new(protocol));
+                reader.read()
+            }
+            Err(err) => Err(err.to_string()),
+        };
+    }
+    Err(format!("No reader to load '{}'", file_path))
 }
 
 #[cfg(feature = "yaml-config")]

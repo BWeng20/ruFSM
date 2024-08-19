@@ -6,7 +6,7 @@ use std::io::Read;
 /// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).
 pub trait ProtocolReader<R: Read> {
     /// Reads and verify the protocol version
-    /// Goes to error state if version doesn't matchs.
+    /// Goes to error state if version doesn't match.
     fn verify_version(&mut self);
 
     /// Close the underlying stream

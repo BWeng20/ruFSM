@@ -3029,6 +3029,23 @@ impl Fsm {
             cb();
         }
     }
+
+    /// Very basic compare.
+    /// TODO: needs to be extended if the tests get more complex.
+    #[cfg(test)]
+    pub fn compare_to(&self, other: &Fsm) -> bool {
+        if self.name.eq(&other.name)
+            && self.binding == other.binding
+            && self.states.len() == other.states.len()
+            && self.transitions.len() == other.transitions.len()
+            && self.executableContent.len() == other.executableContent.len()
+            && self.datamodel.eq(&other.datamodel)
+        {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -3192,7 +3209,7 @@ impl HistoryType {
         match self {
             HistoryType::Shallow => 1u8,
             HistoryType::Deep => 2u8,
-            HistoryType::None => 3u8,
+            HistoryType::None => 0u8,
         }
     }
 
@@ -3225,8 +3242,8 @@ pub enum TransitionType {
 impl TransitionType {
     pub fn from_ordinal(ordinal: u8) -> TransitionType {
         match ordinal {
-            1 => TransitionType::Internal,
-            2 => TransitionType::External,
+            0 => TransitionType::Internal,
+            1 => TransitionType::External,
             _ => {
                 panic!("Unknown ordinal {} for TransitionType", ordinal);
             }
@@ -3235,8 +3252,8 @@ impl TransitionType {
 
     pub fn ordinal(&self) -> u8 {
         match self {
-            TransitionType::Internal => 1u8,
-            TransitionType::External => 2u8,
+            TransitionType::Internal => 0u8,
+            TransitionType::External => 1u8,
         }
     }
 }

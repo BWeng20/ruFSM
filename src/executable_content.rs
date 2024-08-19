@@ -21,19 +21,31 @@ use crate::{get_global, Event, EventType};
 
 pub const TARGET_SCXML_EVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#SCXMLEventProcessor";
 
-pub const TYPE_IF: &str = "if";
-pub const TYPE_EXPRESSION: &str = "expression";
-pub const TYPE_SCRIPT: &str = "script";
-pub const TYPE_LOG: &str = "log";
-pub const TYPE_FOREACH: &str = "foreach";
-pub const TYPE_SEND: &str = "send";
-pub const TYPE_RAISE: &str = "raise";
-pub const TYPE_CANCEL: &str = "cancel";
-pub const TYPE_ASSIGN: &str = "assign";
+pub const TYPE_IF: u8 = 0;
+pub const TYPE_EXPRESSION: u8 = 1;
+pub const TYPE_SCRIPT: u8 = 2;
+pub const TYPE_LOG: u8 = 3;
+pub const TYPE_FOREACH: u8 = 4;
+pub const TYPE_SEND: u8 = 5;
+pub const TYPE_RAISE: u8 = 6;
+pub const TYPE_CANCEL: u8 = 7;
+pub const TYPE_ASSIGN: u8 = 8;
+
+pub const TYPE_NAMES: [&str; 9] = [
+    "if",
+    "expression",
+    "script",
+    "log",
+    "foreach",
+    "send",
+    "raise",
+    "cancel",
+    "assign",
+];
 
 pub trait ExecutableContent: ToAny + Debug + Send {
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm);
-    fn get_type(&self) -> &str;
+    fn get_type(&self) -> u8;
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm);
 }
 
@@ -219,7 +231,7 @@ impl ExecutableContent for Assign {
         datamodel.assign(&self.location, &self.expr);
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_ASSIGN
     }
 
@@ -249,7 +261,7 @@ impl ExecutableContent for Raise {
         get_global!(datamodel).enqueue_internal(event);
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_RAISE
     }
 
@@ -273,7 +285,7 @@ impl ExecutableContent for Script {
         }
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_SCRIPT
     }
 
@@ -296,7 +308,7 @@ impl ExecutableContent for Expression {
         let _l = datamodel.execute(&self.content);
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_EXPRESSION
     }
 
@@ -324,7 +336,7 @@ impl ExecutableContent for Log {
         }
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_LOG
     }
 
@@ -364,7 +376,7 @@ impl ExecutableContent for If {
         }
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_IF
     }
 
@@ -404,7 +416,7 @@ impl ExecutableContent for ForEach {
         });
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_FOREACH
     }
 
@@ -446,7 +458,7 @@ impl ExecutableContent for Cancel {
         todo!()
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_CANCEL
     }
 
@@ -581,7 +593,7 @@ impl ExecutableContent for SendParameters {
         }
     }
 
-    fn get_type(&self) -> &str {
+    fn get_type(&self) -> u8 {
         TYPE_SEND
     }
 
@@ -692,7 +704,15 @@ impl ExecutableContentTracer for DefaultExecutableContentTracer {
     fn print_name_and_attributes(&mut self, ec: &dyn ExecutableContent, attrs: &[(&str, &String)]) {
         let mut buf = String::new();
 
-        buf.push_str(format!("{:1$}{2} [", " ", 2 * self.trace_depth, ec.get_type()).as_str());
+        buf.push_str(
+            format!(
+                "{:1$}{2} [",
+                " ",
+                2 * self.trace_depth,
+                TYPE_NAMES[ec.get_type() as usize]
+            )
+            .as_str(),
+        );
 
         let mut first = true;
         for (name, value) in attrs {
