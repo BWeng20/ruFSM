@@ -152,16 +152,19 @@ pub fn run_test(test: TestUseCase) {
     let timeout = test.specification.timeout_milliseconds.unwrap_or(0);
     let final_expected_configuration = test.specification.final_configuration.unwrap_or_default();
 
-    run_test_manual(
-        &test.name,
-        fsm,
-        &test.include_paths,
-        #[cfg(feature = "Trace")]
-        test.trace_mode,
-        timeout as u64,
-        &final_expected_configuration,
-    );
-    process::exit(0);
+    if !run_test_manual(
+            &test.name,
+            fsm,
+            &test.include_paths,
+            #[cfg(feature = "Trace")]
+            test.trace_mode,
+            timeout as u64,
+            &final_expected_configuration
+        ) {
+        process::exit(-1);
+    } else {
+        process::exit(0);
+    }
 }
 
 pub fn run_test_manual(

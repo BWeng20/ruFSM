@@ -6,7 +6,7 @@ According to W3C Recommendations, reading and executing State Chart XML (SCXML).
 
 See https://www.w3.org/TR/scxml/
 
-Currently, the project passed all 160 mandatory automated tests from the W3C test-suite.<br/>
+Currently, the project passed ~~all 160 mandatory~~ 92 automated tests from the W3C test-suite.<br/>
 See [Test Readme](test/w3c/README.md) and the [Test Report](test/w3c/REPORT.MD).
 
 ## To-Dos:

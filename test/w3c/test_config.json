@@ -4,5 +4,5 @@
     "pass"
   ],
   "events": [],
-  "timeout_milliseconds": 60000
+  "timeout_milliseconds": 8000
 }
