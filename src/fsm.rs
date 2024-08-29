@@ -690,10 +690,11 @@ impl Event {
         id: &String,
         data_params: Option<Vec<ParamPair>>,
         data_content: Option<String>,
+        event_type: EventType,
     ) -> Event {
         Event {
             name: format!("{}{}", prefix, id),
-            etype: EventType::external,
+            etype: event_type,
             sendid: "".to_string(),
             origin: None,
             param_values: data_params,
@@ -1667,8 +1668,9 @@ impl Fsm {
                         panic!("Internal Error: Caller-Invoke-Id not available but Parent-Session-Id is set.");
                     }
                     Some(invoke_id) => {
-                        // TODO: Evaluate done_data
-                        let mut event = Event::new("done.invoke.", &invoke_id, None, None);
+                        // TODO: Evaluate done_data, EventType::external ?
+                        let mut event =
+                            Event::new("done.invoke.", &invoke_id, None, None, EventType::external);
                         event.invoke_id = Some(invoke_id);
                         if let Err(_e) = self.send_to_session(session_id, datamodel, event) {
                             #[cfg(feature = "Trace")]
@@ -2157,7 +2159,14 @@ impl Fsm {
                     };
                     self.enqueue_internal(
                         datamodel,
-                        Event::new("done.state.", &parentS.name, param_values, content),
+                        // TODO: EventType::external ?
+                        Event::new(
+                            "done.state.",
+                            &parentS.name,
+                            param_values,
+                            content,
+                            EventType::external,
+                        ),
                     );
                     let stateParent = self.get_state_by_id(parent);
                     let grandparent: StateId = stateParent.parent;
@@ -2169,7 +2178,14 @@ impl Fsm {
                         let grandparentS = self.get_state_by_id(grandparent);
                         self.enqueue_internal(
                             datamodel,
-                            Event::new("done.state.", &grandparentS.name, None, None),
+                            // TODO: EventType::external ?
+                            Event::new(
+                                "done.state.",
+                                &grandparentS.name,
+                                None,
+                                None,
+                                EventType::external,
+                            ),
                         );
                     }
                 }
@@ -3325,8 +3341,39 @@ impl Transition {
     }
 
     #[allow(non_snake_case)]
+    /// W3C says:\
+    /// An event descriptor matches an event name if its string of tokens is an exact match or a prefix
+    /// of the set of tokens in the event's name. In all cases, the token matching is case sensitive.\
+    /// For example, a transition with an 'event' attribute of "error foo" will match event names
+    /// "error", "error.send", "error.send.failed", etc. (or "foo", "foo.bar" etc.) but would not
+    /// match events named "errors.my.custom", "errorhandler.mistake", "error.send" or "foobar".\
+    /// For compatibility with CCXML, and to make the prefix matching possibly more clear to a reader
+    /// of the SCXML document, an event descriptor MAY also end with the wildcard '.*', which matches
+    /// zero or more tokens at the end of the processed event's name. Note that a transition with
+    /// 'event' of "error", one with "error.", and one with "error.*" are functionally equivalent
+    /// since they are token prefixes of exactly the same set of event names.
+    ///
+    /// Implementation Note:
+    /// Terminating "." and ".*" are already stripped by the parser.
     fn nameMatch(&self, name: &String) -> bool {
-        self.wildcard || self.events.contains(name)
+        if self.wildcard {
+            true
+        } else {
+            for e in &self.events {
+                if name.starts_with(e) {
+                    if name.len() == e.len() {
+                        // Full match
+                        return true;
+                    } else if let Some(c) = name.chars().nth(e.len()) {
+                        // partial match, token needs to be terminated with "."
+                        if c == '.' {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
     }
 }
 

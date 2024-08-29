@@ -98,18 +98,14 @@ impl FsmExecutor {
         self.set_include_paths(&include_path_from_arguments(named_arguments));
     }
 
-    pub fn set_global_options_from_arguments(
-        &mut self,
-        named_arguments: &HashMap<&str, String>,
-    ) {
+    pub fn set_global_options_from_arguments(&mut self, named_arguments: &HashMap<&str, String>) {
         let mut guard = self.state.lock().unwrap();
         // Currently only Datamodel options are relevant. Ignore all other stuff.
         for (name, value) in named_arguments {
             if let Some(datamodel_option) = name.strip_prefix(DATAMODEL_OPTION_PREFIX) {
-                guard.datamodel_options.insert(
-                    datamodel_option.to_string(),
-                    value.clone(),
-                );
+                guard
+                    .datamodel_options
+                    .insert(datamodel_option.to_string(), value.clone());
             }
         }
     }

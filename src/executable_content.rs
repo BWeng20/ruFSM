@@ -257,7 +257,7 @@ impl Debug for Raise {
 
 impl ExecutableContent for Raise {
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
-        let event = Event::new("", &self.event, None, None);
+        let event = Event::new("", &self.event, None, None, EventType::internal);
         get_global!(datamodel).enqueue_internal(event);
     }
 
