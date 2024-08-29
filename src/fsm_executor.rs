@@ -17,6 +17,7 @@ use log::info;
 
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
+use crate::datamodel::DATAMODEL_OPTION_PREFIX;
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm;
 use crate::fsm::{Event, FinishMode, InvokeId, ParamPair, ScxmlSession, SessionId};
@@ -33,6 +34,7 @@ use crate::tracer::TraceMode;
 pub struct ExecuteState {
     pub processors: Vec<Box<dyn EventIOProcessor>>,
     pub sessions: HashMap<SessionId, ScxmlSession>,
+    pub datamodel_options: HashMap<String, String>,
 }
 
 impl ExecuteState {
@@ -40,6 +42,7 @@ impl ExecuteState {
         ExecuteState {
             processors: Vec::new(),
             sessions: HashMap::new(),
+            datamodel_options: HashMap::new(),
         }
     }
 }
@@ -93,6 +96,22 @@ impl FsmExecutor {
         named_arguments: &HashMap<&'static str, String>,
     ) {
         self.set_include_paths(&include_path_from_arguments(named_arguments));
+    }
+
+    pub fn set_global_options_from_arguments(
+        &mut self,
+        named_arguments: &HashMap<&str, String>,
+    ) {
+        let mut guard = self.state.lock().unwrap();
+        // Currently only Datamodel options are relevant. Ignore all other stuff.
+        for (name, value) in named_arguments {
+            if let Some(datamodel_option) = name.strip_prefix(DATAMODEL_OPTION_PREFIX) {
+                guard.datamodel_options.insert(
+                    datamodel_option.to_string(),
+                    value.clone(),
+                );
+            }
+        }
     }
 
     pub fn set_include_paths(&mut self, include_path: &Vec<PathBuf>) {

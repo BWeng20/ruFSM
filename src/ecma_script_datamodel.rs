@@ -5,14 +5,16 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::string::ToString;
 use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(test)]
 use std::{println as debug, println as info, println as warn, println as error};
 
+use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
 use boa_engine::object::builtins::{JsMap, JsSet};
 use boa_engine::object::ObjectInitializer;
-use boa_engine::property::Attribute;
+use boa_engine::property::{Attribute, PropertyDescriptor};
 use boa_engine::value::Type;
 use boa_engine::JsResult;
 use boa_engine::{js_string, native_function::NativeFunction, Context, JsError, JsValue, Source};
@@ -35,6 +37,17 @@ pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
 pub const FSM_CONFIGURATION: &str = "_fsm_configuration";
 
+pub const ECMA_OPTION_INFIX: &str = "ecma:";
+pub const ECMA_OPTION_STRICT_POSTFIX: &str = "strict";
+
+pub const ECMA_STRICT_OPTION: &str = "datamodel:ecma:strict";
+
+pub static ECMA_STRICT_ARGUMENT: ArgOption = ArgOption {
+    name: ECMA_STRICT_OPTION,
+    with_value: false,
+    required: false,
+};
+
 static CONTEXT_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 pub struct ECMAScriptDatamodel {
@@ -45,6 +58,7 @@ pub struct ECMAScriptDatamodel {
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
     pub io_processors: HashMap<String, Box<dyn EventIOProcessor>>,
     pub id_to_state_names: HashMap<StateId, String>,
+    pub strict_mode: bool,
 }
 
 fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
@@ -80,6 +94,20 @@ impl ECMAScriptDatamodel {
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
             io_processors: HashMap::new(),
             id_to_state_names: HashMap::new(),
+            strict_mode: false,
+        }
+    }
+
+    pub fn set_option(&mut self, name: &str, _value: &str) {
+        if let Some(ecma_option) = name.strip_prefix(ECMA_OPTION_INFIX) {
+            match ecma_option {
+                ECMA_OPTION_STRICT_POSTFIX => {
+                    info!("Running in ECMA strict mode");
+                    self.strict_mode = true;
+                    self.context.strict(true);
+                }
+                &_ => {}
+            }
         }
     }
 
@@ -160,6 +188,38 @@ impl ECMAScriptDatamodel {
         }
         self.set_js_property(FSM_CONFIGURATION, set);
     }
+
+    fn assign_internal(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str, allow_undefined: bool) -> bool {
+        let exp = format!("{}={}", left_expr, right_expr);
+        if allow_undefined && self.strict_mode {
+            self.context.strict(false);
+        }
+        let r =
+            match self.eval(exp.as_str()) {
+                Ok(_) => true,
+                Err(error) => {
+                    // W3C says:\
+                    // If the location expression does not denote a valid location in the data model or
+                    // if the value specified (by 'expr' or children) is not a legal value for the
+                    // location specified, the SCXML Processor must place the error 'error.execution'
+                    // in the internal event queue.
+                    self.log(
+                        format!(
+                            "Could not assign {}={}, '{}'.",
+                            left_expr, right_expr, error
+                        )
+                            .as_str(),
+                    );
+
+                    self.internal_error_execution();
+                    false
+                }
+            };
+        if allow_undefined && self.strict_mode {
+            self.context.strict(true);
+        }
+        r
+    }
 }
 
 impl Datamodel for ECMAScriptDatamodel {
@@ -235,11 +295,23 @@ impl Datamodel for ECMAScriptDatamodel {
                 Ok(val) => {
                     self.set_js_property(name.as_str(), val);
                 }
-                Err(_) => {
-                    todo!()
+                Err(err) => {
+                    error!("Error on Initialize '{}': {}", name, err);
                 }
             }
         }
+    }
+
+    fn initialize_read_only(&mut self, name: &str, value: &str) {
+        _ = self.context.global_object().define_property_or_throw(
+            js_string!(name),
+            PropertyDescriptor::builder()
+                .configurable(false)
+                .enumerable(false)
+                .writable(false)
+                .value(js_string!(value)),
+            &mut self.context,
+        );
     }
 
     fn set(self: &mut ECMAScriptDatamodel, name: &str, data: Data) {
@@ -314,27 +386,8 @@ impl Datamodel for ECMAScriptDatamodel {
         );
     }
 
-    fn assign(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str) {
-        let exp = format!("{}={}", left_expr, right_expr);
-        match self.eval(exp.as_str()) {
-            Ok(_) => {}
-            Err(error) => {
-                // W3C says:\
-                // If the location expression does not denote a valid location in the data model or
-                // if the value specified (by 'expr' or children) is not a legal value for the
-                // location specified, the SCXML Processor must place the error 'error.execution'
-                // in the internal event queue.
-                self.log(
-                    format!(
-                        "Could not be assign: {}={}, '{}'.",
-                        left_expr, right_expr, error
-                    )
-                    .as_str(),
-                );
-
-                self.internal_error_execution();
-            }
-        }
+    fn assign(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str) -> bool {
+        self.assign_internal( left_expr, right_expr, false)
     }
 
     fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Option<Data> {
@@ -386,40 +439,32 @@ impl Datamodel for ECMAScriptDatamodel {
                         let ob = obj.borrow();
                         let p = ob.properties();
                         let mut idx: i64 = 1;
-                        self.set_js_property(item_name, JsValue::Null);
-                        let item_declaration = self.context.eval(Source::from_bytes(item_name));
-                        match item_declaration {
-                            Ok(_) => {
-                                for item_prop in p.index_property_values() {
-                                    // Skip the last "length" element
-                                    if item_prop.enumerable().is_some()
-                                        && item_prop.enumerable().unwrap()
-                                    {
-                                        match item_prop.value() {
-                                            Some(item) => {
-                                                debug!(
-                                                    "ForEach: #{} {}={:?}",
-                                                    idx, item_name, item
-                                                );
-                                                self.set_js_property(item_name, item.clone());
+
+                        if self.assign_internal(item_name, "null", true) {
+                            for item_prop in p.index_property_values() {
+                                // Skip the last "length" element
+                                if item_prop.enumerable().is_some()
+                                    && item_prop.enumerable().unwrap()
+                                {
+                                    match item_prop.value() {
+                                        Some(item) => {
+                                            debug!("ForEach: #{} {}={:?}", idx, item_name, item);
+                                            let str = js_to_string(item, &mut self.context);
+                                            if self.assign(item_name, str.as_str()) {
                                                 if !index.is_empty() {
                                                     self.set_js_property(index, idx);
                                                 }
                                                 execute_body(self);
-                                            }
-                                            None => {
-                                                warn!("ForEach: #{} - failed to get value", idx,);
+                                            } else {
+                                                return;
                                             }
                                         }
-                                        idx += 1;
+                                        None => {
+                                            warn!("ForEach: #{} - failed to get value", idx,);
+                                        }
                                     }
+                                    idx += 1;
                                 }
-                            }
-                            Err(_) => {
-                                self.log(
-                                    format!("Item '{}' could not be declared.", item_name).as_str(),
-                                );
-                                self.internal_error_execution();
                             }
                         }
                     }
@@ -461,6 +506,7 @@ impl Datamodel for ECMAScriptDatamodel {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use log::info;
 
     use crate::scxml_reader;
@@ -513,6 +559,7 @@ mod tests {
 
         assert!(run_test_manual(
             "In_function",
+            &HashMap::new(),
             fsm,
             &Vec::new(),
             TraceMode::STATES,

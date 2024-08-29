@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
@@ -50,6 +51,7 @@ pub struct TestSpecification {
     events: Vec<EventSpecification>,
     final_configuration: Option<Vec<String>>,
     timeout_milliseconds: Option<i32>,
+    options: Option<HashMap<String, String>>,
 }
 
 pub struct TestUseCase {
@@ -152,15 +154,29 @@ pub fn run_test(test: TestUseCase) {
     let timeout = test.specification.timeout_milliseconds.unwrap_or(0);
     let final_expected_configuration = test.specification.final_configuration.unwrap_or_default();
 
+    let mut options_s = HashMap::new();
+
+    if let Some(test_option) = test.specification.options {
+        for (name, value) in &test_option {
+            options_s.insert(name.clone(), value.clone());
+        }
+    }
+
+    let mut options = HashMap::new();
+    for (name, value) in &options_s {
+        options.insert(name.as_str(), value.clone());
+    }
+
     if !run_test_manual(
-            &test.name,
-            fsm,
-            &test.include_paths,
-            #[cfg(feature = "Trace")]
-            test.trace_mode,
-            timeout as u64,
-            &final_expected_configuration
-        ) {
+        &test.name,
+        &options,
+        fsm,
+        &test.include_paths,
+        #[cfg(feature = "Trace")]
+        test.trace_mode,
+        timeout as u64,
+        &final_expected_configuration,
+    ) {
         process::exit(-1);
     } else {
         process::exit(0);
@@ -169,6 +185,7 @@ pub fn run_test(test: TestUseCase) {
 
 pub fn run_test_manual(
     test_name: &str,
+    options: &HashMap<&str, String>,
     fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
     #[cfg(feature = "Trace")] trace_mode: TraceMode,
@@ -177,6 +194,7 @@ pub fn run_test_manual(
 ) -> bool {
     run_test_manual_with_send(
         test_name,
+        options,
         fsm,
         include_paths,
         #[cfg(feature = "Trace")]
@@ -187,8 +205,10 @@ pub fn run_test_manual(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn run_test_manual_with_send(
     test_name: &str,
+    options: &HashMap<&str, String>,
     mut fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
     #[cfg(feature = "Trace")] trace_mode: TraceMode,
@@ -200,6 +220,8 @@ pub fn run_test_manual_with_send(
     fsm.tracer.enable_trace(trace_mode);
 
     let mut executor = FsmExecutor::new_without_io_processor();
+    executor.set_global_options_from_arguments(options);
+
     let executor_state = executor.state.clone();
     for ip in include_paths {
         executor.include_paths.push(ip.clone());

@@ -6,7 +6,7 @@
 | test149.txml.scxml   | OK       |
 | test150.txml.scxml   | OK       |
 | test151.txml.scxml   | OK       |
-| test152.txml.scxml   | _Failed_ |
+| test152.txml.scxml   | OK       |
 | test153.txml.scxml   | OK       |
 | test155.txml.scxml   | OK       |
 | test156.txml.scxml   | _Failed_ |
@@ -76,9 +76,9 @@
 | test312.txml.scxml   | OK       |
 | test318.txml.scxml   | OK       |
 | test319.txml.scxml   | OK       |
-| test321.txml.scxml   | _Failed_ |
+| test321.txml.scxml   | OK       |
 | test322.txml.scxml   | _Failed_ |
-| test323.txml.scxml   | _Failed_ |
+| test323.txml.scxml   | OK       |
 | test324.txml.scxml   | _Failed_ |
 | test325.txml.scxml   | _Failed_ |
 | test326.txml.scxml   | _Failed_ |
@@ -160,4 +160,4 @@
 | test576.txml.scxml   | OK       |
 | test579.txml.scxml   | _Failed_ |
 | test580.txml.scxml   | OK       |
-__Result__: 92 of 160 tests succeeded
+__Result__: 95 of 160 tests succeeded

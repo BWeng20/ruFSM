@@ -4,6 +4,7 @@
 extern crate core;
 
 use log::error;
+use rfsm::ecma_script_datamodel::ECMA_STRICT_ARGUMENT;
 use std::io::{stdout, Write};
 use std::{io, process, thread, time};
 
@@ -26,6 +27,8 @@ async fn main() {
         &TRACE_ARGUMENT_OPTION,
         #[cfg(feature = "xml")]
         &INCLUDE_PATH_ARGUMENT_OPTION,
+        #[cfg(feature = "boa_engine")]
+        &ECMA_STRICT_ARGUMENT,
     ]);
 
     #[cfg(feature = "Trace")]
@@ -39,6 +42,7 @@ async fn main() {
     let mut executor = FsmExecutor::new_with_io_processor().await;
     #[cfg(feature = "xml")]
     executor.set_include_paths_from_arguments(&named_opt);
+    executor.set_global_options_from_arguments(&named_opt);
 
     let mut session;
 

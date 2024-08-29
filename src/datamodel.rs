@@ -16,6 +16,8 @@ use crate::fsm::{
     CommonContent, Event, ExecutableContentId, Fsm, GlobalData, ParamPair, Parameter, StateId,
 };
 
+pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
+
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
 
@@ -25,6 +27,20 @@ pub const SCXML_EVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#SCXMLEventP
 
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 pub const BASIC_HTTP_EVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#BasicHTTPEventProcessor";
+
+/// Name of system variable "_sessionid".\
+/// *W3C says*:\
+/// The SCXML Processor MUST bind the variable _sessionid at load time to the system-generated id
+/// for the current SCXML session. (This is of type NMTOKEN.) The Processor MUST keep the variable
+/// bound to this value until the session terminates.
+pub const SESSION_ID_VARIABLE_NAME: &str = "_sessionid";
+
+/// Name of system variable "_name".
+/// *W3C says*:\
+/// The SCXML Processor MUST bind the variable _name at load time to the value of the 'name'
+/// attribute of the \<scxml\> element. The Processor MUST keep the variable bound to this
+/// value until the session terminates.
+pub const SESSION_NAME_VARIABLE_NAME: &str = "_name";
 
 /// Name of system variable "_event" for events
 pub const EVENT_VARIABLE_NAME: &str = "_event";
@@ -123,6 +139,9 @@ pub trait Datamodel {
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, fsm: &mut Fsm, state: StateId);
 
+    /// Initialize a global read-only variable.
+    fn initialize_read_only(&mut self, name: &str, value: &str);
+
     /// Sets a global variable.
     fn set(&mut self, name: &str, data: Data);
 
@@ -130,7 +149,8 @@ pub trait Datamodel {
     fn set_event(&mut self, event: &Event);
 
     /// Execute an assign expression.
-    fn assign(&mut self, left_expr: &str, right_expr: &str);
+    /// Returns true if the assignment was correct.
+    fn assign(&mut self, left_expr: &str, right_expr: &str) -> bool;
 
     /// Gets a global variable by a location expression.\
     /// If the location is undefined or the location expression is invalid,
@@ -200,13 +220,11 @@ pub trait Datamodel {
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
     fn internal_error_execution(&mut self) {
-        info!("enqueue error:execution");
         get_global!(self).enqueue_internal(Event::error_execution());
     }
 
     /// W3C: Indicates that an error has occurred while trying to communicate with an external entity.
     fn internal_error_communication(&mut self) {
-        info!("enqueue error:communication");
         get_global!(self).enqueue_internal(Event::error_communication());
     }
 
@@ -342,6 +360,10 @@ impl Datamodel for NullDatamodel {
         // nothing to do
     }
 
+    fn initialize_read_only(&mut self, _name: &str, _value: &str) {
+        // nothing to do
+    }
+
     fn set(&mut self, _name: &str, _data: Data) {
         // nothing to do
     }
@@ -350,8 +372,9 @@ impl Datamodel for NullDatamodel {
         // nothing to do
     }
 
-    fn assign(&mut self, _left_expr: &str, _right_expr: &str) {
+    fn assign(&mut self, _left_expr: &str, _right_expr: &str) -> bool {
         // nothing to do
+        true
     }
 
     fn get_by_location(&mut self, _name: &str) -> Option<Data> {

@@ -25,7 +25,7 @@ use log::{debug, error, info};
 
 use crate::datamodel::{
     Data, DataStore, Datamodel, GlobalDataAccess, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
-    SCXML_TYPE,
+    SCXML_TYPE, SESSION_ID_VARIABLE_NAME, SESSION_NAME_VARIABLE_NAME,
 };
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMAScriptDatamodel, ECMA_SCRIPT_LC};
@@ -93,12 +93,13 @@ pub fn start_fsm_with_data_and_finish_mode(
         FinishMode::NOTHING => {}
     }
 
-    executor
-        .state
-        .lock()
-        .unwrap()
-        .sessions
-        .insert(session_id, session.clone());
+    let options = {
+        let mut execute_state = executor.state.lock().unwrap();
+
+        execute_state.sessions.insert(session_id, session.clone());
+
+        execute_state.datamodel_options.clone()
+    };
 
     let global_data = session.global_data.clone();
 
@@ -107,7 +108,8 @@ pub fn start_fsm_with_data_and_finish_mode(
         .spawn(move || {
             info!("SM starting...");
             {
-                let mut datamodel = create_datamodel(sm.datamodel.as_str(), global_data, &vt);
+                let mut datamodel =
+                    create_datamodel(sm.datamodel.as_str(), global_data, &vt, &options);
 
                 {
                     let mut global = get_global!(datamodel);
@@ -1049,7 +1051,6 @@ pub struct Fsm {
     #[cfg(feature = "Trace")]
     pub tracer: Box<dyn Tracer>,
     pub datamodel: String,
-
     pub binding: BindingType,
     pub version: String,
     pub statesNames: StateNameMap,
@@ -1282,6 +1283,19 @@ impl Fsm {
         self.expandScxmlSource();
         {
             datamodel.clear();
+
+            // Initialize session variables "_name" and "_sessionid"
+
+            let session_id = datamodel.global().lock().session_id;
+            datamodel.initialize_read_only(
+                SESSION_ID_VARIABLE_NAME,
+                format!("'{}'", session_id).as_str(),
+            );
+            datamodel.initialize_read_only(
+                SESSION_NAME_VARIABLE_NAME,
+                format!("'{}'", self.name).as_str(),
+            );
+
             {
                 let mut gd = get_global!(datamodel);
                 gd.internalQueue.clear();
@@ -3320,6 +3334,7 @@ pub fn create_datamodel(
     name: &str,
     global_data: GlobalDataAccess,
     processors: &Vec<Box<dyn EventIOProcessor>>,
+    options: &HashMap<String, String>,
 ) -> Box<dyn Datamodel> {
     match name.to_lowercase().as_str() {
         // TODO: use some registration api to handle data models
@@ -3330,6 +3345,9 @@ pub fn create_datamodel(
                 for t in p.as_ref().get_types() {
                     ecma.io_processors.insert(t.to_string(), p.get_copy());
                 }
+            }
+            for (key, value) in options {
+                ecma.set_option(key.as_str(), value.as_str());
             }
             ecma
         }
@@ -3430,6 +3448,7 @@ pub(crate) fn opt_vec_to_string<T: Display>(v: &Option<Vec<T>>) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::mpsc::Sender;
 
     use crate::fsm::List;
@@ -3764,6 +3783,7 @@ mod tests {
         assert!(
             run_test_manual_with_send(
                 "fsm_shall_exit",
+                &HashMap::new(),
                 fsm,
                 &Vec::new(),
                 TraceMode::ALL,

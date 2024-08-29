@@ -51,6 +51,11 @@
     "timeout_milliseconds": {
       "description": "Maximal time the FSM shall run.",
       "type": "integer"
+    },
+    "options":  {
+      "description": "Global options for executor.",
+      "type": "object",
+      "additionalProperties": true
     }
   },
   "required": [
