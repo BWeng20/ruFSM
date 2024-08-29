@@ -111,6 +111,28 @@ impl ECMAScriptDatamodel {
         }
     }
 
+    pub fn set_from_data_store(&mut self, data : &DataStore) {
+        for (name, data) in &data.values {
+            match &data.value {
+                None => {
+                    self.set_js_property(name.as_str(), JsValue::Null);
+                }
+                Some(dv) => {
+                    let rs = self.context.eval(Source::from_bytes(dv.as_str()));
+                    match rs {
+                        Ok(val) => {
+                            self.set_js_property(name.as_str(), val);
+                        }
+                        Err(err) => {
+                            error!("Error on Initialize '{}': {}", name, err);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
     fn execute_internal(&mut self, script: &str, handle_error: bool) -> Option<String> {
         let result = self.eval(script);
         match result {
@@ -289,25 +311,12 @@ impl Datamodel for ECMAScriptDatamodel {
             s.push(sn.clone());
         }
         let state_obj: &State = fsm.get_state_by_id_mut(data_state);
-
         // Set all (simple) global variables.
-        for (name, data) in &state_obj.data.values {
-            match &data.value {
-                None => {
-                    self.set_js_property(name.as_str(), JsValue::Null);
-                }
-                Some(dv) => {
-                    let rs = self.context.eval(Source::from_bytes(dv.as_str()));
-                    match rs {
-                        Ok(val) => {
-                            self.set_js_property(name.as_str(), val);
-                        }
-                        Err(err) => {
-                            error!("Error on Initialize '{}': {}", name, err);
-                        }
-                    }
-                }
-            }
+        self.set_from_data_store(&state_obj.data);
+        if data_state == fsm.pseudo_root {
+            let mut ds = DataStore::new();
+            ds.values = self.global_data.lock().environment.values.clone();
+            self.set_from_data_store(&ds);
         }
     }
 

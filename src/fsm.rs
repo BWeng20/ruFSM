@@ -119,11 +119,11 @@ pub fn start_fsm_with_data_and_finish_mode(
                         Option::map(sm.caller_invoke_id.as_ref(), |x| x.clone());
                     global.parent_session_id = sm.parent_session_id;
                     global.executor = Some(executor);
+                    for val in data_copy {
+                        global.environment.set(val.name.as_str(), val.value.clone());
+                    }
                 }
 
-                for val in data_copy {
-                    datamodel.set(val.name.as_str(), val.value.clone());
-                }
                 sm.interpret(datamodel.deref_mut());
             }
             info!("SM finished");
@@ -956,6 +956,7 @@ pub struct GlobalData {
 
     /// Will contain after execution the final configuration, if set before.
     pub final_configuration: Option<Vec<String>>,
+    pub environment : DataStore,
 }
 
 impl GlobalData {
@@ -973,6 +974,7 @@ impl GlobalData {
             parent_session_id: None,
             session_id: 0,
             final_configuration: None,
+            environment: DataStore::new(),
         }
     }
 
@@ -1809,7 +1811,7 @@ impl Fsm {
                     self.transition_document_order(t1, t2)
                 });
                 for t in transition {
-                    if (!t.events.is_empty()) && t.nameMatch(&event.name) {
+                    if (!t.events.is_empty()) && t.nameMatch(event.name.as_str()) {
                         condT.push(t.id);
                     }
                 }
@@ -3355,7 +3357,7 @@ impl Transition {
     ///
     /// Implementation Note:
     /// Terminating "." and ".*" are already stripped by the parser.
-    fn nameMatch(&self, name: &String) -> bool {
+    fn nameMatch(&self, name: &str) -> bool {
         if self.wildcard {
             true
         } else {
