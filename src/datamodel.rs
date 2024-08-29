@@ -453,6 +453,10 @@ impl Data {
     pub fn new_moved(val: String) -> Data {
         Data { value: Some(val) }
     }
+
+    pub fn new_null() -> Data {
+        Data { value: None }
+    }
 }
 
 impl Debug for Data {

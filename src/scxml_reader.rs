@@ -828,6 +828,8 @@ impl ReaderState {
             self.get_current_state()
                 .data
                 .set(id, Data::new_moved(content));
+        } else {
+            self.get_current_state().data.set(id, Data::new_null());
         }
     }
 
@@ -915,7 +917,29 @@ impl ReaderState {
             t.events = event
                 .unwrap()
                 .split_whitespace()
-                .map(|s| s.to_string())
+                .map(|s| {
+                    // Strip redundant "." and ".*" suffix
+                    let mut rt = s;
+                    let mut do_it = true;
+                    while do_it {
+                        do_it = false;
+                        match rt.strip_suffix(".*") {
+                            None => {}
+                            Some(r) => {
+                                do_it = true;
+                                rt = r
+                            }
+                        }
+                        match rt.strip_suffix(".") {
+                            None => {}
+                            Some(r) => {
+                                do_it = true;
+                                rt = r
+                            }
+                        }
+                    }
+                    rt.to_string()
+                })
                 .collect();
             t.wildcard = t.events.contains(&"*".to_string());
         }

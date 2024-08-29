@@ -102,7 +102,7 @@ impl ECMAScriptDatamodel {
         if let Some(ecma_option) = name.strip_prefix(ECMA_OPTION_INFIX) {
             match ecma_option {
                 ECMA_OPTION_STRICT_POSTFIX => {
-                    info!("Running in ECMA strict mode");
+                    info!("Running ECMA in strict mode");
                     self.strict_mode = true;
                     self.context.strict(true);
                 }
@@ -189,32 +189,36 @@ impl ECMAScriptDatamodel {
         self.set_js_property(FSM_CONFIGURATION, set);
     }
 
-    fn assign_internal(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str, allow_undefined: bool) -> bool {
+    fn assign_internal(
+        self: &mut ECMAScriptDatamodel,
+        left_expr: &str,
+        right_expr: &str,
+        allow_undefined: bool,
+    ) -> bool {
         let exp = format!("{}={}", left_expr, right_expr);
         if allow_undefined && self.strict_mode {
             self.context.strict(false);
         }
-        let r =
-            match self.eval(exp.as_str()) {
-                Ok(_) => true,
-                Err(error) => {
-                    // W3C says:\
-                    // If the location expression does not denote a valid location in the data model or
-                    // if the value specified (by 'expr' or children) is not a legal value for the
-                    // location specified, the SCXML Processor must place the error 'error.execution'
-                    // in the internal event queue.
-                    self.log(
-                        format!(
-                            "Could not assign {}={}, '{}'.",
-                            left_expr, right_expr, error
-                        )
-                            .as_str(),
-                    );
+        let r = match self.eval(exp.as_str()) {
+            Ok(_) => true,
+            Err(error) => {
+                // W3C says:\
+                // If the location expression does not denote a valid location in the data model or
+                // if the value specified (by 'expr' or children) is not a legal value for the
+                // location specified, the SCXML Processor must place the error 'error.execution'
+                // in the internal event queue.
+                self.log(
+                    format!(
+                        "Could not assign {}={}, '{}'.",
+                        left_expr, right_expr, error
+                    )
+                    .as_str(),
+                );
 
-                    self.internal_error_execution();
-                    false
-                }
-            };
+                self.internal_error_execution();
+                false
+            }
+        };
         if allow_undefined && self.strict_mode {
             self.context.strict(true);
         }
@@ -288,15 +292,20 @@ impl Datamodel for ECMAScriptDatamodel {
 
         // Set all (simple) global variables.
         for (name, data) in &state_obj.data.values {
-            let rs = self
-                .context
-                .eval(Source::from_bytes(data.value.as_ref().unwrap().as_str()));
-            match rs {
-                Ok(val) => {
-                    self.set_js_property(name.as_str(), val);
+            match &data.value {
+                None => {
+                    self.set_js_property(name.as_str(), JsValue::Null);
                 }
-                Err(err) => {
-                    error!("Error on Initialize '{}': {}", name, err);
+                Some(dv) => {
+                    let rs = self.context.eval(Source::from_bytes(dv.as_str()));
+                    match rs {
+                        Ok(val) => {
+                            self.set_js_property(name.as_str(), val);
+                        }
+                        Err(err) => {
+                            error!("Error on Initialize '{}': {}", name, err);
+                        }
+                    }
                 }
             }
         }
@@ -387,7 +396,7 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn assign(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str) -> bool {
-        self.assign_internal( left_expr, right_expr, false)
+        self.assign_internal(left_expr, right_expr, false)
     }
 
     fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Option<Data> {
@@ -506,8 +515,8 @@ impl Datamodel for ECMAScriptDatamodel {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use log::info;
+    use std::collections::HashMap;
 
     use crate::scxml_reader;
     use crate::test::run_test_manual;
