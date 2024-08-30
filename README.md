@@ -6,18 +6,20 @@ According to W3C Recommendations, reading and executing State Chart XML (SCXML).
 
 See https://www.w3.org/TR/scxml/
 
-Currently, the project passed ~~all 160 mandatory~~ 109 automated tests from the W3C test-suite.<br/>
+Currently, the project passed ~~all 160~~ 121 of the mandatory automated tests from the W3C test-suite.<br/>
 See [Test Readme](test/w3c/README.md) and the [Test Report](test/w3c/REPORT.MD).
 
 ## To-Dos:
 
++ Fix all W3C Tests (and add all missing implementations for it)
 + Implement BasicHttpEvent I/O Processor _(ongoing, see [basic_http_event_io_processor.rs](src/basic_http_event_io_processor.rs))_.
++ Design a concept for dynamic binding of business-logic to the FSM (to do real things). 
 
 
 > [!NOTE]
 > ### Not conformant or not implemented features of the W3C recommendation
 > 
-> + XML inside &lt;content> is not handled accoring to _[content_and_namespaces](doc/W3C_SCXML_2024_07_13/index.html#content_and_namespaces)_. The content inside &lt;content> is not
+> + XML inside &lt;content> is not handled according to _[content_and_namespaces](doc/W3C_SCXML_2024_07_13/index.html#content_and_namespaces)_. The content inside &lt;content> is not
 >  interpreted and send to the receiver unmodified.
 
 ## SW Design
@@ -44,4 +46,12 @@ If none of the <i>Trace_xxx</i> features are used, "Tracer" module is completely
 
 ## How To Use
 
-_TODO_
+FSMs normally are used embedded inside other software to control some state-full workflow.<br/> 
+The operations of this workflow are triggered from the transitions or the states-handlers.  
+To add such operations different approaches exits. In hard-codes FSMs methods-calls are directly
+linked to the transition or states during compile-time.<br/>
+
+This implementation loads FSMs during runtime, so the binding needs to be dynamically.<br/> 
+The API for this binding currently doesn't exist (a todo).
+
+The only practical use (currently) is to test SCXML documents (see [Manual Testing](SW_Design.md#manual-tests)) 

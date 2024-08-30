@@ -6,6 +6,8 @@ Multiple FSM can work in parallel and communicate via their external event-queue
 
 A Datamodel-instance is associated with each FSM-instance.
 
+All active Fsm-sessions are managed by the FsmExecutor. 
+
 ## Details
 
 The Fsm implements the algorithm described in the W3C Recommendation. The main loop is executed in a work-thread. The application sends events via a "BlockingQueue" (technical a
@@ -24,6 +26,13 @@ These methods are marked with "_#[allow(non_snake_case)]_" to suppress warnings.
 ## Structure
 
 ```mermaid
+---
+title: Basic Structure
+config:
+  layout: elk
+  look: handDrawn
+  theme: neutral
+---
 erDiagram
     Fsm {
     }
@@ -54,6 +63,12 @@ erDiagram
 ## Basic class diagram
 
 ```mermaid
+---
+title: Classes
+config:
+  look: handDrawn
+  theme: dark
+---
 classDiagram
     Fsm *-- Datamodel
     Fsm *-- BlockingQueue: external queue
@@ -125,38 +140,35 @@ classDiagram
      +global() GlobalData
 
      +initializeDataModel(Data)
+     +implement_mandatory_functionality(Fsm)
+     +initialize_read_only(name,value)
 
-     +set(name, Data);
-     +get(name): Data;
+     +set(name, Data)
+     +get(name): Data
+     +set_event(Event)
+     +assign( left, right)
+     +get_by_location(location)
+     +get_io_processors(): Map~String,EventIOProcessor~
 
-     +execute(Script): String;
+     +execute(Script): String
      +executeCondition(BooleanExpression): boolean
-     
+     +executeContent(Fsm, ExecutableContentId)
+     +execute_for_each(array_expression, item, index, body)
+        
      +log(String)
     }
 
     class ECMAScriptDatamodel {
      +data: DataStore
-     +context_id: u32
+     +global_data: GlobalData
+     +context: boa_engine::Context
     }
-
-    class ECMAScriptContext {
-      +global_data: GlobalData
-      +context: boa_engine::Context
-    }
-
-    
-    class context_map{
-    }
-    
-    context_map "1" *-- "*" ECMAScriptContext
 
     class BlockingQueue{
     }
 
     NullDatamodel ..|> Datamodel
     ECMAScriptDatamodel ..|> Datamodel
-    ECMAScriptDatamodel --> context_map: context_id
     
     class reader {
      +read_from_xml(xml) Fsm
@@ -182,16 +194,22 @@ classDiagram
     class FsmExecutor {
         + add_processor(EventIOProcessor)
         + shutdown()
-        + execute(file_path, trace)
+        + execute(file_path, TraceMode)
+        + remove_session(SessionId)
+        + get_session_sender(SessionId): Sender
+        + send_to_session(SessionId,Event)
+        +include_paths: Vec~Path~
     }
     
-    class SystemState {
+    class ExecuteState {
         processors : EventIOProcessor[]
+        sessions: Map~SessionId,ScxmlSession~
+        datamodel_options: Map~String,String~
     }
 
     Datamodel "0..n" -- "0..n" EventIOProcessor
-    SystemState "1" *-- "0..n" EventIOProcessor
-    FsmExecutor "1" *-- "1" SystemState
+    ExecuteState "1" *-- "0..n" EventIOProcessor
+    FsmExecutor "1" *-- "1" ExecuteState
     FsmExecutor "1" *-- "0..n" Fsm
 
 
@@ -230,4 +248,4 @@ or depending on your OS, `set RUST_LOG=debug`.
 
 For automated tests the binary `test` can be used. The schema for the configuration files is _[schema/test_specification_schema.json](schema/test_specification_schema.json)_.
 
-For a practical application to the tests from _"W3C SCXML 1.0 Implementation Report"_, see [test/w3c/README.md](test/w3c/README.md).
+For a practical application see [test/w3c/README.md](test/w3c/README.md).
