@@ -5,6 +5,12 @@ SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 cd $SCRIPT_DIR
 echo "Working in $(pwd)"
 
+if ! command -v xmllint &> /dev/null
+then
+    echo "xmllint not found, please install libxml2-utils!"
+    exit 1
+fi
+
 RFSM_BIN=../../target/debug/test
 
 echo "======================================================="
@@ -25,11 +31,18 @@ REPORT_FILE="REPORT.MD"
 
 echo "Write report to $REPORT_FILE"
 
-echo "| Test                 | Result   |" > $REPORT_FILE
-echo "|----------------------|----------|" >> $REPORT_FILE
+echo "| Test                 | Result   | Test Description                                        |" > $REPORT_FILE
+echo "|----------------------|----------|---------------------------------------------------------|" >> $REPORT_FILE
 
 for TEST_FILE in scxml/*.scxml; do
   TEST_NAME=$(basename "${TEST_FILE}")
+
+  # Extract comment
+  TEST_COMMENT=$(xmllint --xpath "/comment()" "${TEST_FILE}" 2>/dev/null)
+  TEST_COMMENT=${TEST_COMMENT//$'\n'/ }
+  TEST_COMMENT=${TEST_COMMENT/\<!--/}
+  TEST_COMMENT=${TEST_COMMENT/--\>/}
+  TEST_COMMENT=${TEST_COMMENT//\</\\\<}
 
   TABLE_TEST_NAME="$TEST_NAME"
   if [ ${#TEST_NAME} -lt 21 ]; then
@@ -45,11 +58,12 @@ for TEST_FILE in scxml/*.scxml; do
   if [ $? -eq 0 ]; then
       OK_COUNT=$(( OK_COUNT + 1 ))
       echo -e "\033[0;32mOK\033[0m"
-      echo "OK       |" >> $REPORT_FILE
+      echo -n "OK       |" >> $REPORT_FILE
   else
       echo -e "\033[0;31mFailed\033[0m"
-      echo "_Failed_ |" >> $REPORT_FILE
+      echo -n "_Failed_ |" >> $REPORT_FILE
   fi
+  echo "${TEST_COMMENT}|" >> $REPORT_FILE
   ALL_COUNT=$(( ALL_COUNT + 1 ))
 done
 

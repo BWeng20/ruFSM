@@ -1,163 +1,163 @@
-| Test                 | Result   |
-|----------------------|----------|
-| test144.txml.scxml   | OK       |
-| test147.txml.scxml   | OK       |
-| test148.txml.scxml   | OK       |
-| test149.txml.scxml   | OK       |
-| test150.txml.scxml   | OK       |
-| test151.txml.scxml   | OK       |
-| test152.txml.scxml   | OK       |
-| test153.txml.scxml   | OK       |
-| test155.txml.scxml   | OK       |
-| test156.txml.scxml   | _Failed_ |
-| test158.txml.scxml   | OK       |
-| test159.txml.scxml   | _Failed_ |
-| test172.txml.scxml   | OK       |
-| test173.txml.scxml   | OK       |
-| test174.txml.scxml   | OK       |
-| test175.txml.scxml   | OK       |
-| test176.txml.scxml   | OK       |
-| test179.txml.scxml   | OK       |
-| test183.txml.scxml   | _Failed_ |
-| test185.txml.scxml   | OK       |
-| test186.txml.scxml   | OK       |
-| test187.txml.scxml   | OK       |
-| test189.txml.scxml   | OK       |
-| test190.txml.scxml   | OK       |
-| test191.txml.scxml   | OK       |
-| test192.txml.scxml   | OK       |
-| test194.txml.scxml   | _Failed_ |
-| test198.txml.scxml   | _Failed_ |
-| test199.txml.scxml   | OK       |
-| test200.txml.scxml   | OK       |
-| test205.txml.scxml   | OK       |
-| test207.txml.scxml   | _Failed_ |
-| test208.txml.scxml   | _Failed_ |
-| test210.txml.scxml   | _Failed_ |
-| test215.txml.scxml   | OK       |
-| test216.txml.scxml   | _Failed_ |
-| test220.txml.scxml   | OK       |
-| test223.txml.scxml   | OK       |
-| test224.txml.scxml   | OK       |
-| test225.txml.scxml   | OK       |
-| test226.txml.scxml   | OK       |
-| test228.txml.scxml   | OK       |
-| test229.txml.scxml   | _Failed_ |
-| test232.txml.scxml   | OK       |
-| test233.txml.scxml   | _Failed_ |
-| test234.txml.scxml   | _Failed_ |
-| test235.txml.scxml   | OK       |
-| test236.txml.scxml   | OK       |
-| test237.txml.scxml   | _Failed_ |
-| test239.txml.scxml   | OK       |
-| test240.txml.scxml   | OK       |
-| test241.txml.scxml   | OK       |
-| test242.txml.scxml   | OK       |
-| test243.txml.scxml   | OK       |
-| test244.txml.scxml   | OK       |
-| test245.txml.scxml   | _Failed_ |
-| test247.txml.scxml   | OK       |
-| test252.txml.scxml   | _Failed_ |
-| test253.txml.scxml   | OK       |
-| test276.txml.scxml   | OK       |
-| test277.txml.scxml   | _Failed_ |
-| test279.txml.scxml   | _Failed_ |
-| test280.txml.scxml   | _Failed_ |
-| test286.txml.scxml   | OK       |
-| test287.txml.scxml   | OK       |
-| test294.txml.scxml   | OK       |
-| test298.txml.scxml   | OK       |
-| test302.txml.scxml   | _Failed_ |
-| test303.txml.scxml   | OK       |
-| test304.txml.scxml   | _Failed_ |
-| test309.txml.scxml   | OK       |
-| test310.txml.scxml   | OK       |
-| test311.txml.scxml   | OK       |
-| test312.txml.scxml   | OK       |
-| test318.txml.scxml   | OK       |
-| test319.txml.scxml   | OK       |
-| test321.txml.scxml   | OK       |
-| test322.txml.scxml   | OK       |
-| test323.txml.scxml   | OK       |
-| test324.txml.scxml   | OK       |
-| test325.txml.scxml   | OK       |
-| test326.txml.scxml   | _Failed_ |
-| test329.txml.scxml   | _Failed_ |
-| test330.txml.scxml   | OK       |
-| test331.txml.scxml   | OK       |
-| test332.txml.scxml   | _Failed_ |
-| test333.txml.scxml   | _Failed_ |
-| test335.txml.scxml   | _Failed_ |
-| test336.txml.scxml   | _Failed_ |
-| test337.txml.scxml   | _Failed_ |
-| test338.txml.scxml   | OK       |
-| test339.txml.scxml   | _Failed_ |
-| test342.txml.scxml   | OK       |
-| test343.txml.scxml   | _Failed_ |
-| test344.txml.scxml   | OK       |
-| test346.txml.scxml   | _Failed_ |
-| test347.txml.scxml   | OK       |
-| test348.txml.scxml   | OK       |
-| test349.txml.scxml   | _Failed_ |
-| test350.txml.scxml   | OK       |
-| test351.txml.scxml   | OK       |
-| test352.txml.scxml   | _Failed_ |
-| test354.txml.scxml   | _Failed_ |
-| test355.txml.scxml   | OK       |
-| test364.txml.scxml   | OK       |
-| test372.txml.scxml   | OK       |
-| test375.txml.scxml   | _Failed_ |
-| test376.txml.scxml   | OK       |
-| test377.txml.scxml   | _Failed_ |
-| test378.txml.scxml   | OK       |
-| test387.txml.scxml   | OK       |
-| test388.txml.scxml   | OK       |
-| test396.txml.scxml   | OK       |
-| test399.txml.scxml   | OK       |
-| test401.txml.scxml   | OK       |
-| test402.txml.scxml   | OK       |
-| test403a.txml.scxml  | OK       |
-| test403b.txml.scxml  | OK       |
-| test403c.txml.scxml  | _Failed_ |
-| test404.txml.scxml   | OK       |
-| test405.txml.scxml   | OK       |
-| test406.txml.scxml   | OK       |
-| test407.txml.scxml   | OK       |
-| test409.txml.scxml   | OK       |
-| test411.txml.scxml   | OK       |
-| test412.txml.scxml   | OK       |
-| test413.txml.scxml   | OK       |
-| test416.txml.scxml   | OK       |
-| test417.txml.scxml   | OK       |
-| test419.txml.scxml   | OK       |
-| test421.txml.scxml   | OK       |
-| test422.txml.scxml   | OK       |
-| test423.txml.scxml   | OK       |
-| test436.txml.scxml   | _Failed_ |
-| test487.txml.scxml   | OK       |
-| test488.txml.scxml   | _Failed_ |
-| test495.txml.scxml   | OK       |
-| test496.txml.scxml   | OK       |
-| test500.txml.scxml   | OK       |
-| test501.txml.scxml   | _Failed_ |
-| test503.txml.scxml   | OK       |
-| test504.txml.scxml   | OK       |
-| test505.txml.scxml   | OK       |
-| test506.txml.scxml   | OK       |
-| test521.txml.scxml   | OK       |
-| test525.txml.scxml   | OK       |
-| test527.txml.scxml   | OK       |
-| test528.txml.scxml   | _Failed_ |
-| test529.txml.scxml   | OK       |
-| test530.txml.scxml   | _Failed_ |
-| test533.txml.scxml   | OK       |
-| test550.txml.scxml   | _Failed_ |
-| test551.txml.scxml   | _Failed_ |
-| test552.txml.scxml   | OK       |
-| test553.txml.scxml   | _Failed_ |
-| test554.txml.scxml   | _Failed_ |
-| test570.txml.scxml   | OK       |
-| test576.txml.scxml   | OK       |
-| test579.txml.scxml   | _Failed_ |
-| test580.txml.scxml   | OK       |
+| Test                 | Result   | Test Description                                        |
+|----------------------|----------|---------------------------------------------------------|
+| test144.txml.scxml   | OK       | test that events are inserted into the queue in the order in which they are raised.  If foo occurs before bar, success, otherwise failure |
+| test147.txml.scxml   | OK       | test that the first clause that evaluates to true - and only that clause - is executed. Only one event should be raised, and it should be bar |
+| test148.txml.scxml   | OK       | test that the else clause executes if \<if> and \<elseif> evaluate to false. Baz should be the only event generated by the \<if>.  bat is raised to catch the case where the \<else> clause fails and baz is not generated, i.e. it makes sure that the test doesn't hang.  |
+| test149.txml.scxml   | OK       | test that neither if clause executes, so that bat is the only event raised. |
+| test150.txml.scxml   | OK       | test that foreach causes a new variable to be declared if 'item' doesn't already exist.  Also test that it will use an existing var if it does exist. |
+| test151.txml.scxml   | OK       | test that foreach causes a new variable to be declared if 'item' doesn't already exist.  Also test that it will use an existing var if it does exist. |
+| test152.txml.scxml   | OK       | test that an illegal array or item value causes error.execution and results in executable content not being executed. |
+| test153.txml.scxml   | OK       | test that foreach goes over the array in the right order.  since the array contains 1 2 3, we compare the current  value with the previous value, which is stored in var1. The current value should always be larger.  If it ever isn't, set Var4 to 0, indicating failure |
+| test155.txml.scxml   | OK       | test that foreach executes the executable content once for each item in the list '(1,2,3)'. The executable content sums the items into var1 so it should be 6 at the end |
+| test156.txml.scxml   | _Failed_ | test that an error causes the foreach to stop execution.  The second piece of executable content should cause an error, so var1 should be incremented only once |
+| test158.txml.scxml   | OK       | test that executable content executes in document order.  if event1 occurs then event2, succeed, otherwise fail |
+| test159.txml.scxml   | _Failed_ | test that any error raised by an element of executable content causes all subsequent elements to be skipped. The send tag will raise an error so var1 should not be incremented.  If it is fail, otherwise succeed |
+| test172.txml.scxml   | OK       | we test that eventexpr uses the current value of var1, not its initial value  |
+| test173.txml.scxml   | OK       | we test that targetexpr uses the current value of var1, not its initial value (If it uses the initial value, it will generate an error.  If it uses the current value, event1 will be raised  |
+| test174.txml.scxml   | OK       | we test that typeexpr uses the current value of var1, not its initial value (If it uses the initial value, it will generate an error.  If it uses the current value, event1 will be raised  |
+| test175.txml.scxml   | OK       | we test that delayexpr uses the current value of var1, not its initial value (If it uses the initial value, event2 will be generated first, before event1.  If it uses the current value,  event1 will be raised first.  Succeed if event1 occurs before event2, otherwise fail |
+| test176.txml.scxml   | OK       | we test that \<param> uses the current value of var1, not its initial value.  If the value of aParam in event1 is 2 so that var2 gets set to 2, success, otherwise failure  |
+| test179.txml.scxml   | OK       | we test that \<content> can be used to populate body of a message |
+| test183.txml.scxml   | _Failed_ | we test that \<send> stores the value of the sendid in idlocation.  If it does, var1 has a value and we pass.  Otherwise we fail  |
+| test185.txml.scxml   | OK       | we test that \<send> respects the delay specification.  If it does, event1 arrives before event2  and we pass.  Otherwise we fail  |
+| test186.txml.scxml   | OK       | we test that \<send> evals its args when it is evaluated, not when the delay interval expires and the message is actually sent.  If it does, aParam will have the value of 1 (even though var1 has been incremented in the interval.)  If var2 ends up == 1, we pass.  Otherwise we fail  |
+| test187.txml.scxml   | OK       | we test that delayed \<send> is not sent if the sending session terminates.  In this case, a subscript is invoked which sends the event childToParent delayed by 1 second, and then terminates.  The parent session, should not receive childToParent. If it does, we fail.  Otherwise the  10 sec timer expires and we pass |
+| test189.txml.scxml   | OK       | we test that #_internal as a target of \<send> puts the event on the internal queue.  If it does, event1 will be processed before event2, because event1 is added to the internal queue while event2 is added to the external queue (event though event2 is generated first)  |
+| test190.txml.scxml   | OK       | we test that #_scxml_sessionid as a target of \<send> puts the event on the external queue.  If it does, event1 will be processed before event2, because event1 is added to the internal queue while event2 is added to the external queue (event though event2 is generated first).  we have to make sure that event2 is actually delivered.  The delayed \<send> makes sure another event is generated (so the test doesn't hang) |
+| test191.txml.scxml   | OK       | we test that #_parent works as  a target of  \<send> .  a subscript is invoked and sends the event  childToParent to its parent session (ths session) using #_parent as the target. If we get this event, we pass, otherwise we fail.  The timer insures that some event is generated and that the test does not hang. |
+| test192.txml.scxml   | OK       | we test that #_invokeid works as  a target of  \<send> .  A child  script is invoked and sends us childToParent once its running.  Then we send it the event parentToChild using its invokeid as the target.   If it receives this event, it sends sends the event eventReceived to its parent session (ths session).  If we get this event, we pass, otherwise the child script eventually times out sends invoke.done and we fail. We also set a timeout in this process to make sure the test doesn't hang  |
+| test194.txml.scxml   | _Failed_ | we test that specifying an illegal target for \<send> causes the event error.execution to be raised.  If it does, we succeed.  Otherwise we eventually timeout and fail.  |
+| test198.txml.scxml   | _Failed_ | we test that if type is not provided \<send> uses the scxml event i/o processor.  The only way to tell what processor was used is to look at the origintype of the resulting event  |
+| test199.txml.scxml   | OK       | we test that using an invalid send type results in error.execution |
+| test200.txml.scxml   | OK       | we test that the processor supports the scxml event i/o processor |
+| test205.txml.scxml   | OK       | we test that the processor doesn't  change the message.  We can't test that it never does this, but at least we can check that the event name and included data are the same as we sent.  |
+| test207.txml.scxml   | _Failed_ | we test that that we can't  cancel an event in another session.  We invoke a child process.  It notifies us when it has generated a delayed event with sendid foo.  We try to cancel foo.  The child  process sends us event  event success if the event is not cancelled, event fail otherwise.  This doesn't test that there is absolutely no way to cancel an event raised in another session, but the spec doesn't define any way to refer to an event in another process  |
+| test208.txml.scxml   | _Failed_ | we test that cancel works.  We cancel delayed event1.  If cancel works, we get event2 first and pass.  If we get event1 or an error first, cancel didn't work and we fail.  |
+| test210.txml.scxml   | _Failed_ | we test that sendidexpr works with cancel.  If it takes the most recent value of var1, it should cancel  delayed event1.  Thus we get event2 first and pass.  If we get event1 or an error first, cancel didn't work and we fail.  |
+| test215.txml.scxml   | OK       | we test that typexpr is evaluated at runtime.  If the original value of var1 is used, the invocation will fail (test215sub1.scxml is not of type 'foo', even if the platform supports foo as a type).  If the runtime value is used, the invocation will succeed |
+| test216.txml.scxml   | _Failed_ | we test that srcexpr is evaluated at runtime.  If the original value of var1 is used, the invocation will fail (assuming that there is no script named 'foo').  If the runtime value is used, the invocation will succeed |
+| test220.txml.scxml   | OK       | we test that the scxml type is supported.   |
+| test223.txml.scxml   | OK       | we test that idlocation is supported.   |
+| test224.txml.scxml   | OK       | we test that the automatically generated id has the form stateid.platformid.   |
+| test225.txml.scxml   | OK       | we test that the automatically generated id is unique, we call invoke twice and compare the ids.   |
+| test226.txml.scxml   | OK       | this is basically just a test that invoke works correctly and that you can pass data to the invoked process.  If the invoked session finds aParam==1, it exits, signalling success.  otherwise it will hang and the timeout in this doc signifies failure.   |
+| test228.txml.scxml   | OK       | test that the invokeid is included in events returned from the invoked process.   |
+| test229.txml.scxml   | _Failed_ | test that autofoward works. If the child  process receives back a copy of the childToParent event that it sends to this doc, it sends eventReceived, signalling success. (Note that this doc is not required to process that event explicitly.  It should be forwarded in any case.) Otherwise it eventually times out and the done.invoke signals failure   |
+| test232.txml.scxml   | OK       | test that a parent process can receive multiple events from a child process   |
+| test233.txml.scxml   | _Failed_ | test that finalize markup runs before the event is processed.  The invoked process will return 2 in _event.data.aParam, so that new value should be in force when we select the transtitions.   |
+| test234.txml.scxml   | _Failed_ | test that only finalize markup in the invoking state runs.  the first invoked process will return 2 in _event.data.aParam, while second invoked process sleeps without returning any events.  Only the first finalize should execute.  So when we get to s1 var1 should have value 2 but  var2 should still be set to 1  |
+| test235.txml.scxml   | OK       | test that done.invoke.id event has the right id.  the invoked child terminates immediately and should generate done.invoke.foo   |
+| test236.txml.scxml   | OK       | test that done.invoke.id event is the last event we receive.  the invoked process sends childToParent in the exit handler of its final state.  We should get it before the done.invoke, and we should get no events after the done.invoke.  Hence timeout indicates success   |
+| test237.txml.scxml   | _Failed_ | test that cancelling works. invoked child sleeps for two seconds, then terminates.  We sleep for 1 sec in s0, then move to s1.  This should cause the invocation to get cancelled. If we receive done.invoke, the invocation wasn't cancelled, and we fail. If we receive no events by the time timeout2 fires, success   |
+| test239.txml.scxml   | OK       | test that markup can be specified both by 'src' and by \<content>  |
+| test240.txml.scxml   | OK       | test that datamodel values can be specified both by 'namelist' and by \<param>. invoked child will return success if its Var1 is set to 1, failure otherwise. This test will fail schema validation because of the multiple occurences of Var1, but should run correctly. |
+| test241.txml.scxml   | OK       | The child process will return success ifits Var1 is set to 1, failure otherwise. For this test we try passing in Var1 by param and by namelist and check that we either get two successes or two failures.  This test will fail schema validation due to multiple  declarations of Var1, but should  run correctly.  |
+| test242.txml.scxml   | OK       | test that markup specified  by 'src' and by \<content> is treated the same way.  That means that either we get done.invoke in both cases or in neither case (in which case we timeout) |
+| test243.txml.scxml   | OK       | test that datamodel values can be specified by param. test240sub1 will return success ifits Var1 is set to 1, failure otherwise.  |
+| test244.txml.scxml   | OK       | test that datamodel values can be specified by  namelist. invoked child will return success ifits Var1 is set to 1, failure otherwise.   This test will fail schema validation due to multiple occurrences of Var1, but should run correctly. |
+| test245.txml.scxml   | _Failed_ | test that non-existent datamodel values are not set.  Var2 is not defined in  invoked child's datamodel.  It will will return success if its Var2 remains unbound, failure otherwise.  |
+| test247.txml.scxml   | OK       | test that we get done.invoke.  timeout indicates failure  |
+| test252.txml.scxml   | _Failed_ | test that we don't process any events received from the invoked process once it is cancelled.  child process tries to send us childToParent in an onexit handler.  If we get it, we fail.   timeout indicates success.   |
+| test253.txml.scxml   | OK       | test that the scxml event processor is used in both directions.  If child process uses the  scxml event i/o processor to communicate with us, send it an event.  It will send back success if this process uses the scxml processor to send the message to it, otherwise failure.  For this test we allow  'scxml' as an alternative to the full url.   |
+| test276.txml.scxml   | OK       | test that values passed in from parent process override default values specified in the child, test276sub1.scxml. The child returns event1 if var1 has value 1, event0 if it has default value 0.  |
+| test277.txml.scxml   | _Failed_ | test that platform creates undound variable if we assign an illegal value to it.  Thus  we can assign to it later in state s1.  |
+| test279.txml.scxml   | _Failed_ |  testing that in case of early binding variables are assigned values at init time, before  the state containing them is visited  |
+| test280.txml.scxml   | _Failed_ | test late binding.  var2 won't get bound until s1 is entered, so it shouldn't  have a value in s0 and accessing it should cause an error. It should get bound before the onentry code in s1 so it should  be possible access it there and assign its value to var1 |
+| test286.txml.scxml   | OK       | test that assigment to a non-declared var causes an error.  the transition on foo catches the case where no error is raised |
+| test287.txml.scxml   | OK       | a simple test that a legal value may be assigned to a valid data model location |
+| test294.txml.scxml   | OK       | test that a param inside donedata ends up in the data field of the done event and that content inside donedata sets the full value of the event.data field |
+| test298.txml.scxml   | OK       | reference a non-existent data model location in param in donedata and see that the right error is raised |
+| test302.txml.scxml   | _Failed_ | test that a script is evaluated at load time.  \<conf:script> shoudl assign the value 1 to  Var1.  Hence, if script is evaluated at download time, Var1 has a value in the initial state s0. This test is valid only for datamodels that support scripting |
+| test303.txml.scxml   | OK       | to test that scripts are run as part of executable content, we check that it changes the value of a var at the right point. This test is valid only for datamodels that support scripting |
+| test304.txml.scxml   | _Failed_ | test that a variable declared by a script can be accessed like any other part of the data model |
+| test309.txml.scxml   | OK       | test that an expression that cannot be interpreted as a boolean is treated as false |
+| test310.txml.scxml   | OK       | simple test of the in() predicate |
+| test311.txml.scxml   | OK       | test that assignment to a non-existent location yields an error |
+| test312.txml.scxml   | OK       | test that assignment with an illegal expr raises an error |
+| test318.txml.scxml   | OK       | test that _event stays bound during the onexit and entry into the next state |
+| test319.txml.scxml   | OK       | test that _event is not bound before any event has been raised |
+| test321.txml.scxml   | OK       | test that _sessionid is bound on startup |
+| test322.txml.scxml   | OK       | test that _sessionid remains bound to the same value throught the session.  this means that it can't be assigned to  |
+| test323.txml.scxml   | OK       | test that _name is bound on startup |
+| test324.txml.scxml   | OK       | test that _name stays bound till the session ends.  This means that it cannot be assigned to |
+| test325.txml.scxml   | OK       | test that _ioprocessors is bound at startup.  I'm not sure how to test for a set value or how to test that the entries in it do represent I/O processors, since the set that each implementation supports may be different.  Suggestions welcome |
+| test326.txml.scxml   | _Failed_ | test that _ioprocessors stays bound till the session ends.  This means that it cannot be assigned to |
+| test329.txml.scxml   | _Failed_ | test that none of the system variables can be modified |
+| test330.txml.scxml   | OK       | check that the required fields are present in both internal and external events |
+| test331.txml.scxml   | OK       ||
+| test332.txml.scxml   | _Failed_ | test that sendid is present in error events triggered by send errors |
+| test333.txml.scxml   | _Failed_ | make sure sendid is blank in a non-error event |
+| test335.txml.scxml   | _Failed_ | test that origin field is blank for internal events |
+| test336.txml.scxml   | _Failed_ | test that the origin field of an external event contains a URL that lets you send back to the originator.  In this case it's the same session, so if we get bar we succeed |
+| test337.txml.scxml   | _Failed_ | test that origintype is blank on internal events |
+| test338.txml.scxml   | OK       | test that invokeid is set correctly in events received from an invoked process.  timeout event catches the  case where the invoke doesn't work correctly |
+| test339.txml.scxml   | _Failed_ | test that invokeid is blank in an event that wasn't returned from an invoked process |
+| test342.txml.scxml   | OK       | test that eventexpr works and sets the name field of the resulting event |
+| test343.txml.scxml   | _Failed_ |  test that illegal \<param> produces error.execution and empty event.data |
+| test344.txml.scxml   | OK       | test that a cond expression that cannot be evaluated as a  boolean cond expression evaluates to false and causes error.execution to be raised. In some languages, any valid expression/object can be converted to a boolean, so conf:nonBoolean will have to be mapped onto something that produces a syntax error or something similarly invalid |
+| test346.txml.scxml   | _Failed_ | test that any attempt to change the value of a system variable causes error.execution to be raised.   Event1..4 are there to catch the case where the error event is not raised. In cases where it is, we have to dispose of eventn in the next state, hence the targetless transitions (which simply throw away the event.) |
+| test347.txml.scxml   | OK       | test that the scxml event I/O processor works by sending events back and forth between an invoked child and its parent process |
+| test348.txml.scxml   | OK       ||
+| test349.txml.scxml   | _Failed_ | test that value in origin field can be used to send an event back to the sender |
+| test350.txml.scxml   | OK       | test that target value is used to decide what session to deliver the event to.  A session should be able to send an event to itself using its own session ID as the target |
+| test351.txml.scxml   | OK       | test that sendid is set in event if present in send, blank otherwise |
+| test352.txml.scxml   | _Failed_ | test the origintype is 'http://www.w3.org/TR/scxml/#SCXMLEventProcessor' |
+| test354.txml.scxml   | _Failed_ | test that event.data can be populated using both namelist, param and \<content> and that correct values are used |
+| test355.txml.scxml   | OK       | test that default initial state is first in document order.  If we enter s0 first we succeed, if s1, failure. |
+| test364.txml.scxml   | OK       | test that default initial states are entered when a compound state is entered.  First we test the 'initial' attribute, then the initial element, then default to the first child in document order.   If we get to s01111 we succeed, if any other state, failure.  |
+| test372.txml.scxml   | OK       | test that entering a final state generates done.state.parentid after executing the onentry elements.   Var1 should be set to 2 (but not 3) by the time the event is raised |
+| test375.txml.scxml   | _Failed_ | test that onentry handlers are executed in document order.  event1 should be raised before event2 |
+| test376.txml.scxml   | OK       | test that each onentry handler is a separate block.  The \<send> of event1 will cause an error but  the increment to var1 should happen anyways |
+| test377.txml.scxml   | _Failed_ | test that onexit handlers are executed in document order.  event1 should be raised before event2 |
+| test378.txml.scxml   | OK       | test that each onexithandler is a separate block.  The \<send> of event1 will cause an error but  the increment to var1 should happen anyways |
+| test387.txml.scxml   | OK       | test that the default history state works correctly.  From initial state s3 we take a transition to s0's default shallow history state.  That should generate "enteringS011", which takes us to s4.  In s4, we transition to s1's default deep history state. We should end up in s122, generating "enteringS122".  Otherwise failure.|
+| test388.txml.scxml   | OK       | test that history states works correctly.  The counter Var1 counts how many times we have entered s0.  The initial state is s012.  We then transition to s1, which transitions to s0's deep history state.  entering.s012 should be raised, otherwise failure.  Then we transition to s02, which transitions to s0's shallow history state.  That should have value s01, and its initial state is s011, so we should get entering.s011, otherwise failure.|
+| test396.txml.scxml   | OK       | test that the value in _event.name matches the event name used to match against transitions  |
+| test399.txml.scxml   | OK       | test that the event name matching works correctly, including prefix matching and the fact that the event attribute of transition may contain multiple event designators.    |
+| test401.txml.scxml   | OK       | test that errors go in the internal event queue.  We send ourselves an external event foo, then perform and operation that raises an error. Then check that the error event is processed first, even though it was raised second  |
+| test402.txml.scxml   | OK       | the assertion that errors are 'like any other event' is pretty broad, but we can check that they are pulled off the internal queue in order, and that prefix matching works on them.  |
+| test403a.txml.scxml  | OK       | we test one part of 'optimal enablement' meaning that of all transitions that are enabled, we chose the ones in child states over parent states, and use document order to break ties. We have a parent state s0 with two children, s01 and s02. In s01, we test that a) if a transition in the child matches, we don't consider matches in the parent and b) that if two transitions match in any state, we take the first in document order. In s02 we test that we take a transition in the parent if there is no matching transition in the child. |
+| test403b.txml.scxml  | OK       | we test that 'optimally enabled set' really is a set, specifically that if a transition is optimally enabled in two different states, it is taken only once.  |
+| test403c.txml.scxml  | _Failed_ | we test 'optimally enabled set', specifically that preemption works correctly |
+| test404.txml.scxml   | OK       |  test that states are exited in exit order (children before parents with reverse doc order used to break ties  before the executable content in the transitions.  event1, event2, event3, event4 should be raised in that   order when s01p is exited  |
+| test405.txml.scxml   | OK       |  test that the executable content in the transitions is executed in document order after  the states are exited. event1, event2, event3, event4 should be raised in that order when the state machine is entered  |
+| test406.txml.scxml   | OK       |  Test that states are entered in entry order (parents before children with document order used to break ties) after the executable content in the transition is executed. event1, event2, event3, event4 should be raised in that  order when the transition in s01 is taken  |
+| test407.txml.scxml   | OK       | a simple test that onexit handlers work. var1 should be incremented when we leave s0 |
+| test409.txml.scxml   | OK       | we test that states are removed from the active states list as they are exited.  When s01's onexit handler fires, s011 should not be on the active state list, so in(S011) should be false, and event1 should not be raised.  Therefore the timeout should fire to indicate success   |
+| test411.txml.scxml   | OK       | we test that states are added to the active states list as they are entered and before onentry handlers are executed.  When s0's onentry handler fires we should not be in s01.  But when s01's onentry handler fires, we should be in s01.  Therefore event1 should not fire, but event2 should.  Either event1 or timeout also indicates failure  |
+| test412.txml.scxml   | OK       | test that executable content in the \<initial> transition executes after the onentry handler on the state and before the onentry handler of the child states.  Event1, event2, and event3 should occur in that order. |
+| test413.txml.scxml   | OK       | test that the state machine is put into the configuration specified by the initial element, without regard to any other defaults.  we should start off in s2p111 and s2p122.  the atomic states we should not enter all have immediate transitions to failure in them |
+| test416.txml.scxml   | OK       | test that the done.state.id gets generated when we enter the final state of a compound state |
+| test417.txml.scxml   | OK       | test that we get the done.state.id event when all of a  parallel elements children enter final states.  |
+| test419.txml.scxml   | OK       | test that eventless transitions take precedence over event-driven ones |
+| test421.txml.scxml   | OK       | test that internal events take priority over external ones, and that the processor keeps pulling off internal events until it finds one that triggers a transition |
+| test422.txml.scxml   | OK       | Test that at the end of a macrostep, the processor executes all invokes in states that have been entered and not exited during the step.  (The invokes are supposed to be executed in document order, but we can test that since each invocation is separate and they may take different amounts to time to start up.)  In this case, there are three invoke statements, in states s1, s11 and s12.  Each invoked process returns an event named after its parent state. The invokes in s1 and s12 should execute, but not the one in s11. So we should receive invokeS1, invokeS12, but not invokeS12.  Furthermore, when the timeout fires, var1 should equal 2.|
+| test423.txml.scxml   | OK       | test that we keep pulling external events off the queue till we find one that matches a transition. |
+| test436.txml.scxml   | _Failed_ | test that in() predicate works in null data model |
+| test487.txml.scxml   | OK       | test illegal assignment.  error.execution should be raised.  |
+| test488.txml.scxml   | _Failed_ |  test that illegal expr in \<param> produces error.execution and empty event.data |
+| test495.txml.scxml   | OK       | test that the scxml event i/o processor puts events in the correct queues.|
+| test496.txml.scxml   | OK       ||
+| test500.txml.scxml   | OK       | test that location field is found inside entry for SCXML Event I/O processor |
+| test501.txml.scxml   | _Failed_ | test that the location entry for the SCXML Event I/O processor can be used as the target for an event |
+| test503.txml.scxml   | OK       | test that a targetless transition does not exit and reenter its source state |
+| test504.txml.scxml   | OK       | test that an external transition exits all states up the the LCCA |
+| test505.txml.scxml   | OK       | test that an internal transition does not exit its source state |
+| test506.txml.scxml   | OK       | test that an internal transition whose targets are not proper descendants of its source state behaves like an external transition |
+| test521.txml.scxml   | OK       | we test that the processor raises error.communication if it cannot dispatch the event. (To create an undispatchable event, we choose a non-existent session as target).  If it raises the error event, we succeed.  Otherwise we eventually timeout and fail.  |
+| test525.txml.scxml   | OK       | test that \<foreach> does a shallow copy, so that modifying the array does not change the iteration behavior. |
+| test527.txml.scxml   | OK       | simple test that 'expr' works with \<content> |
+| test528.txml.scxml   | _Failed_ |  test that illegal 'expr' produces error.execution and empty event.data |
+| test529.txml.scxml   | OK       | simple test that children workn with \<content> |
+| test530.txml.scxml   | _Failed_ | test that \<content> child is evaluated when \<invoke> is. Var1 is initialized with an integer value, then set to an scxml script in the onentry to s0.  If \<content> is evaluated at the right time, we should get invoke.done, otherwise an error  |
+| test533.txml.scxml   | OK       | test that an internal transition whose source state is not compound does  exit its source state |
+| test550.txml.scxml   | _Failed_ | test that expr can be used to assign a value to a var.  This test uses early binding |
+| test551.txml.scxml   | _Failed_ | test that inline content can be used to assign a value to a var.  |
+| test552.txml.scxml   | OK       | test that src content can be used to assign a value to a var. Edit test552.txt to have a value that's legal for the datamodel in question |
+| test553.txml.scxml   | _Failed_ | we test that the processor does not dispatch the event if evaluation of \<send>'s args causes an error..  |
+| test554.txml.scxml   | _Failed_ | test that if the evaluation of \<invoke>'s args causes an error, the  invocation is cancelled.  In this test, that means that we don't get done.invoke  before the timer goes off.  |
+| test570.txml.scxml   | OK       | test that we generate done.state.id when all a parallel state's children are in final states |
+| test576.txml.scxml   | OK       | test that the 'initial' value of scxml is respected.  We set the value to deeply nested non-default parallel siblings and test that both are entered. |
+| test579.txml.scxml   | _Failed_ | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
+| test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 __Result__: 114 of 160 tests succeeded
