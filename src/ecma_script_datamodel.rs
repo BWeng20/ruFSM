@@ -111,7 +111,7 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    pub fn set_from_data_store(&mut self, data : &DataStore) {
+    pub fn set_from_data_store(&mut self, data: &DataStore) {
         for (name, data) in &data.values {
             match &data.value {
                 None => {
@@ -131,7 +131,6 @@ impl ECMAScriptDatamodel {
             }
         }
     }
-
 
     fn execute_internal(&mut self, script: &str, handle_error: bool) -> Option<String> {
         let result = self.eval(script);
@@ -300,7 +299,18 @@ impl Datamodel for ECMAScriptDatamodel {
                     ctx,
                 );
             }
-            self.set_js_property(SYS_IO_PROCESSORS, io_processors_js);
+            let r = self.context.global_object().define_property_or_throw(
+                js_string!(SYS_IO_PROCESSORS),
+                PropertyDescriptor::builder()
+                    .configurable(true)
+                    .enumerable(false)
+                    .writable(false)
+                    .value(io_processors_js),
+                &mut self.context,
+            );
+            if let Err(error) = r {
+                error!("Failed to initialize {}: {}", SYS_IO_PROCESSORS, error);
+            }
         }
     }
 
@@ -321,15 +331,18 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn initialize_read_only(&mut self, name: &str, value: &str) {
-        _ = self.context.global_object().define_property_or_throw(
+        let r = self.context.global_object().define_property_or_throw(
             js_string!(name),
             PropertyDescriptor::builder()
-                .configurable(false)
+                .configurable(true)
                 .enumerable(false)
                 .writable(false)
                 .value(js_string!(value)),
             &mut self.context,
         );
+        if let Err(error) = r {
+            error!("Failed to initialize read only {}: {}", name, error);
+        }
     }
 
     fn set(self: &mut ECMAScriptDatamodel, name: &str, data: Data) {
@@ -356,52 +369,68 @@ impl Datamodel for ECMAScriptDatamodel {
                 JsValue::Object(data_object_initializer.build())
             }
         };
+
         let mut event_object_initializer = ObjectInitializer::new(&mut self.context);
+
         let event_object_builder = event_object_initializer
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_NAME),
                 js_string!(event.name.clone()),
-                Attribute::all(),
+                Attribute::READONLY,
             )
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_TYPE),
                 js_string!(event.etype.name().to_string()),
-                Attribute::all(),
+                Attribute::READONLY,
             )
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_SEND_ID),
                 js_string!(event.sendid.clone()),
-                Attribute::all(),
+                Attribute::READONLY,
             )
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_ORIGIN),
                 option_to_js_value(&event.origin),
-                Attribute::all(),
+                Attribute::READONLY,
             )
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_ORIGIN_TYPE),
                 option_to_js_value(&event.origin_type),
-                Attribute::all(),
+                Attribute::READONLY,
             )
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_INVOKE_ID),
                 option_to_js_value(&event.invoke_id),
-                Attribute::all(),
+                Attribute::READONLY,
             );
         event_object_builder.property(
             js_string!(EVENT_VARIABLE_FIELD_DATA),
             data_value,
-            Attribute::all(),
+            Attribute::READONLY,
         );
 
         let event_object = event_object_builder.build();
+        let r = self
+            .context
+            .global_object()
+            .delete_property_or_throw(js_string!(EVENT_VARIABLE_NAME), &mut self.context);
+        if let Err(error) = r {
+            error!("Failed to delete old event: {}", error);
+        }
 
-        _ = self.context.global_object().set(
+        let r = self.context.global_object().define_property_or_throw(
             js_string!(EVENT_VARIABLE_NAME),
-            event_object,
-            false,
+            PropertyDescriptor::builder()
+                .configurable(true)
+                .enumerable(false)
+                .writable(false)
+                .value(event_object),
             &mut self.context,
         );
+
+        if let Err(error) = r {
+            error!("Failed to set event: {}", error);
+        }
     }
 
     fn assign(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str) -> bool {

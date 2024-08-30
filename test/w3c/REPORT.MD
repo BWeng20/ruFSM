@@ -81,8 +81,8 @@
 | test323.txml.scxml   | OK       | test that _name is bound on startup |
 | test324.txml.scxml   | OK       | test that _name stays bound till the session ends.  This means that it cannot be assigned to |
 | test325.txml.scxml   | OK       | test that _ioprocessors is bound at startup.  I'm not sure how to test for a set value or how to test that the entries in it do represent I/O processors, since the set that each implementation supports may be different.  Suggestions welcome |
-| test326.txml.scxml   | _Failed_ | test that _ioprocessors stays bound till the session ends.  This means that it cannot be assigned to |
-| test329.txml.scxml   | _Failed_ | test that none of the system variables can be modified |
+| test326.txml.scxml   | OK       | test that _ioprocessors stays bound till the session ends.  This means that it cannot be assigned to |
+| test329.txml.scxml   | OK       | test that none of the system variables can be modified |
 | test330.txml.scxml   | OK       | check that the required fields are present in both internal and external events |
 | test331.txml.scxml   | OK       ||
 | test332.txml.scxml   | _Failed_ | test that sendid is present in error events triggered by send errors |
@@ -95,7 +95,7 @@
 | test342.txml.scxml   | OK       | test that eventexpr works and sets the name field of the resulting event |
 | test343.txml.scxml   | _Failed_ |  test that illegal \<param> produces error.execution and empty event.data |
 | test344.txml.scxml   | OK       | test that a cond expression that cannot be evaluated as a  boolean cond expression evaluates to false and causes error.execution to be raised. In some languages, any valid expression/object can be converted to a boolean, so conf:nonBoolean will have to be mapped onto something that produces a syntax error or something similarly invalid |
-| test346.txml.scxml   | _Failed_ | test that any attempt to change the value of a system variable causes error.execution to be raised.   Event1..4 are there to catch the case where the error event is not raised. In cases where it is, we have to dispose of eventn in the next state, hence the targetless transitions (which simply throw away the event.) |
+| test346.txml.scxml   | OK       | test that any attempt to change the value of a system variable causes error.execution to be raised.   Event1..4 are there to catch the case where the error event is not raised. In cases where it is, we have to dispose of eventn in the next state, hence the targetless transitions (which simply throw away the event.) |
 | test347.txml.scxml   | OK       | test that the scxml event I/O processor works by sending events back and forth between an invoked child and its parent process |
 | test348.txml.scxml   | OK       ||
 | test349.txml.scxml   | _Failed_ | test that value in origin field can be used to send an event back to the sender |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | _Failed_ | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 114 of 160 tests succeeded
+__Result__: 117 of 160 tests succeeded
