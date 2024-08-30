@@ -6,7 +6,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::string::ToString;
-use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(test)]
 use std::{println as debug, println as info, println as warn, println as error};
 
@@ -48,11 +47,8 @@ pub static ECMA_STRICT_ARGUMENT: ArgOption = ArgOption {
     required: false,
 };
 
-static CONTEXT_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
-
 pub struct ECMAScriptDatamodel {
     pub data: DataStore,
-    pub context_id: u32,
     pub global_data: GlobalDataAccess,
     pub context: Context,
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
@@ -88,7 +84,6 @@ impl ECMAScriptDatamodel {
     pub fn new(global_data: GlobalDataAccess) -> ECMAScriptDatamodel {
         ECMAScriptDatamodel {
             data: DataStore::new(),
-            context_id: CONTEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
             global_data,
             context: ContextBuilder::new().build().unwrap(),
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
