@@ -80,7 +80,7 @@
 | test322.txml.scxml   | OK       |
 | test323.txml.scxml   | OK       |
 | test324.txml.scxml   | OK       |
-| test325.txml.scxml   | _Failed_ |
+| test325.txml.scxml   | OK       |
 | test326.txml.scxml   | _Failed_ |
 | test329.txml.scxml   | _Failed_ |
 | test330.txml.scxml   | OK       |
@@ -138,7 +138,7 @@
 | test488.txml.scxml   | _Failed_ |
 | test495.txml.scxml   | OK       |
 | test496.txml.scxml   | OK       |
-| test500.txml.scxml   | _Failed_ |
+| test500.txml.scxml   | OK       |
 | test501.txml.scxml   | _Failed_ |
 | test503.txml.scxml   | OK       |
 | test504.txml.scxml   | OK       |
@@ -160,4 +160,4 @@
 | test576.txml.scxml   | OK       |
 | test579.txml.scxml   | _Failed_ |
 | test580.txml.scxml   | OK       |
-__Result__: 112 of 160 tests succeeded
+__Result__: 114 of 160 tests succeeded

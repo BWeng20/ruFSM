@@ -1305,11 +1305,12 @@ impl Fsm {
                 gd.historyValue.clear();
                 gd.running = true;
             }
+
+            datamodel.implement_mandatory_functionality(self);
+
             if self.binding == BindingType::Early {
                 datamodel.initializeDataModel(self, self.pseudo_root);
             }
-
-            datamodel.implement_mandatory_functionality(self);
         }
         self.executeGlobalScriptElement(datamodel);
 

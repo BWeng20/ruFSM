@@ -131,7 +131,8 @@ pub trait Datamodel {
     /// Get the name of the data model as defined by the \<scxml\> attribute "datamodel".
     fn get_name(&self) -> &str;
 
-    /// Adds the "In" function.
+    /// Adds the "In" function.\
+    /// If needed, adds also "log" function and sets '_ioprocessors'.
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm);
 
     /// Initialize the data model for one data-store.
