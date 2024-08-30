@@ -1292,11 +1292,11 @@ impl Fsm {
             let session_id = datamodel.global().lock().session_id;
             datamodel.initialize_read_only(
                 SESSION_ID_VARIABLE_NAME,
-                format!("'{}'", session_id).as_str(),
+                session_id.to_string().as_str()
             );
             datamodel.initialize_read_only(
                 SESSION_NAME_VARIABLE_NAME,
-                format!("'{}'", self.name).as_str(),
+                self.name.as_str()
             );
 
             {
