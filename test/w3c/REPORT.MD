@@ -160,4 +160,5 @@
 | test576.txml.scxml   | OK       | test that the 'initial' value of scxml is respected.  We set the value to deeply nested non-default parallel siblings and test that both are entered. |
 | test579.txml.scxml   | _Failed_ | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
+
 __Result__: 114 of 160 tests succeeded
