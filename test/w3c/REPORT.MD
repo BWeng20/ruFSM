@@ -18,7 +18,7 @@
 | test175.txml.scxml   | OK       | we test that delayexpr uses the current value of var1, not its initial value (If it uses the initial value, event2 will be generated first, before event1.  If it uses the current value,  event1 will be raised first.  Succeed if event1 occurs before event2, otherwise fail |
 | test176.txml.scxml   | OK       | we test that \<param> uses the current value of var1, not its initial value.  If the value of aParam in event1 is 2 so that var2 gets set to 2, success, otherwise failure  |
 | test179.txml.scxml   | OK       | we test that \<content> can be used to populate body of a message |
-| test183.txml.scxml   | _Failed_ | we test that \<send> stores the value of the sendid in idlocation.  If it does, var1 has a value and we pass.  Otherwise we fail  |
+| test183.txml.scxml   | OK       | we test that \<send> stores the value of the sendid in idlocation.  If it does, var1 has a value and we pass.  Otherwise we fail  |
 | test185.txml.scxml   | OK       | we test that \<send> respects the delay specification.  If it does, event1 arrives before event2  and we pass.  Otherwise we fail  |
 | test186.txml.scxml   | OK       | we test that \<send> evals its args when it is evaluated, not when the delay interval expires and the message is actually sent.  If it does, aParam will have the value of 1 (even though var1 has been incremented in the interval.)  If var2 ends up == 1, we pass.  Otherwise we fail  |
 | test187.txml.scxml   | OK       | we test that delayed \<send> is not sent if the sending session terminates.  In this case, a subscript is invoked which sends the event childToParent delayed by 1 second, and then terminates.  The parent session, should not receive childToParent. If it does, we fail.  Otherwise the  10 sec timer expires and we pass |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | _Failed_ | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 120 of 160 tests succeeded
+__Result__: 121 of 160 tests succeeded

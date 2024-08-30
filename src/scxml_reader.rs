@@ -1375,6 +1375,9 @@ impl ReaderState {
         if let Some(name_list_value) = attr.get(ATTR_NAMELIST) {
             self.parse_location_expressions(name_list_value, &mut send_params.name_list);
         }
+        send_params
+            .parent_state_name
+            .clone_from(&self.get_current_state().name);
         self.add_executable_content(Box::new(send_params));
     }
 

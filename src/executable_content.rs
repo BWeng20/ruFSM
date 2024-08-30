@@ -3,6 +3,7 @@
 
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::sync::atomic::Ordering;
 #[cfg(test)]
 use std::{println as info, println as warn};
 
@@ -12,9 +13,10 @@ use log::error;
 use log::{info, warn};
 use regex::Regex;
 
-use crate::datamodel::{Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
+use crate::datamodel::{Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
 use crate::fsm::{
     opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, Parameter,
+    PLATFORM_ID_COUNTER,
 };
 use crate::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
 use crate::{get_global, Event, EventType};
@@ -90,6 +92,8 @@ pub struct SendParameters {
     pub name_location: String,
     /// SCXML \<send\> attribute 'id'.
     pub name: String,
+    /// In case the id is generated, the parent state of the send.
+    pub parent_state_name: String,
     /// SCXML \<send\> attribute 'event'.
     pub event: String,
     /// SCXML \<send\> attribute 'eventexpr'.
@@ -118,6 +122,7 @@ impl SendParameters {
         SendParameters {
             name_location: "".to_string(),
             name: "".to_string(),
+            parent_state_name: "".to_string(),
             event: "".to_string(),
             event_expr: "".to_string(),
             target: "".to_string(),
@@ -511,13 +516,26 @@ impl ExecutableContent for SendParameters {
         let send_id = if self.name_location.is_empty() {
             self.name.clone()
         } else {
-            match datamodel.get_by_location(self.name_location.as_str()) {
-                None => {
-                    // Error -> abort
-                    return;
-                }
-                Some(id) => id.value.unwrap(),
-            }
+            // W3c says:
+            // If 'idlocation' is present, the SCXML Processor MUST generate an id when the parent
+            // <send> element is evaluated and store it in this location.
+            // note that the automatically generated id for <invoke> has a special format.
+            // See 6.4.1 Attribute Details for details.
+            // The SCXML processor MAY generate all other ids in any format, as long as they are unique.
+            //
+            // Implementation: we do it the same as for invoke
+
+            let generated_id = format!(
+                "{}.{}",
+                &self.parent_state_name,
+                PLATFORM_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
+            );
+
+            datamodel.set(
+                self.name_location.as_str(),
+                Data::new(generated_id.as_str()),
+            );
+            generated_id
         };
 
         let mut data_vec = Vec::new();

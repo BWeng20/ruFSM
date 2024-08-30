@@ -42,7 +42,7 @@ use crate::tracer::{DefaultTracer, TraceMode, Tracer};
 pub const EVENT_CANCEL_SESSION: &str = "error.platform.cancel";
 pub const INTERNAL_INTERNAL_ARRIVED: &str = "event.internal";
 
-static PLATFORM_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+pub static PLATFORM_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 /// Starts the FSM inside a worker thread.
 ///
@@ -868,7 +868,7 @@ pub struct Invoke {
     /// Executable content to massage the data returned from the invoked component. Occurs 0 or 1 times. See 6.5 \<finalize}> for details.
     pub finalize: ExecutableContentId,
 
-    /// Generated invokeId (identical to "id" if specified.
+    /// Generated invokeId (identical to "id" if specified).
     pub invoke_id: String,
 
     pub parent_state_name: String,
