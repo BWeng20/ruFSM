@@ -1248,6 +1248,16 @@ impl Fsm {
         }
     }
 
+    /// Implements variant "initializeDataModel(datamodel, doc)" from W3C.
+    fn initialize_data_models_recursive(&mut self, datamodel: &mut dyn Datamodel, state_id : StateId) {
+        datamodel.initializeDataModel(self, state_id);
+
+        for child_state in self.getChildStates(state_id).iterator() {
+            self.initialize_data_models_recursive(datamodel, *child_state);
+        }
+    }
+
+
     /// *W3C says*:
     /// The purpose of this procedure is to initialize the interpreter and to start processing.
     ///
@@ -1309,7 +1319,7 @@ impl Fsm {
             datamodel.implement_mandatory_functionality(self);
 
             if self.binding == BindingType::Early {
-                datamodel.initializeDataModel(self, self.pseudo_root);
+                self.initialize_data_models_recursive(datamodel, self.pseudo_root );
             }
         }
         self.executeGlobalScriptElement(datamodel);
