@@ -68,5 +68,5 @@ for TEST_FILE in scxml/*.scxml; do
 done
 
 echo "======================================================="
-echo "__Result__: ${OK_COUNT} of ${ALL_COUNT} tests succeeded" >> $REPORT_FILE
+echo -e "\n__Result__: ${OK_COUNT} of ${ALL_COUNT} tests succeeded" >> $REPORT_FILE
 echo "${OK_COUNT} of ${ALL_COUNT} tests succeeded"
