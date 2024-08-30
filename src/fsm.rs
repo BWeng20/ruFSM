@@ -956,7 +956,7 @@ pub struct GlobalData {
 
     /// Will contain after execution the final configuration, if set before.
     pub final_configuration: Option<Vec<String>>,
-    pub environment : DataStore,
+    pub environment: DataStore,
 }
 
 impl GlobalData {
@@ -1290,14 +1290,9 @@ impl Fsm {
             // Initialize session variables "_name" and "_sessionid"
 
             let session_id = datamodel.global().lock().session_id;
-            datamodel.initialize_read_only(
-                SESSION_ID_VARIABLE_NAME,
-                session_id.to_string().as_str()
-            );
-            datamodel.initialize_read_only(
-                SESSION_NAME_VARIABLE_NAME,
-                self.name.as_str()
-            );
+            datamodel
+                .initialize_read_only(SESSION_ID_VARIABLE_NAME, session_id.to_string().as_str());
+            datamodel.initialize_read_only(SESSION_NAME_VARIABLE_NAME, self.name.as_str());
 
             {
                 let mut gd = get_global!(datamodel);
