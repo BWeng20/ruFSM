@@ -22,6 +22,7 @@ use std::{println as debug, println as info, println as error};
 
 #[cfg(not(test))]
 use log::{debug, error, info};
+use timer::Guard;
 
 use crate::datamodel::{
     Data, DataStore, Datamodel, GlobalDataAccess, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
@@ -957,6 +958,9 @@ pub struct GlobalData {
     /// Will contain after execution the final configuration, if set before.
     pub final_configuration: Option<Vec<String>>,
     pub environment: DataStore,
+
+    /// Stores any delayed send (with a "sendid"), Key: sendid
+    pub delayed_send: HashMap<String, Guard>,
 }
 
 impl GlobalData {
@@ -975,6 +979,7 @@ impl GlobalData {
             session_id: 0,
             final_configuration: None,
             environment: DataStore::new(),
+            delayed_send: HashMap::new(),
         }
     }
 
@@ -3045,16 +3050,18 @@ impl Fsm {
         l
     }
 
-    pub fn schedule<F>(&self, delay_ms: i64, mut cb: F)
+    pub fn schedule<F>(&self, delay_ms: i64, mut cb: F) -> Option<Guard>
     where
         F: 'static + FnMut() + Send,
     {
         if delay_ms > 0 {
-            self.timer
-                .schedule_with_delay(chrono::Duration::milliseconds(delay_ms), cb)
-                .ignore();
+            Some(
+                self.timer
+                    .schedule_with_delay(chrono::Duration::milliseconds(delay_ms), cb),
+            )
         } else {
             cb();
+            None
         }
     }
 

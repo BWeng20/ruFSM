@@ -454,8 +454,18 @@ impl Display for Parameter {
 }
 
 impl ExecutableContent for Cancel {
-    fn execute(&self, _datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
-        todo!()
+    /// W3c says:\
+    /// The \<cancel> element is used to cancel a delayed \<send> event.\
+    /// The SCXML Processor MUST NOT allow \<cancel> to affect events that were not raised in the
+    /// same session. The Processor SHOULD make its best attempt to cancel all delayed events with
+    /// the specified id. Note, however, that it can not be guaranteed to succeed, for example if
+    /// the event has already been delivered by the time the \<cancel> tag executes.
+    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+        if let Ok(send_id) = datamodel
+            .get_expression_alternative_value(self.send_id.as_str(), self.send_id_expr.as_str())
+        {
+            get_global!(datamodel).delayed_send.remove(&send_id);
+        };
     }
 
     fn get_type(&self) -> u8 {
@@ -478,8 +488,6 @@ impl ExecutableContent for SendParameters {
     /// If unable to dispatch, place "error.communication" in internal queue
     /// If target is not supported, place "error.execution" in internal queue
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
-        let global_clone = datamodel.global().clone();
-
         let target = match datamodel
             .get_expression_alternative_value(self.target.as_str(), self.target_expr.as_str())
         {
@@ -580,10 +588,23 @@ impl ExecutableContent for SendParameters {
 
                 info!("schedule '{}' for {}", event, delay_ms);
 
-                fsm.schedule(delay_ms, move || {
+                let global_clone = datamodel.global().clone();
+                let send_id_clone = send_id.clone();
+
+                let tg = fsm.schedule(delay_ms, move || {
                     info!("send '{}' to '{}'", event, target);
+                    if !send_id_clone.is_empty() {
+                        global_clone.lock().delayed_send.remove(&send_id_clone);
+                    }
                     iopc.send(&global_clone, target.as_str(), event.clone());
                 });
+                if let Some(g) = tg {
+                    if send_id.is_empty() {
+                        g.ignore();
+                    } else {
+                        datamodel.global().lock().delayed_send.insert(send_id, g);
+                    }
+                };
             }
             None => {
                 // W3C:  If the SCXML Processor does not support the type that is specified,
