@@ -311,10 +311,6 @@ impl Datamodel for ECMAScriptDatamodel {
 
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, fsm: &mut Fsm, data_state: StateId) {
-        let mut s = Vec::new();
-        for sn in fsm.statesNames.keys() {
-            s.push(sn.clone());
-        }
         let state_obj: &State = fsm.get_state_by_id_mut(data_state);
         // Set all (simple) global variables.
         self.set_from_data_store(&state_obj.data);
