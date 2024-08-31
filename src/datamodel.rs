@@ -6,10 +6,12 @@ use std::fmt::{Debug, Display, Formatter};
 #[cfg(test)]
 use std::println as info;
 use std::sync::{Arc, Mutex, MutexGuard};
+use lazy_static::lazy_static;
 
 use log::error;
 #[cfg(not(test))]
 use log::info;
+use regex::Regex;
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
@@ -339,13 +341,15 @@ pub trait Datamodel {
 pub struct NullDatamodel {
     pub global: GlobalDataAccess,
     pub io_processors: HashMap<String, Box<dyn EventIOProcessor>>,
+    pub state_name_to_id: HashMap<String,StateId>,
 }
 
 impl NullDatamodel {
-    pub fn new() -> NullDatamodel {
+    pub fn new(global_data: GlobalDataAccess) -> NullDatamodel {
         NullDatamodel {
-            global: GlobalDataAccess::new(),
+            global: global_data,
             io_processors: HashMap::new(),
+            state_name_to_id: HashMap::new(),
         }
     }
 }
@@ -363,8 +367,10 @@ impl Datamodel for NullDatamodel {
         NULL_DATAMODEL
     }
 
-    fn implement_mandatory_functionality(&mut self, _fsm: &mut Fsm) {
-        // TODO
+    fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
+        for state in fsm.states.as_slice() {
+            self.state_name_to_id.insert(state.name.clone(), state.id);
+        }
     }
 
     #[allow(non_snake_case)]
@@ -425,9 +431,33 @@ impl Datamodel for NullDatamodel {
     /// The boolean expression language consists of the In predicate only.
     /// It has the form 'In(id)', where id is the id of a state in the enclosing state machine.
     /// The predicate must return 'true' if and only if that state is in the current state configuration.
-    fn execute_condition(&mut self, _script: &str) -> Result<bool, String> {
-        // TODO: Support for "In" predicate
-        Ok(false)
+    fn execute_condition(&mut self, script: &str) -> Result<bool, String> {
+        lazy_static! {
+            static ref IN_RE: Regex =
+                Regex::new(r"In\((.*)\)").unwrap();
+        }
+
+        let caps = IN_RE.captures(script);
+        if caps.is_none() {
+            Ok(false)
+        } else {
+            let mut value = caps.unwrap().get(1).map_or("", |m| m.as_str()).trim();
+            if value.starts_with('\'') && value.ends_with('\'') {
+                value = &value[1..value.len() - 1];
+            }
+            match self.state_name_to_id.get(value) {
+                None => {
+                    Ok(false)
+                }
+                Some(state_id) => {
+                    if self.global.lock().configuration.data.contains(state_id) {
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                }
+            }
+        }
     }
 
     #[allow(non_snake_case)]

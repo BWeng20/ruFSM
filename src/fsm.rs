@@ -3430,7 +3430,7 @@ pub fn create_datamodel(
             }
             ecma
         }
-        NULL_DATAMODEL_LC => Box::new(NullDatamodel::new()),
+        NULL_DATAMODEL_LC => Box::new(NullDatamodel::new(global_data)),
         _ => panic!("Unsupported Data Model '{}'", name),
     }
 }
