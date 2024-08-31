@@ -13,7 +13,8 @@ use log::info;
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
-    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, ParamPair, Parameter, StateId,
+    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter,
+    StateId,
 };
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
@@ -220,13 +221,23 @@ pub trait Datamodel {
     fn executeContent(&mut self, fsm: &Fsm, contentId: ExecutableContentId);
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
+    fn internal_error_execution_with_event(&mut self, event: &Event) {
+        get_global!(self).enqueue_internal(Event::error_execution_with_event(event));
+    }
+
+    /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
+    fn internal_error_execution_for_event(&mut self, send_id: &str, invoke_id: &Option<InvokeId>) {
+        get_global!(self).enqueue_internal(Event::error_execution(send_id, invoke_id));
+    }
+
+    /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
     fn internal_error_execution(&mut self) {
-        get_global!(self).enqueue_internal(Event::error_execution());
+        get_global!(self).enqueue_internal(Event::error_execution("", &None));
     }
 
     /// W3C: Indicates that an error has occurred while trying to communicate with an external entity.
-    fn internal_error_communication(&mut self) {
-        get_global!(self).enqueue_internal(Event::error_communication());
+    fn internal_error_communication(&mut self, event: &Event) {
+        get_global!(self).enqueue_internal(Event::error_communication(event));
     }
 
     fn evaluate_content(&mut self, content: &Option<CommonContent>) -> Option<String> {

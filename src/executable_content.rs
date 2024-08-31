@@ -558,14 +558,14 @@ impl ExecutableContent for SendParameters {
         if delay_ms < 0 {
             // Delay is invalid -> Abort
             error!("Send: delay {} is negative", self.delay_expr);
-            datamodel.internal_error_execution();
+            datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
             return;
         }
 
         if delay_ms > 0 && target.eq(SCXML_TARGET_INTERNAL) {
             // Can't send via internal queue
             error!("Send: illegal delay for target {}", target);
-            datamodel.internal_error_execution();
+            datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
             return;
         }
         let type_result = datamodel
@@ -575,7 +575,7 @@ impl ExecutableContent for SendParameters {
             Ok(val) => val,
             Err(err) => {
                 error!("Failed to evaluate send type: {}", err);
-                datamodel.internal_error_execution();
+                datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
                 return;
             }
         };
@@ -627,7 +627,7 @@ impl ExecutableContent for SendParameters {
             None => {
                 // W3C:  If the SCXML Processor does not support the type that is specified,
                 // it must place the event error.execution on the internal event queue.
-                datamodel.internal_error_execution();
+                datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
             }
         }
     }

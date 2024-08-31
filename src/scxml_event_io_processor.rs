@@ -65,13 +65,13 @@ impl ScxmlEventIOProcessor {
             }
             Some(executor) => {
                 info!("Send '{}' to Session {}", event, session_id);
-                match executor.send_to_session(session_id, event) {
+                match executor.send_to_session(session_id, event.clone()) {
                     Ok(_) => {
                         // TODO
                     }
                     Err(error) => {
                         error!("Can't send to session {}. {}", session_id, error);
-                        global_data_lock.enqueue_internal(Event::error_communication());
+                        global_data_lock.enqueue_internal(Event::error_communication(&event));
                     }
                 }
             }
@@ -145,7 +145,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                     match target.get(SCXML_TARGET_SESSION_ID_PREFIX.len()..) {
                         None => {
                             error!("Send target '{}' has wrong format.", target);
-                            global_lock.enqueue_internal(Event::error_communication());
+                            global_lock.enqueue_internal(Event::error_communication(&event));
                         }
                         Some(session_id_s) => match session_id_s.parse::<SessionId>() {
                             Ok(session_id) => {
@@ -153,7 +153,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                             }
                             Err(_err) => {
                                 error!("Send target '{}' has wrong format.", target);
-                                global_lock.enqueue_internal(Event::error_communication());
+                                global_lock.enqueue_internal(Event::error_communication(&event));
                             }
                         },
                     }
@@ -161,7 +161,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                     match target.get(SCXML_TARGET_INVOKE_ID_PREFIX.len()..) {
                         None => {
                             error!("Send target '{}' has wrong format.", target);
-                            global_lock.enqueue_internal(Event::error_communication());
+                            global_lock.enqueue_internal(Event::error_communication(&event));
                         }
                         Some(invokeid) => {
                             let session_id = match global_lock.child_sessions.get(invokeid) {
@@ -170,7 +170,8 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                                         "InvokeId of target {} '{}' is not available.",
                                         invokeid, target
                                     );
-                                    global_lock.enqueue_internal(Event::error_communication());
+                                    global_lock
+                                        .enqueue_internal(Event::error_communication(&event));
                                     return;
                                 }
                                 Some(session) => session.session_id,
@@ -180,7 +181,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                     }
                 } else {
                     // TODO: Clarify the case, that the format is illegal.
-                    global_lock.enqueue_internal(Event::error_communication());
+                    global_lock.enqueue_internal(Event::error_communication(&event));
                 }
             }
         }

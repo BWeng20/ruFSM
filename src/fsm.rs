@@ -746,30 +746,44 @@ impl Event {
     }
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
-    pub fn error_execution() -> Event {
+    pub fn error_execution_with_event(event: &Event) -> Event {
         Event {
             name: "error.execution".to_string(),
             etype: EventType::platform,
-            sendid: "".to_string(),
+            sendid: event.sendid.clone(),
+            origin: event.origin.clone(),
+            param_values: None,
+            content: None,
+            invoke_id: event.invoke_id.clone(),
+            origin_type: event.origin_type.clone(),
+        }
+    }
+
+    /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
+    pub fn error_execution(send_id: &str, invoke_id: &Option<InvokeId>) -> Event {
+        Event {
+            name: "error.execution".to_string(),
+            etype: EventType::platform,
+            sendid: send_id.to_string(),
             origin: None,
             param_values: None,
             content: None,
-            invoke_id: None,
+            invoke_id: invoke_id.clone(),
             origin_type: None,
         }
     }
 
     /// W3C: Indicates that an error has occurred while trying to communicate with an external entity.
-    pub fn error_communication() -> Event {
+    pub fn error_communication(event: &Event) -> Event {
         Event {
             name: "error.communication".to_string(),
             etype: EventType::platform,
-            sendid: "".to_string(),
-            origin: None,
+            sendid: event.sendid.clone(),
+            origin: event.origin.clone(),
             param_values: None,
             content: None,
-            invoke_id: None,
-            origin_type: None,
+            invoke_id: event.invoke_id.clone(),
+            origin_type: event.origin_type.clone(),
         }
     }
 
@@ -1249,14 +1263,17 @@ impl Fsm {
     }
 
     /// Implements variant "initializeDataModel(datamodel, doc)" from W3C.
-    fn initialize_data_models_recursive(&mut self, datamodel: &mut dyn Datamodel, state_id : StateId) {
+    fn initialize_data_models_recursive(
+        &mut self,
+        datamodel: &mut dyn Datamodel,
+        state_id: StateId,
+    ) {
         datamodel.initializeDataModel(self, state_id);
 
         for child_state in self.getChildStates(state_id).iterator() {
             self.initialize_data_models_recursive(datamodel, *child_state);
         }
     }
-
 
     /// *W3C says*:
     /// The purpose of this procedure is to initialize the interpreter and to start processing.
@@ -1319,7 +1336,7 @@ impl Fsm {
             datamodel.implement_mandatory_functionality(self);
 
             if self.binding == BindingType::Early {
-                self.initialize_data_models_recursive(datamodel, self.pseudo_root );
+                self.initialize_data_models_recursive(datamodel, self.pseudo_root);
             }
         }
         self.executeGlobalScriptElement(datamodel);

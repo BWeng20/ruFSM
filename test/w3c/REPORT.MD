@@ -85,7 +85,7 @@
 | test329.txml.scxml   | OK       | test that none of the system variables can be modified |
 | test330.txml.scxml   | OK       | check that the required fields are present in both internal and external events |
 | test331.txml.scxml   | OK       ||
-| test332.txml.scxml   | _Failed_ | test that sendid is present in error events triggered by send errors |
+| test332.txml.scxml   | OK       | test that sendid is present in error events triggered by send errors |
 | test333.txml.scxml   | _Failed_ | make sure sendid is blank in a non-error event |
 | test335.txml.scxml   | _Failed_ | test that origin field is blank for internal events |
 | test336.txml.scxml   | _Failed_ | test that the origin field of an external event contains a URL that lets you send back to the originator.  In this case it's the same session, so if we get bar we succeed |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 125 of 160 tests succeeded
+__Result__: 126 of 160 tests succeeded
