@@ -1,12 +1,12 @@
 //! Defines the API used to access the data models.
 
+use lazy_static::lazy_static;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 #[cfg(test)]
 use std::println as info;
 use std::sync::{Arc, Mutex, MutexGuard};
-use lazy_static::lazy_static;
 
 use log::error;
 #[cfg(not(test))]
@@ -341,7 +341,7 @@ pub trait Datamodel {
 pub struct NullDatamodel {
     pub global: GlobalDataAccess,
     pub io_processors: HashMap<String, Box<dyn EventIOProcessor>>,
-    pub state_name_to_id: HashMap<String,StateId>,
+    pub state_name_to_id: HashMap<String, StateId>,
 }
 
 impl NullDatamodel {
@@ -433,8 +433,7 @@ impl Datamodel for NullDatamodel {
     /// The predicate must return 'true' if and only if that state is in the current state configuration.
     fn execute_condition(&mut self, script: &str) -> Result<bool, String> {
         lazy_static! {
-            static ref IN_RE: Regex =
-                Regex::new(r"In\((.*)\)").unwrap();
+            static ref IN_RE: Regex = Regex::new(r"In\((.*)\)").unwrap();
         }
 
         let caps = IN_RE.captures(script);
@@ -446,9 +445,7 @@ impl Datamodel for NullDatamodel {
                 value = &value[1..value.len() - 1];
             }
             match self.state_name_to_id.get(value) {
-                None => {
-                    Ok(false)
-                }
+                None => Ok(false),
                 Some(state_id) => {
                     if self.global.lock().configuration.data.contains(state_id) {
                         Ok(true)
