@@ -11,12 +11,14 @@ use std::{println as debug, println as info, println as warn, println as error};
 
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
-use boa_engine::object::builtins::{JsMap, JsSet};
+use boa_engine::object::builtins::JsMap;
 use boa_engine::object::ObjectInitializer;
 use boa_engine::property::{Attribute, PropertyDescriptor};
 use boa_engine::value::Type;
-use boa_engine::JsResult;
 use boa_engine::{js_string, native_function::NativeFunction, Context, JsError, JsValue, Source};
+use boa_engine::{JsArgs, JsData, JsResult};
+use boa_gc::{empty_trace, Finalize, Trace};
+
 #[cfg(not(test))]
 use log::{debug, error, info, warn};
 
@@ -34,7 +36,6 @@ use crate::fsm::{ExecutableContentId, Fsm, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
-pub const FSM_CONFIGURATION: &str = "_fsm_configuration";
 
 pub const ECMA_OPTION_INFIX: &str = "ecma:";
 pub const ECMA_OPTION_STRICT_POSTFIX: &str = "strict";
@@ -53,7 +54,6 @@ pub struct ECMAScriptDatamodel {
     pub context: Context,
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
     pub io_processors: HashMap<String, Box<dyn EventIOProcessor>>,
-    pub id_to_state_names: HashMap<StateId, String>,
     pub strict_mode: bool,
 }
 
@@ -71,13 +71,25 @@ fn option_to_js_value(val: &Option<String>) -> JsValue {
     }
 }
 
-fn log_js(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> Result<JsValue, JsError> {
-    let mut msg = String::new();
-    for arg in args {
-        msg.push_str(js_to_string(arg, ctx).as_str());
+#[derive(JsData, Finalize)]
+struct FsmJSWrapper {
+    pub global_data: GlobalDataAccess,
+    pub state_name_to_id: HashMap<String, StateId>,
+}
+
+/// Dummy implementation for the Wrapper to enable us to add this class to the context.\
+/// Safety: Nothing in this struct needs tracing, so this is safe.
+unsafe impl Trace for FsmJSWrapper {
+    empty_trace!();
+}
+
+impl FsmJSWrapper {
+    fn new(gd: GlobalDataAccess) -> FsmJSWrapper {
+        FsmJSWrapper {
+            global_data: gd,
+            state_name_to_id: HashMap::new(),
+        }
     }
-    info!("{}", msg);
-    Ok(JsValue::Null)
 }
 
 impl ECMAScriptDatamodel {
@@ -88,7 +100,6 @@ impl ECMAScriptDatamodel {
             context: ContextBuilder::new().build().unwrap(),
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
             io_processors: HashMap::new(),
-            id_to_state_names: HashMap::new(),
             strict_mode: false,
         }
     }
@@ -173,7 +184,6 @@ impl ECMAScriptDatamodel {
     }
 
     fn eval(&mut self, source: &str) -> JsResult<JsValue> {
-        self.update_global_data();
         self.context.eval(Source::from_bytes(source))
     }
 
@@ -185,24 +195,6 @@ impl ECMAScriptDatamodel {
             .context
             .global_object()
             .set(js_string!(name), value, false, &mut self.context);
-    }
-
-    fn update_global_data(&mut self) {
-        let set = JsSet::new(&mut self.context);
-        for state in self.global_data.lock().configuration.iterator() {
-            match self.id_to_state_names.get(state) {
-                None => {
-                    error!(
-                        "State {} not found in state-names {:?}",
-                        state, self.id_to_state_names
-                    );
-                }
-                Some(state_name) => {
-                    let _ = set.add(js_string!(state_name.as_str()), &mut self.context);
-                }
-            }
-        }
-        self.set_js_property(FSM_CONFIGURATION, set);
     }
 
     fn assign_internal(
@@ -240,6 +232,38 @@ impl ECMAScriptDatamodel {
         }
         r
     }
+
+    fn in_configuration(
+        _this: &JsValue,
+        args: &[JsValue],
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
+        let state = args.get_or_undefined(0);
+
+        if let Ok(name) = state.to_string(context) {
+            let fsm = context.get_data::<FsmJSWrapper>().unwrap();
+            let loc = fsm.state_name_to_id.get(&name.to_std_string().unwrap());
+            if fsm
+                .global_data
+                .lock()
+                .configuration
+                .data
+                .contains(loc.unwrap())
+            {
+                return Ok(JsValue::Boolean(true));
+            }
+        }
+        Ok(JsValue::Boolean(false))
+    }
+
+    fn log_js(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> Result<JsValue, JsError> {
+        let mut msg = String::new();
+        for arg in args {
+            msg.push_str(js_to_string(arg, ctx).as_str());
+        }
+        info!("{}", msg);
+        Ok(JsValue::Null)
+    }
 }
 
 impl Datamodel for ECMAScriptDatamodel {
@@ -259,15 +283,23 @@ impl Datamodel for ECMAScriptDatamodel {
         let ctx = &mut self.context;
 
         // Implement "In" function.
+        let _ = ctx.register_global_callable(
+            js_string!("__In"),
+            1,
+            NativeFunction::from_copy_closure(Self::in_configuration),
+        );
 
+        let mut fw = FsmJSWrapper::new(self.global_data.clone());
         for state in fsm.states.as_slice() {
-            self.id_to_state_names.insert(state.id, state.name.clone());
+            fw.state_name_to_id.insert(state.name.clone(), state.id);
         }
+
+        let _ = ctx.insert_data(fw);
 
         let _ = ctx.eval(Source::from_bytes(
             r##"
                 function In(state) {
-                   return _fsm_configuration.has( state );
+                   return __In( state );
                 }
             "##,
         ));
@@ -276,7 +308,7 @@ impl Datamodel for ECMAScriptDatamodel {
         let _ = ctx.register_global_callable(
             js_string!("log"),
             1,
-            NativeFunction::from_copy_closure(log_js),
+            NativeFunction::from_copy_closure(Self::log_js),
         );
 
         // set system variable "_ioprocessors"
@@ -467,7 +499,6 @@ impl Datamodel for ECMAScriptDatamodel {
         execute_body: &mut dyn FnMut(&mut dyn Datamodel),
     ) {
         debug!("ForEach: array: {}", array_expression);
-        self.update_global_data();
         match self.context.eval(Source::from_bytes(array_expression)) {
             Ok(r) => {
                 match r.get_type() {
