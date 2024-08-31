@@ -735,7 +735,7 @@ impl DefaultExecutableContentTracer {
     }
 
     pub fn trace(&self, msg: &str) {
-        info!("{:1$}{2}", " ", 2 * self.trace_depth, msg);
+        info!("{:1$}{2}", "", 2 * self.trace_depth, msg);
     }
 }
 
@@ -746,7 +746,7 @@ impl ExecutableContentTracer for DefaultExecutableContentTracer {
         buf.push_str(
             format!(
                 "{:1$}{2} [",
-                " ",
+                "",
                 2 * self.trace_depth,
                 TYPE_NAMES[ec.get_type() as usize]
             )
@@ -770,7 +770,7 @@ impl ExecutableContentTracer for DefaultExecutableContentTracer {
     }
 
     fn print_sub_content(&mut self, name: &str, fsm: &Fsm, content_id: ExecutableContentId) {
-        self.trace(format!("{:1$}{2} {{", " ", 2 * self.trace_depth, name).as_str());
+        self.trace(format!("{:1$}{2} {{", "", 2 * self.trace_depth, name).as_str());
         self.trace_depth += 1;
         if let Some(vec) = fsm.executableContent.get(&content_id) {
             for ec in vec {
@@ -778,6 +778,6 @@ impl ExecutableContentTracer for DefaultExecutableContentTracer {
             }
         }
         self.trace_depth -= 1;
-        self.trace(format!("{:1$}}}", " ", 2 * self.trace_depth).as_str());
+        self.trace(format!("{:1$}}}", "", 2 * self.trace_depth).as_str());
     }
 }
