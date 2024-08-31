@@ -83,15 +83,15 @@
 | test325.txml.scxml   | OK       | test that _ioprocessors is bound at startup.  I'm not sure how to test for a set value or how to test that the entries in it do represent I/O processors, since the set that each implementation supports may be different.  Suggestions welcome |
 | test326.txml.scxml   | OK       | test that _ioprocessors stays bound till the session ends.  This means that it cannot be assigned to |
 | test329.txml.scxml   | OK       | test that none of the system variables can be modified |
-| test330.txml.scxml   | OK       | check that the required fields are present in both internal and external events |
+| test330.txml.scxml   | _Failed_ | check that the required fields are present in both internal and external events |
 | test331.txml.scxml   | OK       ||
 | test332.txml.scxml   | OK       | test that sendid is present in error events triggered by send errors |
-| test333.txml.scxml   | _Failed_ | make sure sendid is blank in a non-error event |
-| test335.txml.scxml   | _Failed_ | test that origin field is blank for internal events |
+| test333.txml.scxml   | OK       | make sure sendid is blank in a non-error event |
+| test335.txml.scxml   | OK       | test that origin field is blank for internal events |
 | test336.txml.scxml   | _Failed_ | test that the origin field of an external event contains a URL that lets you send back to the originator.  In this case it's the same session, so if we get bar we succeed |
-| test337.txml.scxml   | _Failed_ | test that origintype is blank on internal events |
+| test337.txml.scxml   | OK       | test that origintype is blank on internal events |
 | test338.txml.scxml   | OK       | test that invokeid is set correctly in events received from an invoked process.  timeout event catches the  case where the invoke doesn't work correctly |
-| test339.txml.scxml   | _Failed_ | test that invokeid is blank in an event that wasn't returned from an invoked process |
+| test339.txml.scxml   | OK       | test that invokeid is blank in an event that wasn't returned from an invoked process |
 | test342.txml.scxml   | OK       | test that eventexpr works and sets the name field of the resulting event |
 | test343.txml.scxml   | _Failed_ |  test that illegal \<param> produces error.execution and empty event.data |
 | test344.txml.scxml   | OK       | test that a cond expression that cannot be evaluated as a  boolean cond expression evaluates to false and causes error.execution to be raised. In some languages, any valid expression/object can be converted to a boolean, so conf:nonBoolean will have to be mapped onto something that produces a syntax error or something similarly invalid |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 129 of 160 tests succeeded
+__Result__: 132 of 160 tests succeeded

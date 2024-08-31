@@ -395,7 +395,7 @@ impl Datamodel for ECMAScriptDatamodel {
 
         let mut event_object_initializer = ObjectInitializer::new(&mut self.context);
 
-        let event_object_builder = event_object_initializer
+        event_object_initializer
             .property(
                 js_string!(EVENT_VARIABLE_FIELD_NAME),
                 js_string!(event.name.clone()),
@@ -405,34 +405,42 @@ impl Datamodel for ECMAScriptDatamodel {
                 js_string!(EVENT_VARIABLE_FIELD_TYPE),
                 js_string!(event.etype.name().to_string()),
                 Attribute::READONLY,
-            )
-            .property(
+            );
+        if !event.sendid.is_empty() {
+            event_object_initializer.property(
                 js_string!(EVENT_VARIABLE_FIELD_SEND_ID),
                 js_string!(event.sendid.clone()),
                 Attribute::READONLY,
-            )
-            .property(
+            );
+        }
+        if event.origin.is_some() {
+            event_object_initializer.property(
                 js_string!(EVENT_VARIABLE_FIELD_ORIGIN),
                 option_to_js_value(&event.origin),
                 Attribute::READONLY,
-            )
-            .property(
+            );
+        }
+        if event.origin_type.is_some() {
+            event_object_initializer.property(
                 js_string!(EVENT_VARIABLE_FIELD_ORIGIN_TYPE),
                 option_to_js_value(&event.origin_type),
                 Attribute::READONLY,
-            )
-            .property(
+            );
+        }
+        if event.invoke_id.is_some() {
+            event_object_initializer.property(
                 js_string!(EVENT_VARIABLE_FIELD_INVOKE_ID),
                 option_to_js_value(&event.invoke_id),
                 Attribute::READONLY,
             );
-        event_object_builder.property(
+        }
+        event_object_initializer.property(
             js_string!(EVENT_VARIABLE_FIELD_DATA),
             data_value,
             Attribute::READONLY,
         );
 
-        let event_object = event_object_builder.build();
+        let event_object = event_object_initializer.build();
         let r = self
             .context
             .global_object()
