@@ -1649,9 +1649,7 @@ impl Fsm {
             let mut invokes: Vec<Invoke> = Vec::new();
             {
                 let s = self.get_state_by_id(*sid);
-                if s.onexit != 0 {
-                    content.push(s.onexit);
-                }
+                content.extend_from_slice(s.onexit.as_slice());
                 for inv in s.invoke.iterator() {
                     invokes.push(inv.clone());
                 }
@@ -2038,25 +2036,29 @@ impl Fsm {
         get_global!(datamodel).historyValue.put_all(&ahistory);
 
         for sid in statesToExitSorted.iterator() {
-            let onExitId;
+
             let mut invokeList: List<InvokeId> = List::new();
+            let mut exitList: List<ExecutableContentId> = List::new();
             {
                 let s = self.get_state_by_id(*sid);
 
                 #[cfg(feature = "Trace_State")]
                 self.tracer.trace_exit_state(s);
 
-                onExitId = s.onexit;
                 for inv in s.invoke.iterator() {
                     invokeList.push(inv.invoke_id.clone());
                 }
-            }
-            if onExitId != 0 {
-                self.executeContent(datamodel, onExitId);
+                for ec in &s.onexit {
+                    exitList.push(*ec);
+                }
             }
             for invokeId in invokeList.iterator() {
                 self.cancelInvokeId(invokeId.clone());
             }
+            for ec in exitList.iterator() {
+                self.executeContent(datamodel, *ec);
+            }
+
             get_global!(datamodel).configuration.delete(sid)
         }
         #[cfg(feature = "Trace_Method")]
@@ -2151,7 +2153,7 @@ impl Fsm {
             let mut exe = Vec::new();
             {
                 let state_s: &State = self.get_state_by_id(*s);
-                exe.push(state_s.onentry);
+                exe.extend_from_slice(state_s.onentry.as_slice());
                 if statesForDefaultEntry.isMember(s) && state_s.initial > 0 {
                     exe.push(self.get_transition_by_id(state_s.initial).content);
                 }
@@ -3201,10 +3203,10 @@ pub struct State {
     pub history_type: HistoryType,
 
     /// The script that is executed if the state is entered. See W3c comments for \<onentry\> above.
-    pub onentry: ExecutableContentId,
+    pub onentry: Vec<ExecutableContentId>,
 
     /// The script that is executed if the state is left. See W3c comments for \<onexit\> above.
-    pub onexit: ExecutableContentId,
+    pub onexit: Vec<ExecutableContentId>,
 
     /// All transitions between sub-states.
     pub transitions: List<TransitionId>,
@@ -3230,8 +3232,8 @@ impl State {
             name: name.to_string(),
             initial: 0,
             states: vec![],
-            onentry: 0,
-            onexit: 0,
+            onentry: vec![],
+            onexit: vec![],
             transitions: List::new(),
             is_parallel: false,
             is_final: false,

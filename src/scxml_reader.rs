@@ -1127,8 +1127,8 @@ impl ReaderState {
     fn end_on_entry(&mut self) {
         let ec_id = self.end_executable_content_region(TAG_ON_ENTRY);
         let state = self.get_current_state();
-        // Assign the collected content to the on-entry.
-        state.onentry = ec_id;
+        // Add the collected content to on-entry.
+        state.onentry.push(ec_id);
     }
 
     fn start_on_exit(&mut self, _attr: &AttributeMap) {
@@ -1139,8 +1139,8 @@ impl ReaderState {
     fn end_on_exit(&mut self) {
         let ec_id = self.end_executable_content_region(TAG_ON_EXIT);
         let state = self.get_current_state();
-        // Assign the collected content to the on-exit.
-        state.onexit = ec_id;
+        // Add the collected content to the on-exit.
+        state.onexit.push(ec_id);
     }
 
     fn start_if(&mut self, attr: &AttributeMap) {

@@ -209,8 +209,8 @@ where
         self.writer.write_str(state.name.as_str());
 
         let flags = state.history_type.ordinal() as u16 // 0 - 2
-                | if state.onentry  > 0 {FSM_PROTOCOL_FLAG_ON_ENTRY} else {0}
-                | if state.onexit   > 0 {FSM_PROTOCOL_FLAG_ON_EXIT} else {0}
+                | if state.onentry.is_empty() {0} else {FSM_PROTOCOL_FLAG_ON_ENTRY}
+                | if state.onexit.is_empty() {0} else {FSM_PROTOCOL_FLAG_ON_EXIT}
                 | if !state.states.is_empty() {FSM_PROTOCOL_FLAG_STATES} else {0}
                 | if state.is_final {FSM_PROTOCOL_FLAG_IS_FINAL} else {0}
                 | if state.is_parallel {FSM_PROTOCOL_FLAG_IS_PARALLEL} else {0}
@@ -228,11 +228,17 @@ where
             }
         }
 
-        if state.onentry > 0 {
-            self.write_executable_content_id(state.onentry);
+        if !state.onentry.is_empty() {
+            self.writer.write_usize(state.onentry.len());
+            for ec in &state.onentry {
+                self.write_executable_content_id(*ec);
+            }
         }
-        if state.onexit > 0 {
-            self.write_executable_content_id(state.onexit);
+        if !state.onexit.is_empty() {
+            self.writer.write_usize(state.onexit.len());
+            for ec in &state.onexit {
+                self.write_executable_content_id(*ec);
+            }
         }
 
         self.writer.write_usize(state.transitions.size());

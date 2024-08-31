@@ -249,10 +249,16 @@ where
         }
 
         if (flags & FSM_PROTOCOL_FLAG_ON_ENTRY) != 0 {
-            state.onentry = self.read_executable_content_id();
+            let onentry_len = self.reader.read_usize();
+            for _si in 0..onentry_len {
+                state.onentry.push( self.read_executable_content_id() );
+            }
         }
         if (flags & FSM_PROTOCOL_FLAG_ON_EXIT) != 0 {
-            state.onexit = self.read_executable_content_id();
+            let onexit_len = self.reader.read_usize();
+            for _si in 0..onexit_len {
+                state.onexit.push( self.read_executable_content_id() );
+            }
         }
 
         let transition_len = self.reader.read_usize();

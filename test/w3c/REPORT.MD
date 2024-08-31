@@ -106,9 +106,9 @@
 | test355.txml.scxml   | OK       | test that default initial state is first in document order.  If we enter s0 first we succeed, if s1, failure. |
 | test364.txml.scxml   | OK       | test that default initial states are entered when a compound state is entered.  First we test the 'initial' attribute, then the initial element, then default to the first child in document order.   If we get to s01111 we succeed, if any other state, failure.  |
 | test372.txml.scxml   | OK       | test that entering a final state generates done.state.parentid after executing the onentry elements.   Var1 should be set to 2 (but not 3) by the time the event is raised |
-| test375.txml.scxml   | _Failed_ | test that onentry handlers are executed in document order.  event1 should be raised before event2 |
+| test375.txml.scxml   | OK       | test that onentry handlers are executed in document order.  event1 should be raised before event2 |
 | test376.txml.scxml   | OK       | test that each onentry handler is a separate block.  The \<send> of event1 will cause an error but  the increment to var1 should happen anyways |
-| test377.txml.scxml   | _Failed_ | test that onexit handlers are executed in document order.  event1 should be raised before event2 |
+| test377.txml.scxml   | OK       | test that onexit handlers are executed in document order.  event1 should be raised before event2 |
 | test378.txml.scxml   | OK       | test that each onexithandler is a separate block.  The \<send> of event1 will cause an error but  the increment to var1 should happen anyways |
 | test387.txml.scxml   | OK       | test that the default history state works correctly.  From initial state s3 we take a transition to s0's default shallow history state.  That should generate "enteringS011", which takes us to s4.  In s4, we transition to s1's default deep history state. We should end up in s122, generating "enteringS122".  Otherwise failure.|
 | test388.txml.scxml   | OK       | test that history states works correctly.  The counter Var1 counts how many times we have entered s0.  The initial state is s012.  We then transition to s1, which transitions to s0's deep history state.  entering.s012 should be raised, otherwise failure.  Then we transition to s02, which transitions to s0's shallow history state.  That should have value s01, and its initial state is s011, so we should get entering.s011, otherwise failure.|
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 132 of 160 tests succeeded
+__Result__: 134 of 160 tests succeeded
