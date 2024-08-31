@@ -102,7 +102,7 @@
 | test350.txml.scxml   | OK       | test that target value is used to decide what session to deliver the event to.  A session should be able to send an event to itself using its own session ID as the target |
 | test351.txml.scxml   | OK       | test that sendid is set in event if present in send, blank otherwise |
 | test352.txml.scxml   | _Failed_ | test the origintype is 'http://www.w3.org/TR/scxml/#SCXMLEventProcessor' |
-| test354.txml.scxml   | _Failed_ | test that event.data can be populated using both namelist, param and \<content> and that correct values are used |
+| test354.txml.scxml   | OK       | test that event.data can be populated using both namelist, param and \<content> and that correct values are used |
 | test355.txml.scxml   | OK       | test that default initial state is first in document order.  If we enter s0 first we succeed, if s1, failure. |
 | test364.txml.scxml   | OK       | test that default initial states are entered when a compound state is entered.  First we test the 'initial' attribute, then the initial element, then default to the first child in document order.   If we get to s01111 we succeed, if any other state, failure.  |
 | test372.txml.scxml   | OK       | test that entering a final state generates done.state.parentid after executing the onentry elements.   Var1 should be set to 2 (but not 3) by the time the event is raised |
@@ -133,7 +133,7 @@
 | test421.txml.scxml   | OK       | test that internal events take priority over external ones, and that the processor keeps pulling off internal events until it finds one that triggers a transition |
 | test422.txml.scxml   | OK       | Test that at the end of a macrostep, the processor executes all invokes in states that have been entered and not exited during the step.  (The invokes are supposed to be executed in document order, but we can test that since each invocation is separate and they may take different amounts to time to start up.)  In this case, there are three invoke statements, in states s1, s11 and s12.  Each invoked process returns an event named after its parent state. The invokes in s1 and s12 should execute, but not the one in s11. So we should receive invokeS1, invokeS12, but not invokeS12.  Furthermore, when the timeout fires, var1 should equal 2.|
 | test423.txml.scxml   | OK       | test that we keep pulling external events off the queue till we find one that matches a transition. |
-| test436.txml.scxml   | _Failed_ | test that in() predicate works in null data model |
+| test436.txml.scxml   | OK       | test that in() predicate works in null data model |
 | test487.txml.scxml   | OK       | test illegal assignment.  error.execution should be raised.  |
 | test488.txml.scxml   | _Failed_ |  test that illegal expr in \<param> produces error.execution and empty event.data |
 | test495.txml.scxml   | OK       | test that the scxml event i/o processor puts events in the correct queues.|
@@ -154,11 +154,11 @@
 | test550.txml.scxml   | OK       | test that expr can be used to assign a value to a var.  This test uses early binding |
 | test551.txml.scxml   | OK       | test that inline content can be used to assign a value to a var.  |
 | test552.txml.scxml   | OK       | test that src content can be used to assign a value to a var. Edit test552.txt to have a value that's legal for the datamodel in question |
-| test553.txml.scxml   | _Failed_ | we test that the processor does not dispatch the event if evaluation of \<send>'s args causes an error..  |
+| test553.txml.scxml   | OK       | we test that the processor does not dispatch the event if evaluation of \<send>'s args causes an error..  |
 | test554.txml.scxml   | _Failed_ | test that if the evaluation of \<invoke>'s args causes an error, the  invocation is cancelled.  In this test, that means that we don't get done.invoke  before the timer goes off.  |
 | test570.txml.scxml   | OK       | test that we generate done.state.id when all a parallel state's children are in final states |
 | test576.txml.scxml   | OK       | test that the 'initial' value of scxml is respected.  We set the value to deeply nested non-default parallel siblings and test that both are entered. |
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 126 of 160 tests succeeded
+__Result__: 129 of 160 tests succeeded

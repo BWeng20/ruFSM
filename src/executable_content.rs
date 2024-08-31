@@ -15,8 +15,8 @@ use regex::Regex;
 
 use crate::datamodel::{Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
 use crate::fsm::{
-    opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, Parameter,
-    PLATFORM_ID_COUNTER,
+    opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair,
+    Parameter, PLATFORM_ID_COUNTER,
 };
 use crate::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
 use crate::{get_global, Event, EventType};
@@ -539,9 +539,26 @@ impl ExecutableContent for SendParameters {
         };
 
         let mut data_vec = Vec::new();
-        datamodel.evaluate_params(&self.params, &mut data_vec);
 
-        let content = datamodel.evaluate_content(&self.content);
+        let mut content = None;
+
+        // A conformant document MUST NOT specify "namelist" or <param> with <content>.
+        if self.content.is_some() {
+            content = datamodel.evaluate_content(&self.content);
+        } else {
+            datamodel.evaluate_params(&self.params, &mut data_vec);
+            for name in self.name_list.as_slice() {
+                match datamodel.get_by_location(name) {
+                    None => {
+                        // Error -> Abort
+                        return;
+                    }
+                    Some(value) => {
+                        data_vec.push(ParamPair::new(name.as_str(), &value));
+                    }
+                }
+            }
+        }
 
         let delay_ms = if !self.delay_expr.is_empty() {
             match datamodel.execute(&self.delay_expr) {
