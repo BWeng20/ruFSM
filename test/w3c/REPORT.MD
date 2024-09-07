@@ -27,7 +27,7 @@
 | test191.txml.scxml   | OK       | we test that #_parent works as  a target of  \<send> .  a subscript is invoked and sends the event  childToParent to its parent session (ths session) using #_parent as the target. If we get this event, we pass, otherwise we fail.  The timer insures that some event is generated and that the test does not hang. |
 | test192.txml.scxml   | OK       | we test that #_invokeid works as  a target of  \<send> .  A child  script is invoked and sends us childToParent once its running.  Then we send it the event parentToChild using its invokeid as the target.   If it receives this event, it sends sends the event eventReceived to its parent session (ths session).  If we get this event, we pass, otherwise the child script eventually times out sends invoke.done and we fail. We also set a timeout in this process to make sure the test doesn't hang  |
 | test194.txml.scxml   | _Failed_ | we test that specifying an illegal target for \<send> causes the event error.execution to be raised.  If it does, we succeed.  Otherwise we eventually timeout and fail.  |
-| test198.txml.scxml   | _Failed_ | we test that if type is not provided \<send> uses the scxml event i/o processor.  The only way to tell what processor was used is to look at the origintype of the resulting event  |
+| test198.txml.scxml   | OK       | we test that if type is not provided \<send> uses the scxml event i/o processor.  The only way to tell what processor was used is to look at the origintype of the resulting event  |
 | test199.txml.scxml   | OK       | we test that using an invalid send type results in error.execution |
 | test200.txml.scxml   | OK       | we test that the processor supports the scxml event i/o processor |
 | test205.txml.scxml   | OK       | we test that the processor doesn't  change the message.  We can't test that it never does this, but at least we can check that the event name and included data are the same as we sent.  |
@@ -48,7 +48,7 @@
 | test234.txml.scxml   | OK       | test that only finalize markup in the invoking state runs.  the first invoked process will return 2 in _event.data.aParam, while second invoked process sleeps without returning any events.  Only the first finalize should execute.  So when we get to s1 var1 should have value 2 but  var2 should still be set to 1  |
 | test235.txml.scxml   | OK       | test that done.invoke.id event has the right id.  the invoked child terminates immediately and should generate done.invoke.foo   |
 | test236.txml.scxml   | OK       | test that done.invoke.id event is the last event we receive.  the invoked process sends childToParent in the exit handler of its final state.  We should get it before the done.invoke, and we should get no events after the done.invoke.  Hence timeout indicates success   |
-| test237.txml.scxml   | _Failed_ | test that cancelling works. invoked child sleeps for two seconds, then terminates.  We sleep for 1 sec in s0, then move to s1.  This should cause the invocation to get cancelled. If we receive done.invoke, the invocation wasn't cancelled, and we fail. If we receive no events by the time timeout2 fires, success   |
+| test237.txml.scxml   | OK       | test that cancelling works. invoked child sleeps for two seconds, then terminates.  We sleep for 1 sec in s0, then move to s1.  This should cause the invocation to get cancelled. If we receive done.invoke, the invocation wasn't cancelled, and we fail. If we receive no events by the time timeout2 fires, success   |
 | test239.txml.scxml   | OK       | test that markup can be specified both by 'src' and by \<content>  |
 | test240.txml.scxml   | OK       | test that datamodel values can be specified both by 'namelist' and by \<param>. invoked child will return success if its Var1 is set to 1, failure otherwise. This test will fail schema validation because of the multiple occurences of Var1, but should run correctly. |
 | test241.txml.scxml   | OK       | The child process will return success ifits Var1 is set to 1, failure otherwise. For this test we try passing in Var1 by param and by namelist and check that we either get two successes or two failures.  This test will fail schema validation due to multiple  declarations of Var1, but should  run correctly.  |
@@ -101,7 +101,7 @@
 | test349.txml.scxml   | _Failed_ | test that value in origin field can be used to send an event back to the sender |
 | test350.txml.scxml   | OK       | test that target value is used to decide what session to deliver the event to.  A session should be able to send an event to itself using its own session ID as the target |
 | test351.txml.scxml   | OK       | test that sendid is set in event if present in send, blank otherwise |
-| test352.txml.scxml   | _Failed_ | test the origintype is 'http://www.w3.org/TR/scxml/#SCXMLEventProcessor' |
+| test352.txml.scxml   | OK       | test the origintype is 'http://www.w3.org/TR/scxml/#SCXMLEventProcessor' |
 | test354.txml.scxml   | OK       | test that event.data can be populated using both namelist, param and \<content> and that correct values are used |
 | test355.txml.scxml   | OK       | test that default initial state is first in document order.  If we enter s0 first we succeed, if s1, failure. |
 | test364.txml.scxml   | OK       | test that default initial states are entered when a compound state is entered.  First we test the 'initial' attribute, then the initial element, then default to the first child in document order.   If we get to s01111 we succeed, if any other state, failure.  |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 137 of 160 tests succeeded
+__Result__: 140 of 160 tests succeeded

@@ -5,7 +5,7 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::doc_lazy_continuation)]
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::ops::DerefMut;
@@ -24,7 +24,11 @@ use std::{println as debug, println as info, println as error};
 use log::{debug, error, info};
 use timer::Guard;
 
-use crate::datamodel::{Data, DataStore, Datamodel, GlobalDataAccess, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC, SCXML_INVOKE_TYPE, SESSION_ID_VARIABLE_NAME, SESSION_NAME_VARIABLE_NAME, SCXML_INVOKE_TYPE_SHORT};
+use crate::datamodel::{
+    Data, DataStore, Datamodel, GlobalDataAccess, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
+    SCXML_INVOKE_TYPE, SCXML_INVOKE_TYPE_SHORT, SESSION_ID_VARIABLE_NAME,
+    SESSION_NAME_VARIABLE_NAME,
+};
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::{ECMAScriptDatamodel, ECMA_SCRIPT_LC};
 use crate::event_io_processor::EventIOProcessor;
@@ -32,7 +36,9 @@ use crate::executable_content::ExecutableContent;
 use crate::fsm::BindingType::{Early, Late};
 use crate::fsm_executor::FsmExecutor;
 use crate::get_global;
-use crate::scxml_event_io_processor::{SCXML_EVENT_PROCESSOR_SHORT_TYPE, SCXML_TARGET_SESSION_ID_PREFIX};
+use crate::scxml_event_io_processor::{
+    SCXML_EVENT_PROCESSOR_SHORT_TYPE, SCXML_TARGET_SESSION_ID_PREFIX,
+};
 #[cfg(feature = "Trace")]
 use crate::tracer::{DefaultTracer, TraceMode, Tracer};
 
@@ -1042,8 +1048,8 @@ impl Clone for ScxmlSession {
         self.session_id = source.session_id;
         self.session_thread = None;
         self.sender = source.sender.clone();
-        self.state_id= source.state_id;
-        self.invoke_doc_id= source.invoke_doc_id;
+        self.state_id = source.state_id;
+        self.invoke_doc_id = source.invoke_doc_id;
     }
 }
 
@@ -1505,18 +1511,17 @@ impl Fsm {
                     continue;
                 }
 
-                if externalEvent.name.starts_with(EVENT_DONE_INVOKE_PREFIX)  {
+                if externalEvent.name.starts_with(EVENT_DONE_INVOKE_PREFIX) {
                     if let Some(invoke_id) = &externalEvent.invoke_id {
                         get_global!(datamodel).child_sessions.remove(invoke_id);
                     }
                 }
-
             }
             let mut toFinalize: Vec<ExecutableContentId> = Vec::new();
             let mut toForward: Vec<InvokeId> = Vec::new();
             {
                 match externalEvent.invoke_id {
-                    None => { },
+                    None => {}
                     Some(ref invokeId) => {
                         match get_global!(datamodel).child_sessions.get(invokeId) {
                             None => {}
@@ -1602,23 +1607,38 @@ impl Fsm {
     fn exitInterpreter(&mut self, datamodel: &mut dyn Datamodel) {
         let statesToExit;
         {
-            let mut global = get_global!(datamodel);
-
-            if global.final_configuration.is_some() {
-                let mut fc = Vec::new();
-                for sid in global.configuration.iterator() {
-                    fc.push(self.get_state_by_id(*sid).name.clone());
+            {
+                let mut global = get_global!(datamodel);
+                if global.final_configuration.is_some() {
+                    let mut fc = Vec::new();
+                    for sid in global.configuration.iterator() {
+                        fc.push(self.get_state_by_id(*sid).name.clone());
+                    }
+                    let _ = global.final_configuration.insert(fc);
                 }
-                let _ = global.final_configuration.insert(fc);
+                statesToExit = global
+                    .configuration
+                    .toList()
+                    .sort(&|s1, s2| self.state_exit_order(s1, s2));
             }
 
-            statesToExit = global
-                .configuration
-                .toList()
-                .sort(&|s1, s2| self.state_exit_order(s1, s2));
-
-            for invoke_id in global.child_sessions.keys() {
-                self.cancelInvoke( invoke_id );
+            let mut session_id_list = Vec::new();
+            for session in get_global!(datamodel).child_sessions.values() {
+                session_id_list.push(session.session_id);
+            }
+            if !session_id_list.is_empty() {
+                let mut ioc = datamodel
+                    .get_io_processors()
+                    .get(SCXML_EVENT_PROCESSOR_SHORT_TYPE)
+                    .unwrap()
+                    .get_copy();
+                for session_id in session_id_list {
+                    ioc.send(
+                        datamodel.global(),
+                        format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
+                        Event::new_simple(EVENT_CANCEL_SESSION),
+                    );
+                }
             }
         }
         for sid in statesToExit.iterator() {
@@ -1666,11 +1686,24 @@ impl Fsm {
                     }
                     Some(invoke_id) => {
                         // TODO: Evaluate done_data, EventType::external ?
-                        let mut event =
-                            Event::new( EVENT_DONE_INVOKE_PREFIX, &invoke_id, None, None, EventType::external);
+                        let mut event = Event::new(
+                            EVENT_DONE_INVOKE_PREFIX,
+                            &invoke_id,
+                            None,
+                            None,
+                            EventType::external,
+                        );
                         event.invoke_id = Some(invoke_id);
-                        let mut ioc = datamodel.get_io_processors().get(SCXML_EVENT_PROCESSOR_SHORT_TYPE).unwrap().get_copy();
-                        ioc.send( datamodel.global(), format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX ,session_id).as_str(), event );
+                        let mut ioc = datamodel
+                            .get_io_processors()
+                            .get(SCXML_EVENT_PROCESSOR_SHORT_TYPE)
+                            .unwrap()
+                            .get_copy();
+                        ioc.send(
+                            datamodel.global(),
+                            format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
+                            event,
+                        );
                     }
                 }
             }
@@ -2012,25 +2045,30 @@ impl Fsm {
         get_global!(datamodel).historyValue.put_all(&ahistory);
 
         for sid in statesToExitSorted.iterator() {
-
-            let mut invokeList: List<InvokeId> = List::new();
+            // Use the document-id of Invoke to identify sessions to cancel.
+            let mut invoke_doc_ids = HashSet::new();
             let mut exitList: List<ExecutableContentId> = List::new();
             {
                 let s = self.get_state_by_id(*sid);
-
                 #[cfg(feature = "Trace_State")]
                 self.tracer.trace_exit_state(s);
-
                 for inv in s.invoke.iterator() {
-                    invokeList.push(inv.invoke_id.clone());
+                    invoke_doc_ids.insert(inv.doc_id);
                 }
                 for ec in &s.onexit {
                     exitList.push(*ec);
                 }
             }
-            for invokeId in invokeList.iterator() {
-                self.cancelInvoke(invokeId);
+            let mut session_ids = Vec::new();
+            for session in get_global!(datamodel).child_sessions.values() {
+                if invoke_doc_ids.contains(&session.invoke_doc_id) {
+                    session_ids.push(session.session_id);
+                }
             }
+            for session_id in session_ids {
+                self.cancelInvoke(datamodel, session_id);
+            }
+
             for ec in exitList.iterator() {
                 self.executeContent(datamodel, *ec);
             }
@@ -2992,9 +3030,17 @@ impl Fsm {
     }
 
     #[allow(non_snake_case)]
-    fn cancelInvoke(&mut self, _inv: &InvokeId) {
-        // TODO: Send a cancel event to the thread/process.
-        // see isCancelEvent
+    fn cancelInvoke(&mut self, datamodel: &mut dyn Datamodel, session_id: SessionId) {
+        let mut ioc = datamodel
+            .get_io_processors()
+            .get(SCXML_EVENT_PROCESSOR_SHORT_TYPE)
+            .unwrap()
+            .get_copy();
+        ioc.send(
+            datamodel.global(),
+            format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
+            Event::new_simple(EVENT_CANCEL_SESSION),
+        );
     }
 
     /// *W3C says*:

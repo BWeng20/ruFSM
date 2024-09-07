@@ -251,13 +251,13 @@ where
         if (flags & FSM_PROTOCOL_FLAG_ON_ENTRY) != 0 {
             let onentry_len = self.reader.read_usize();
             for _si in 0..onentry_len {
-                state.onentry.push( self.read_executable_content_id() );
+                state.onentry.push(self.read_executable_content_id());
             }
         }
         if (flags & FSM_PROTOCOL_FLAG_ON_EXIT) != 0 {
             let onexit_len = self.reader.read_usize();
             for _si in 0..onexit_len {
-                state.onexit.push( self.read_executable_content_id() );
+                state.onexit.push(self.read_executable_content_id());
             }
         }
 
