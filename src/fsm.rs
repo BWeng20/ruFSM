@@ -1033,7 +1033,7 @@ impl Clone for ScxmlSession {
             session_thread: None,
             sender: self.sender.clone(),
             global_data: self.global_data.clone(),
-            state_id: self.state_id.clone(),
+            state_id: self.state_id,
             invoke_doc_id: self.invoke_doc_id,
         }
     }
@@ -1042,7 +1042,7 @@ impl Clone for ScxmlSession {
         self.session_id = source.session_id;
         self.session_thread = None;
         self.sender = source.sender.clone();
-        self.state_id= source.state_id.clone();
+        self.state_id= source.state_id;
         self.invoke_doc_id= source.invoke_doc_id;
     }
 }
@@ -1617,7 +1617,7 @@ impl Fsm {
                 .toList()
                 .sort(&|s1, s2| self.state_exit_order(s1, s2));
 
-            for (invoke_id, _session) in &global.child_sessions {
+            for invoke_id in global.child_sessions.keys() {
                 self.cancelInvoke( invoke_id );
             }
         }
