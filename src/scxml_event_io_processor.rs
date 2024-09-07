@@ -35,7 +35,7 @@ pub const SCXML_TARGET_PARENT: &str = "#_parent";
 pub const SCXML_TARGET_INVOKE_ID_PREFIX: &str = "#_";
 
 /// Shortcut for SCXML I/O Processors type
-pub const SCXML_TYPE: &str = "scxml";
+pub const SCXML_EVENT_PROCESSOR_SHORT_TYPE: &str = "scxml";
 
 #[derive(Debug, Default)]
 pub struct ScxmlEventIOProcessor {
@@ -64,7 +64,7 @@ impl ScxmlEventIOProcessor {
                 panic!("Executor not available");
             }
             Some(executor) => {
-                info!("Send '{}' to Session {}", event, session_id);
+                info!("Send '{}' to Session #{}", event, session_id);
                 match executor.send_to_session(session_id, event.clone()) {
                     Ok(_) => {
                         // TODO
@@ -79,7 +79,7 @@ impl ScxmlEventIOProcessor {
     }
 }
 
-const TYPES: &[&str] = &[SCXML_EVENT_PROCESSOR, SCXML_TYPE];
+const TYPES: &[&str] = &[SCXML_EVENT_PROCESSOR, SCXML_EVENT_PROCESSOR_SHORT_TYPE];
 
 impl EventIOProcessor for ScxmlEventIOProcessor {
     fn get_location(&self, id: SessionId) -> String {
@@ -119,7 +119,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     /// </ul>
     fn send(&mut self, global: &GlobalDataAccess, target: &str, mut event: Event) {
         let mut global_lock = global.lock();
-        event.origin_type = Some(SCXML_TYPE.to_string());
+        event.origin_type = Some(SCXML_EVENT_PROCESSOR_SHORT_TYPE.to_string());
         if event.origin.is_none() {
             event.origin = Some(self.get_location(global_lock.session_id).to_string());
         }

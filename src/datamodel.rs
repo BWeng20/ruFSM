@@ -24,7 +24,11 @@ pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
 pub const NULL_DATAMODEL: &str = "NULL";
 pub const NULL_DATAMODEL_LC: &str = "null";
 
-pub const SCXML_TYPE: &str = "http://www.w3.org/TR/scxml/";
+pub const SCXML_INVOKE_TYPE: &str = "http://www.w3.org/TR/scxml/";
+
+/// W3C: Processors MAY define short form notations as an authoring convenience
+/// (e.g., "scxml" as equivalent to http://www.w3.org/TR/scxml/).
+pub const SCXML_INVOKE_TYPE_SHORT: &str = "scxml";
 
 pub const SCXML_EVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#SCXMLEventProcessor";
 
