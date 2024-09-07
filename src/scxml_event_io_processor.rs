@@ -119,7 +119,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     /// </ul>
     fn send(&mut self, global: &GlobalDataAccess, target: &str, mut event: Event) {
         let mut global_lock = global.lock();
-        event.origin_type = Some(SCXML_EVENT_PROCESSOR_SHORT_TYPE.to_string());
+        event.origin_type = Some(SCXML_EVENT_PROCESSOR.to_string());
         if event.origin.is_none() {
             event.origin = Some(self.get_location(global_lock.session_id).to_string());
         }
