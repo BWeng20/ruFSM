@@ -180,8 +180,10 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                         }
                     }
                 } else {
-                    // TODO: Clarify the case, that the format is illegal.
-                    global_lock.enqueue_internal(Event::error_communication(&event));
+                    // W3C says:
+                    // If the value ... is not supported or invalid, the Processor MUST place the
+                    // error error.execution on the internal event queue.
+                    global_lock.enqueue_internal(Event::error_execution(event.sendid.as_str(), &event.invoke_id));
                 }
             }
         }

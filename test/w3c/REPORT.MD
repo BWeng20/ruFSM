@@ -26,7 +26,7 @@
 | test190.txml.scxml   | OK       | we test that #_scxml_sessionid as a target of \<send> puts the event on the external queue.  If it does, event1 will be processed before event2, because event1 is added to the internal queue while event2 is added to the external queue (event though event2 is generated first).  we have to make sure that event2 is actually delivered.  The delayed \<send> makes sure another event is generated (so the test doesn't hang) |
 | test191.txml.scxml   | OK       | we test that #_parent works as  a target of  \<send> .  a subscript is invoked and sends the event  childToParent to its parent session (ths session) using #_parent as the target. If we get this event, we pass, otherwise we fail.  The timer insures that some event is generated and that the test does not hang. |
 | test192.txml.scxml   | OK       | we test that #_invokeid works as  a target of  \<send> .  A child  script is invoked and sends us childToParent once its running.  Then we send it the event parentToChild using its invokeid as the target.   If it receives this event, it sends sends the event eventReceived to its parent session (ths session).  If we get this event, we pass, otherwise the child script eventually times out sends invoke.done and we fail. We also set a timeout in this process to make sure the test doesn't hang  |
-| test194.txml.scxml   | _Failed_ | we test that specifying an illegal target for \<send> causes the event error.execution to be raised.  If it does, we succeed.  Otherwise we eventually timeout and fail.  |
+| test194.txml.scxml   | OK       | we test that specifying an illegal target for \<send> causes the event error.execution to be raised.  If it does, we succeed.  Otherwise we eventually timeout and fail.  |
 | test198.txml.scxml   | OK       | we test that if type is not provided \<send> uses the scxml event i/o processor.  The only way to tell what processor was used is to look at the origintype of the resulting event  |
 | test199.txml.scxml   | OK       | we test that using an invalid send type results in error.execution |
 | test200.txml.scxml   | OK       | we test that the processor supports the scxml event i/o processor |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 140 of 160 tests succeeded
+__Result__: 141 of 160 tests succeeded
