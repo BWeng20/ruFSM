@@ -115,7 +115,6 @@ pub fn start_fsm_with_data_and_finish_mode(
             {
                 let mut datamodel =
                     create_datamodel(sm.datamodel.as_str(), global_data, &vt, &options);
-
                 {
                     let mut global = get_global!(datamodel);
                     global.externalQueue = externalQueue;
@@ -124,11 +123,21 @@ pub fn start_fsm_with_data_and_finish_mode(
                         Option::map(sm.caller_invoke_id.as_ref(), |x| x.clone());
                     global.parent_session_id = sm.parent_session_id;
                     global.executor = Some(executor);
-                    for val in data_copy {
-                        global.environment.set(val.name.as_str(), val.value.clone());
+
+                    // W3C:
+                    // If the value of a key ... matches the 'id' of a <data> element
+                    // in the top-level data model of the invoked session, the SCXML Processor
+                    // MUST use the value of the key as the initial value of the corresponding
+                    // <data> element.
+                    if !data_copy.is_empty() {
+                        let root_state = sm.get_state_by_id_mut(sm.pseudo_root);
+                        for val in data_copy {
+                            if let Some(var) = root_state.data.get_mut(&val.name) {
+                                var.value = val.value.value.clone();
+                            }
+                        }
                     }
                 }
-
                 sm.interpret(datamodel.deref_mut());
             }
             info!("SM finished");
