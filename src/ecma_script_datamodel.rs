@@ -65,11 +65,10 @@ fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
 }
 
 fn option_to_js_value(val: &Option<String>) -> JsValue {
-    let r = match val {
+    match val {
         Some(s) => JsValue::from(js_string!(s.clone())),
         None => JsValue::Undefined,
-    };
-    r
+    }
 }
 
 #[derive(JsData, Finalize)]
