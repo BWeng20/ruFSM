@@ -183,7 +183,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                     // W3C says:
                     // If the value ... is not supported or invalid, the Processor MUST place the
                     // error error.execution on the internal event queue.
-                    global_lock.enqueue_internal(Event::error_execution(event.sendid.as_str(), &event.invoke_id));
+                    global_lock.enqueue_internal(Event::error_execution(&event.sendid, &event.invoke_id));
                 }
             }
         }

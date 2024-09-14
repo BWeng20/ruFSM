@@ -83,7 +83,7 @@
 | test325.txml.scxml   | OK       | test that _ioprocessors is bound at startup.  I'm not sure how to test for a set value or how to test that the entries in it do represent I/O processors, since the set that each implementation supports may be different.  Suggestions welcome |
 | test326.txml.scxml   | OK       | test that _ioprocessors stays bound till the session ends.  This means that it cannot be assigned to |
 | test329.txml.scxml   | OK       | test that none of the system variables can be modified |
-| test330.txml.scxml   | _Failed_ | check that the required fields are present in both internal and external events |
+| test330.txml.scxml   | OK       | check that the required fields are present in both internal and external events |
 | test331.txml.scxml   | OK       ||
 | test332.txml.scxml   | OK       | test that sendid is present in error events triggered by send errors |
 | test333.txml.scxml   | OK       | make sure sendid is blank in a non-error event |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 141 of 160 tests succeeded
+__Result__: 142 of 160 tests succeeded

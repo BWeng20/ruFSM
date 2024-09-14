@@ -514,7 +514,11 @@ impl ExecutableContent for SendParameters {
         };
 
         let send_id = if self.name_location.is_empty() {
-            self.name.clone()
+            if self.name.is_empty() {
+               None
+            } else {
+                Some(self.name.clone())
+            }
         } else {
             // W3c says:
             // If 'idlocation' is present, the SCXML Processor MUST generate an id when the parent
@@ -535,7 +539,7 @@ impl ExecutableContent for SendParameters {
                 self.name_location.as_str(),
                 Data::new(generated_id.as_str()),
             );
-            generated_id
+            Some(generated_id)
         };
 
         let mut data_vec = Vec::new();
@@ -624,20 +628,21 @@ impl ExecutableContent for SendParameters {
                 info!("schedule '{}' for {}", event, delay_ms);
 
                 let global_clone = datamodel.global().clone();
+
                 let send_id_clone = send_id.clone();
 
                 let tg = fsm.schedule(delay_ms, move || {
                     info!("send '{}' to '{}'", event, target);
-                    if !send_id_clone.is_empty() {
-                        global_clone.lock().delayed_send.remove(&send_id_clone);
+                    if let Some(sid) = &send_id_clone {
+                        global_clone.lock().delayed_send.remove(sid);
                     }
                     iopc.send(&global_clone, target.as_str(), event.clone());
                 });
                 if let Some(g) = tg {
-                    if send_id.is_empty() {
-                        g.ignore();
+                    if let Some(sid) = &send_id {
+                        datamodel.global().lock().delayed_send.insert(sid.clone(), g);
                     } else {
-                        datamodel.global().lock().delayed_send.insert(send_id, g);
+                        g.ignore();
                     }
                 };
             }

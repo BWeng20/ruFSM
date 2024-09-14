@@ -72,7 +72,6 @@ async fn main() {
 
     let mut line = String::new();
     let stdin = io::stdin();
-    let empty_str = "".to_string();
 
     loop {
         // let the FSM some time to process.
@@ -113,7 +112,7 @@ async fn main() {
                     let event = Box::new(Event {
                         name: line.clone(),
                         etype: EventType::platform,
-                        sendid: empty_str.clone(),
+                        sendid: None,
                         origin: None,
                         origin_type: None,
                         invoke_id: Some(1.to_string()),

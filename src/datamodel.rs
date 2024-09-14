@@ -232,13 +232,13 @@ pub trait Datamodel {
     }
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
-    fn internal_error_execution_for_event(&mut self, send_id: &str, invoke_id: &Option<InvokeId>) {
+    fn internal_error_execution_for_event(&mut self, send_id: &Option<String>, invoke_id: &Option<InvokeId>) {
         get_global!(self).enqueue_internal(Event::error_execution(send_id, invoke_id));
     }
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
     fn internal_error_execution(&mut self) {
-        get_global!(self).enqueue_internal(Event::error_execution("", &None));
+        get_global!(self).enqueue_internal(Event::error_execution(&None, &None));
     }
 
     /// W3C: Indicates that an error has occurred while trying to communicate with an external entity.

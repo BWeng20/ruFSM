@@ -658,7 +658,7 @@ impl ParamPair {
 pub struct Event {
     pub name: String,
     pub etype: EventType,
-    pub sendid: String,
+    pub sendid: Option<String>,
     pub origin: Option<String>,
     pub origin_type: Option<String>,
     pub invoke_id: Option<InvokeId>,
@@ -681,7 +681,7 @@ impl Event {
         Event {
             name: name.to_string(),
             etype: EventType::external,
-            sendid: "".to_string(),
+            sendid: None,
             origin: None,
             param_values: None,
             content: None,
@@ -692,15 +692,15 @@ impl Event {
 
     pub fn new(
         prefix: &str,
-        id: &String,
+        id: &str,
         data_params: Option<Vec<ParamPair>>,
         data_content: Option<String>,
-        event_type: EventType,
+        event_type: EventType
     ) -> Event {
         Event {
             name: format!("{}{}", prefix, id),
             etype: event_type,
-            sendid: "".to_string(),
+            sendid: None,
             origin: None,
             param_values: data_params,
             content: data_content,
@@ -714,7 +714,7 @@ impl Event {
         Event {
             name: format!("trace.{}.{}", t, if enable { "on" } else { "off" }),
             etype: EventType::external,
-            sendid: "".to_string(),
+            sendid: None,
             origin: None,
             param_values: None,
             content: None,
@@ -727,7 +727,7 @@ impl Event {
         Event {
             name: format!("error.{}", name),
             etype: EventType::platform,
-            sendid: "".to_string(),
+            sendid: None,
             origin: None,
             param_values: None,
             content: None,
@@ -751,11 +751,11 @@ impl Event {
     }
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
-    pub fn error_execution(send_id: &str, invoke_id: &Option<InvokeId>) -> Event {
+    pub fn error_execution(send_id : &Option<String>, invoke_id: &Option<InvokeId>) -> Event {
         Event {
             name: "error.execution".to_string(),
             etype: EventType::platform,
-            sendid: send_id.to_string(),
+            sendid: send_id.clone(),
             origin: None,
             param_values: None,
             content: None,
@@ -3894,7 +3894,7 @@ mod tests {
                         Event {
                             name: "ab".to_string(),
                             etype: EventType::platform,
-                            sendid: "0".to_string(),
+                            sendid: Some("0".to_string()),
                             origin: None,
                             origin_type: None,
                             invoke_id: Some(1.to_string()),
@@ -3907,7 +3907,7 @@ mod tests {
                         Event {
                             name: "exit".to_string(),
                             etype: EventType::platform,
-                            sendid: "0".to_string(),
+                            sendid: Some("0".to_string()),
                             origin: None,
                             origin_type: None,
                             invoke_id: Some(2.to_string()),

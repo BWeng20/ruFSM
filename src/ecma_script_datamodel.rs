@@ -65,10 +65,11 @@ fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
 }
 
 fn option_to_js_value(val: &Option<String>) -> JsValue {
-    match val {
+    let r = match val {
         Some(s) => JsValue::from(js_string!(s.clone())),
-        None => JsValue::Null,
-    }
+        None => JsValue::Undefined,
+    };
+    r
 }
 
 #[derive(JsData, Finalize)]
@@ -406,34 +407,27 @@ impl Datamodel for ECMAScriptDatamodel {
                 js_string!(event.etype.name().to_string()),
                 Attribute::READONLY,
             );
-        if !event.sendid.is_empty() {
-            event_object_initializer.property(
-                js_string!(EVENT_VARIABLE_FIELD_SEND_ID),
-                js_string!(event.sendid.clone()),
-                Attribute::READONLY,
-            );
-        }
-        if event.origin.is_some() {
-            event_object_initializer.property(
-                js_string!(EVENT_VARIABLE_FIELD_ORIGIN),
-                option_to_js_value(&event.origin),
-                Attribute::READONLY,
-            );
-        }
-        if event.origin_type.is_some() {
-            event_object_initializer.property(
-                js_string!(EVENT_VARIABLE_FIELD_ORIGIN_TYPE),
-                option_to_js_value(&event.origin_type),
-                Attribute::READONLY,
-            );
-        }
-        if event.invoke_id.is_some() {
-            event_object_initializer.property(
-                js_string!(EVENT_VARIABLE_FIELD_INVOKE_ID),
-                option_to_js_value(&event.invoke_id),
-                Attribute::READONLY,
-            );
-        }
+        event_object_initializer.property(
+            js_string!(EVENT_VARIABLE_FIELD_SEND_ID),
+            option_to_js_value(&event.sendid),
+            Attribute::READONLY,
+        );
+
+        event_object_initializer.property(
+            js_string!(EVENT_VARIABLE_FIELD_ORIGIN),
+            option_to_js_value(&event.origin),
+            Attribute::READONLY,
+        );
+        event_object_initializer.property(
+            js_string!(EVENT_VARIABLE_FIELD_ORIGIN_TYPE),
+            option_to_js_value(&event.origin_type),
+            Attribute::READONLY,
+        );
+        event_object_initializer.property(
+            js_string!(EVENT_VARIABLE_FIELD_INVOKE_ID),
+            option_to_js_value(&event.invoke_id),
+            Attribute::READONLY,
+        );
         event_object_initializer.property(
             js_string!(EVENT_VARIABLE_FIELD_DATA),
             data_value,
