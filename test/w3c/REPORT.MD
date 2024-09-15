@@ -149,7 +149,7 @@
 | test527.txml.scxml   | OK       | simple test that 'expr' works with \<content> |
 | test528.txml.scxml   | _Failed_ |  test that illegal 'expr' produces error.execution and empty event.data |
 | test529.txml.scxml   | OK       | simple test that children workn with \<content> |
-| test530.txml.scxml   | _Failed_ | test that \<content> child is evaluated when \<invoke> is. Var1 is initialized with an integer value, then set to an scxml script in the onentry to s0.  If \<content> is evaluated at the right time, we should get invoke.done, otherwise an error  |
+| test530.txml.scxml   | OK       | test that \<content> child is evaluated when \<invoke> is. Var1 is initialized with an integer value, then set to an scxml script in the onentry to s0.  If \<content> is evaluated at the right time, we should get invoke.done, otherwise an error  |
 | test533.txml.scxml   | OK       | test that an internal transition whose source state is not compound does  exit its source state |
 | test550.txml.scxml   | OK       | test that expr can be used to assign a value to a var.  This test uses early binding |
 | test551.txml.scxml   | OK       | test that inline content can be used to assign a value to a var.  |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 144 of 160 tests succeeded
+__Result__: 145 of 160 tests succeeded

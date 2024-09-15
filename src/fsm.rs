@@ -1676,7 +1676,6 @@ impl Fsm {
     /// the id generated in that session when the \<invoke\> was executed.
     #[allow(non_snake_case)]
     fn returnDoneEvent(&mut self, _done_data: &Option<DoneData>, datamodel: &mut dyn Datamodel) {
-        // TODO. Currently no "sender" is set by the calling code.
         let caller_invoke_id;
         let parent_session_id;
         {
@@ -3461,7 +3460,16 @@ pub fn create_datamodel(
             }
             ecma
         }
-        NULL_DATAMODEL_LC => Box::new(NullDatamodel::new(global_data)),
+        NULL_DATAMODEL_LC => {
+            let mut null_dm = Box::new(NullDatamodel::new(global_data));
+            for p in processors {
+                for t in p.as_ref().get_types() {
+                    null_dm.io_processors.insert(t.to_string(), p.get_copy());
+                }
+            }
+
+            null_dm
+        },
         _ => panic!("Unsupported Data Model '{}'", name),
     }
 }
