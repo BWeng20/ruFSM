@@ -334,10 +334,10 @@ impl Log {
 impl ExecutableContent for Log {
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
         match &datamodel.execute(&self.expression) {
-            Some(msg) => {
+            Ok(msg) => {
                 datamodel.log(msg);
             }
-            None => {}
+            Err(_msg) => {}
         }
     }
 
@@ -553,11 +553,11 @@ impl ExecutableContent for SendParameters {
             datamodel.evaluate_params(&self.params, &mut data_vec);
             for name in self.name_list.as_slice() {
                 match datamodel.get_by_location(name) {
-                    None => {
+                    Err(_msg) => {
                         // Error -> Abort
                         return;
                     }
-                    Some(value) => {
+                    Ok(value) => {
                         data_vec.push(ParamPair::new(name.as_str(), &value));
                     }
                 }
@@ -566,11 +566,11 @@ impl ExecutableContent for SendParameters {
 
         let delay_ms = if !self.delay_expr.is_empty() {
             match datamodel.execute(&self.delay_expr) {
-                None => {
+                Err(_msg) => {
                     // Error -> Abort
                     return;
                 }
-                Some(delay) => parse_duration_to_milliseconds(&delay),
+                Ok(delay) => parse_duration_to_milliseconds(&delay),
             }
         } else {
             self.delay_ms as i64

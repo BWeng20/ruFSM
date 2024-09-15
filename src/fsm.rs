@@ -2965,8 +2965,11 @@ impl Fsm {
         let mut name_values: Vec<ParamPair> = Vec::new();
         for name in inv.name_list.as_slice() {
             match datamodel.get_by_location(name) {
-                None => {}
-                Some(value) => {
+                Err(_msg) => {
+                    // Error -> Abort
+                    return;
+                }
+                Ok(value) => {
                     name_values.push(ParamPair::new(name.as_str(), &value));
                 }
             }

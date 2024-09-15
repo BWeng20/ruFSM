@@ -138,37 +138,39 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    fn execute_internal(&mut self, script: &str, handle_error: bool) -> Option<String> {
+    fn execute_internal(&mut self, script: &str, handle_error: bool) -> Result<String,String> {
         let result = self.eval(script);
         match result {
             Ok(res) => {
                 if res.is_undefined() {
                     debug!("Execute: {} => undefined", script);
-                    None
+                    Ok("".to_string())
                 } else {
                     match res.to_string(&mut self.context) {
                         Ok(str) => {
                             let r = str.to_std_string_escaped();
                             debug!("Execute: {} => {}", script, r);
-                            Some(r)
+                            Ok(r)
                         }
                         Err(err) => {
-                            warn!(
+                            let msg = format!(
                                 "Script Error - failed to convert result to string: {} => {}",
                                 script, err
                             );
+                            warn!("{}", msg);
                             if handle_error {
                                 self.internal_error_execution();
                             }
-                            None
+                            Err(msg)
                         }
                     }
                 }
             }
             Err(e) => {
                 // Pretty print the error
-                error!("Script Error: {} => {} ", script, e);
-                None
+                let msg = format!("Script Error:  {} => {} ", script, e );
+                error!("{}",msg);
+                Err(msg)
             }
         }
     }
@@ -461,13 +463,13 @@ impl Datamodel for ECMAScriptDatamodel {
         self.assign_internal(left_expr, right_expr, false)
     }
 
-    fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Option<Data> {
+    fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Result<Data,String> {
         match self.execute_internal(location, false) {
-            None => {
+            Err(msg) => {
                 self.internal_error_execution();
-                None
+                Err(msg)
             }
-            Some(val) => Some(Data::new_moved(val)),
+            Ok(val) => Ok(Data::new_moved(val)),
         }
     }
 
@@ -488,7 +490,7 @@ impl Datamodel for ECMAScriptDatamodel {
         info!("Log: {}", msg);
     }
 
-    fn execute(&mut self, script: &str) -> Option<String> {
+    fn execute(&mut self, script: &str) -> Result<String, String> {
         self.execute_internal(script, true)
     }
 
@@ -557,11 +559,11 @@ impl Datamodel for ECMAScriptDatamodel {
         //   as described in Section 9.2 of [ECMASCRIPT-262].
         let to_boolean_expression = format!("({})?true:false", script);
         match self.execute_internal(to_boolean_expression.as_str(), false) {
-            Some(val) => match bool::from_str(val.as_str()) {
+            Ok(val) => match bool::from_str(val.as_str()) {
                 Ok(v) => Ok(v),
                 Err(e) => Err(e.to_string()),
             },
-            None => Err("undefined".to_string()),
+            Err(msg) => Err(msg),
         }
     }
 

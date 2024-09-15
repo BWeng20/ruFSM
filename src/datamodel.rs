@@ -164,7 +164,7 @@ pub trait Datamodel {
     /// If the location is undefined or the location expression is invalid,
     /// "error.execute" shall be put inside the internal event queue.\
     /// See [internal_error_execution](Datamodel::internal_error_execution).
-    fn get_by_location(&mut self, location: &str) -> Option<Data>;
+    fn get_by_location(&mut self, location: &str) -> Result<Data, String>;
 
     /// Convenient function to retrieve a value that has an alternative expression-value.\
     /// If value_expression is empty, Ok(value) is returned (if empty or not). If the expression
@@ -179,11 +179,11 @@ pub trait Datamodel {
             Ok(value.to_string())
         } else {
             match self.execute(value_expression) {
-                None => {
+                Err(_msg) => {
                     // Error -> Abort
                     Err("execution failed".to_string())
                 }
-                Some(value) => Ok(value),
+                Ok(value) => Ok(value),
             }
         }
     }
@@ -203,7 +203,7 @@ pub trait Datamodel {
     /// If the script execution fails, "error.execute" shall be put
     /// inside the internal event queue.
     /// See [internal_error_execution](Datamodel::internal_error_execution).
-    fn execute(&mut self, script: &str) -> Option<String>;
+    fn execute(&mut self, script: &str) -> Result<String, String>;
 
     fn execute_for_each(
         &mut self,
@@ -254,16 +254,16 @@ pub trait Datamodel {
                     None => ct.content.clone(),
                     Some(expr) => {
                         match self.execute(expr.as_str()) {
-                            None => {
+                            Err(msg) => {
                                 // W3C:\
                                 // If the evaluation of 'expr' produces an error, the Processor must place
                                 // error.execution in the internal event queue and use the empty string as
                                 // the value of the <content> element.
-                                error!("content expr '{}' is invalid", expr);
+                                error!("content expr '{}' is invalid ({})", expr, msg);
                                 self.internal_error_execution();
                                 None
                             }
-                            Some(value) => Some(value),
+                            Ok(value) => Some(value),
                         }
                     }
                 }
@@ -278,30 +278,30 @@ pub trait Datamodel {
                 for param in params {
                     if !param.location.is_empty() {
                         match self.get_by_location(&param.location) {
-                            None => {
+                            Err(msg) => {
                                 // W3C:\
                                 // If the 'location' attribute does not refer to a valid location in
                                 // the data model, ..., the SCXML Processor must place the error
                                 // 'error.execution' on the internal event queue and must ignore the name
                                 // and value.
-                                error!("location of param {} is invalid", param);
+                                error!("location of param {} is invalid ({})", param, msg);
                                 self.internal_error_execution();
                             }
-                            Some(value) => {
+                            Ok(value) => {
                                 values.push(ParamPair::new_moved(param.name.clone(), value));
                             }
                         }
                     } else if !param.expr.is_empty() {
                         match self.execute(param.expr.as_str()) {
-                            None => {
+                            Err(msg) => {
                                 //  W3C:\
                                 // ...if the evaluation of the 'expr' produces an error, the SCXML
                                 // Processor must place the error 'error.execution' on the internal event
                                 // queue and must ignore the name and value.
-                                error!("expr of param {} is invalid", param);
+                                error!("expr of param {} is invalid ({})", param, msg);
                                 self.internal_error_execution();
                             }
-                            Some(value) => {
+                            Ok(value) => {
                                 values.push(ParamPair::new_moved(
                                     param.name.clone(),
                                     Data::new_moved(value),
@@ -399,8 +399,8 @@ impl Datamodel for NullDatamodel {
         true
     }
 
-    fn get_by_location(&mut self, _name: &str) -> Option<Data> {
-        None
+    fn get_by_location(&mut self, _name: &str) -> Result<Data, String> {
+        Err("unimplemented".to_string())
     }
 
     fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
@@ -417,8 +417,8 @@ impl Datamodel for NullDatamodel {
         info!("Log: {}", msg);
     }
 
-    fn execute(&mut self, _script: &str) -> Option<String> {
-        None
+    fn execute(&mut self, _script: &str) -> Result<String,String> {
+        Err("unimplemented".to_string())
     }
 
     fn execute_for_each(
