@@ -1885,7 +1885,18 @@ impl Fsm {
     /// transition. Note that targetless transitions have empty exit sets and thus do not conflict with
     /// any other transitions.
     ///
-    /// We start with a list of enabledTransitions and produce a conflict-free list of filteredTransitions. For each t1 in enabledTransitions, we test it against all t2 that are already selected in filteredTransitions. If there is a conflict, then if t1's source state is a descendant of t2's source state, we prefer t1 and say that it preempts t2 (so we we make a note to remove t2 from filteredTransitions). Otherwise, we prefer t2 since it was selected in an earlier state in document order, so we say that it preempts t1. (There's no need to do anything in this case since t2 is already in filteredTransitions. Furthermore, once one transition preempts t1, there is no need to test t1 against any other transitions.) Finally, if t1 isn't preempted by any transition in filteredTransitions, remove any transitions that it preempts and add it to that list.
+    /// We start with a list of enabledTransitions and produce a conflict-free list of filteredTransitions.
+    /// For each t1 in enabledTransitions, we test it against all t2 that are already selected in
+    /// filteredTransitions. If there is a conflict, then if t1's source state is a descendant of
+    /// t2's source state, we prefer t1 and say that it preempts t2
+    /// (so we we make a note to remove t2 from filteredTransitions).
+    /// Otherwise, we prefer t2 since it was selected in an earlier state in document order,
+    /// so we say that it preempts t1.
+    /// (There's no need to do anything in this case since t2 is already in filteredTransitions.
+    /// Furthermore, once one transition preempts t1, there is no need to test t1 against any other
+    /// transitions.)
+    /// Finally, if t1 isn't preempted by any transition in filteredTransitions, remove any
+    /// transitions that it preempts and add it to that list.
     /// ```ignore
     /// function removeConflictingTransitions(enabledTransitions):
     ///     filteredTransitions = new OrderedSet()
@@ -2014,6 +2025,7 @@ impl Fsm {
     ) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("exitStates");
+
 
         let statesToExit = self.computeExitSet(datamodel, enabledTransitions);
 
@@ -2343,7 +2355,6 @@ impl Fsm {
         #[cfg(feature = "Trace_Method")]
         self.tracer.trace_argument("transitions", &transitions);
         let mut statesToExit: OrderedSet<StateId> = OrderedSet::new();
-
         for tid in transitions.iterator() {
             let t = self.get_transition_by_id(*tid);
             if !t.target.is_empty() {
@@ -2881,7 +2892,11 @@ impl Fsm {
 
     #[allow(non_snake_case)]
     fn isCompoundStateOrScxmlElement(&self, sid: StateId) -> bool {
-        sid == self.pseudo_root || !self.get_state_by_id(sid).states.is_empty()
+        if sid == self.pseudo_root {
+            true
+        } else {
+            self.isCompoundState(sid)
+        }
     }
 
     #[allow(non_snake_case)]

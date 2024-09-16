@@ -118,7 +118,7 @@
 | test402.txml.scxml   | OK       | the assertion that errors are 'like any other event' is pretty broad, but we can check that they are pulled off the internal queue in order, and that prefix matching works on them.  |
 | test403a.txml.scxml  | OK       | we test one part of 'optimal enablement' meaning that of all transitions that are enabled, we chose the ones in child states over parent states, and use document order to break ties. We have a parent state s0 with two children, s01 and s02. In s01, we test that a) if a transition in the child matches, we don't consider matches in the parent and b) that if two transitions match in any state, we take the first in document order. In s02 we test that we take a transition in the parent if there is no matching transition in the child. |
 | test403b.txml.scxml  | OK       | we test that 'optimally enabled set' really is a set, specifically that if a transition is optimally enabled in two different states, it is taken only once.  |
-| test403c.txml.scxml  | _Failed_ | we test 'optimally enabled set', specifically that preemption works correctly |
+| test403c.txml.scxml  | OK       | we test 'optimally enabled set', specifically that preemption works correctly |
 | test404.txml.scxml   | OK       |  test that states are exited in exit order (children before parents with reverse doc order used to break ties  before the executable content in the transitions.  event1, event2, event3, event4 should be raised in that   order when s01p is exited  |
 | test405.txml.scxml   | OK       |  test that the executable content in the transitions is executed in document order after  the states are exited. event1, event2, event3, event4 should be raised in that order when the state machine is entered  |
 | test406.txml.scxml   | OK       |  Test that states are entered in entry order (parents before children with document order used to break ties) after the executable content in the transition is executed. event1, event2, event3, event4 should be raised in that  order when the transition in s01 is taken  |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 145 of 160 tests succeeded
+__Result__: 146 of 160 tests succeeded
