@@ -58,7 +58,7 @@ impl ScxmlEventIOProcessor {
         global_data_lock: &mut GlobalDataLock,
         session_id: SessionId,
         event: Event,
-    ) {
+    ) -> bool {
         match &global_data_lock.executor {
             None => {
                 panic!("Executor not available");
@@ -68,10 +68,12 @@ impl ScxmlEventIOProcessor {
                 match executor.send_to_session(session_id, event.clone()) {
                     Ok(_) => {
                         // TODO
+                        true
                     }
                     Err(error) => {
                         error!("Can't send to session {}. {}", session_id, error);
                         global_data_lock.enqueue_internal(Event::error_communication(&event));
+                        false
                     }
                 }
             }
@@ -117,7 +119,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     /// <li>#_invokeid. If the target is the special term '#_invokeid', where invokeid is the invokeid of an SCXML session that the sending session has created by <invoke>, the Processor must add the event to the external queue of that session. See 6.4 <invoke> for details.</li>
     /// <li>If neither the 'target' nor the 'targetexpr' attribute is specified, the SCXML Processor must add the event to the external event queue of the sending session.</li>
     /// </ul>
-    fn send(&mut self, global: &GlobalDataAccess, target: &str, mut event: Event) {
+    fn send(&mut self, global: &GlobalDataAccess, target: &str, mut event: Event) -> bool {
         let mut global_lock = global.lock();
         event.origin_type = Some(SCXML_EVENT_PROCESSOR.to_string());
         if event.origin.is_none() {
@@ -128,15 +130,16 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
         match target {
             "" => {
                 global_lock.externalQueue.enqueue(Box::new(event));
+                true
             }
             SCXML_TARGET_INTERNAL => {
                 event.etype = EventType::internal;
-
                 global_lock.enqueue_internal(event);
+                true
             }
             SCXML_TARGET_PARENT => {
                 let sid = global_lock.parent_session_id.unwrap();
-                self.send_to_session(&mut global_lock, sid, event);
+                self.send_to_session(&mut global_lock, sid, event)
             }
             _ => {
                 // W3C: If the sending SCXML session specifies a session that does not exist or is inaccessible,
@@ -146,14 +149,16 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                         None => {
                             error!("Send target '{}' has wrong format.", target);
                             global_lock.enqueue_internal(Event::error_communication(&event));
+                            false
                         }
                         Some(session_id_s) => match session_id_s.parse::<SessionId>() {
                             Ok(session_id) => {
-                                self.send_to_session(&mut global_lock, session_id, event);
+                                self.send_to_session(&mut global_lock, session_id, event)
                             }
                             Err(_err) => {
                                 error!("Send target '{}' has wrong format.", target);
                                 global_lock.enqueue_internal(Event::error_communication(&event));
+                                false
                             }
                         },
                     }
@@ -162,6 +167,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                         None => {
                             error!("Send target '{}' has wrong format.", target);
                             global_lock.enqueue_internal(Event::error_communication(&event));
+                            false
                         }
                         Some(invokeid) => {
                             let session_id = match global_lock.child_sessions.get(invokeid) {
@@ -172,11 +178,11 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                                     );
                                     global_lock
                                         .enqueue_internal(Event::error_communication(&event));
-                                    return;
+                                    return false;
                                 }
                                 Some(session) => session.session_id,
                             };
-                            self.send_to_session(&mut global_lock, session_id, event);
+                            self.send_to_session(&mut global_lock, session_id, event)
                         }
                     }
                 } else {
@@ -185,6 +191,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                     // error error.execution on the internal event queue.
                     global_lock
                         .enqueue_internal(Event::error_execution(&event.sendid, &event.invoke_id));
+                    false
                 }
             }
         }

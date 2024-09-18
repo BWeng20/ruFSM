@@ -646,25 +646,33 @@ impl ExecutableContent for SendParameters {
 
                 let send_id_clone = send_id.clone();
 
-                let tg = fsm.schedule(delay_ms, move || {
+                if delay_ms > 0 {
+                    let tg = fsm.schedule(delay_ms, move || {
+                        info!("send '{}' to '{}'", event, target);
+                        if let Some(sid) = &send_id_clone {
+                            global_clone.lock().delayed_send.remove(sid);
+                        }
+                        iopc.send(&global_clone, target.as_str(), event.clone());
+                    });
+                    if let Some(g) = tg {
+                        if let Some(sid) = &send_id {
+                            datamodel
+                                .global()
+                                .lock()
+                                .delayed_send
+                                .insert(sid.clone(), g);
+                        } else {
+                            g.ignore();
+                        }
+                    };
+                    true
+                } else {
                     info!("send '{}' to '{}'", event, target);
                     if let Some(sid) = &send_id_clone {
                         global_clone.lock().delayed_send.remove(sid);
                     }
-                    iopc.send(&global_clone, target.as_str(), event.clone());
-                });
-                if let Some(g) = tg {
-                    if let Some(sid) = &send_id {
-                        datamodel
-                            .global()
-                            .lock()
-                            .delayed_send
-                            .insert(sid.clone(), g);
-                    } else {
-                        g.ignore();
-                    }
-                };
-                true
+                    iopc.send(&global_clone, target.as_str(), event.clone())
+                }
             }
             None => {
                 // W3C:  If the SCXML Processor does not support the type that is specified,

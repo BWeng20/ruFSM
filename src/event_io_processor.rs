@@ -57,7 +57,7 @@ pub trait EventIOProcessor: ToAny + Debug + Send {
 
     fn get_copy(&self) -> Box<dyn EventIOProcessor>;
 
-    fn send(&mut self, global: &GlobalDataAccess, target: &str, event: Event);
+    fn send(&mut self, global: &GlobalDataAccess, target: &str, event: Event) -> bool;
 
     fn shutdown(&mut self);
 }

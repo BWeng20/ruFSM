@@ -270,7 +270,7 @@ impl EventIOProcessor for BasicHTTPEventIOProcessor {
         Box::new(b)
     }
 
-    fn send(&mut self, _global: &GlobalDataAccess, _target: &str, _event: Event) {
+    fn send(&mut self, _global: &GlobalDataAccess, _target: &str, _event: Event) -> bool {
         // W3C basic html processor:
         // If neither the 'target' nor the 'targetexpr' attribute is specified, the SCXML Processor must add the event error.communication to the internal event queue of the sending session.
 
