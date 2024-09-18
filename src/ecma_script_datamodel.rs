@@ -138,7 +138,7 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    fn execute_internal(&mut self, script: &str, handle_error: bool) -> Result<String,String> {
+    fn execute_internal(&mut self, script: &str, handle_error: bool) -> Result<String, String> {
         let result = self.eval(script);
         match result {
             Ok(res) => {
@@ -168,21 +168,21 @@ impl ECMAScriptDatamodel {
             }
             Err(e) => {
                 // Pretty print the error
-                let msg = format!("Script Error:  {} => {} ", script, e );
-                error!("{}",msg);
+                let msg = format!("Script Error:  {} => {} ", script, e);
+                error!("{}", msg);
                 Err(msg)
             }
         }
     }
 
-    fn execute_content(&mut self, fsm: &Fsm, e: &dyn ExecutableContent) {
+    fn execute_content(&mut self, fsm: &Fsm, e: &dyn ExecutableContent) -> bool {
         match &mut self.tracer {
             Some(t) => {
                 e.trace(t.as_mut(), fsm);
             }
             None => {}
         }
-        e.execute(self, fsm);
+        e.execute(self, fsm)
     }
 
     fn eval(&mut self, source: &str) -> JsResult<JsValue> {
@@ -463,7 +463,7 @@ impl Datamodel for ECMAScriptDatamodel {
         self.assign_internal(left_expr, right_expr, false)
     }
 
-    fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Result<Data,String> {
+    fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Result<Data, String> {
         match self.execute_internal(location, false) {
             Err(msg) => {
                 self.internal_error_execution();
@@ -499,8 +499,8 @@ impl Datamodel for ECMAScriptDatamodel {
         array_expression: &str,
         item_name: &str,
         index: &str,
-        execute_body: &mut dyn FnMut(&mut dyn Datamodel),
-    ) {
+        execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
+    ) -> bool {
         debug!("ForEach: array: {}", array_expression);
         match self.context.eval(Source::from_bytes(array_expression)) {
             Ok(r) => {
@@ -526,13 +526,16 @@ impl Datamodel for ECMAScriptDatamodel {
                                                 if !index.is_empty() {
                                                     self.set_js_property(index, idx);
                                                 }
-                                                execute_body(self);
+                                                if !execute_body(self) {
+                                                    return false;
+                                                }
                                             } else {
-                                                return;
+                                                return false;
                                             }
                                         }
                                         None => {
                                             warn!("ForEach: #{} - failed to get value", idx,);
+                                            return false;
                                         }
                                     }
                                     idx += 1;
@@ -545,9 +548,11 @@ impl Datamodel for ECMAScriptDatamodel {
                         self.internal_error_execution();
                     }
                 }
+                true
             }
             Err(e) => {
                 self.log(&e.to_string());
+                false
             }
         }
     }
@@ -568,11 +573,14 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     #[allow(non_snake_case)]
-    fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) {
+    fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) -> bool {
         let ec = fsm.executableContent.get(&content_id);
         for e in ec.unwrap().iter() {
-            self.execute_content(fsm, e.as_ref());
+            if !self.execute_content(fsm, e.as_ref()) {
+                return false;
+            }
         }
+        true
     }
 }
 

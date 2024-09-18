@@ -19,7 +19,7 @@ name = "rfsm"
 path = "src/lib.rs"
 
 [features]
-default = [ "BasicHttpEventIOProcessor", "ECMAScript", "EnvLog", "yaml-config", "json-config", "xml", "serializer", "Trace_State", "Debug_Serializer" ]
+default = [ "BasicHttpEventIOProcessor", "ECMAScript", "EnvLog", "yaml-config", "json-config", "xml", "serializer", "Trace_Event", "Trace_State", "Debug_Serializer" ]
 ECMAScript = ["boa_engine", "boa_gc"]
 EnvLog = ["env_logger"]
 BasicHttpEventIOProcessor = ["hyper", "http-body-util", "hyper-util", "form_urlencoded"]

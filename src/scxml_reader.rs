@@ -1571,7 +1571,12 @@ impl ReaderState {
         }
 
         let assign_text = if has_content {
-            format!("\"{}\"", self.read_content(TAG_ASSIGN, reader).replace("\"", "\\\"").replace("\n", " "))
+            format!(
+                "\"{}\"",
+                self.read_content(TAG_ASSIGN, reader)
+                    .replace("\"", "\\\"")
+                    .replace("\n", " ")
+            )
         } else {
             String::new()
         };

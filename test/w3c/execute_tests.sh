@@ -11,7 +11,7 @@ then
     exit 1
 fi
 
-RFSM_BIN=../../target/debug/test
+RFSM_BIN=../../target/release/test
 
 echo "======================================================="
 

@@ -46,7 +46,7 @@ pub const TYPE_NAMES: [&str; 9] = [
 ];
 
 pub trait ExecutableContent: ToAny + Debug + Send {
-    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm);
+    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool;
     fn get_type(&self) -> u8;
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm);
 }
@@ -232,8 +232,8 @@ impl Debug for Assign {
 }
 
 impl ExecutableContent for Assign {
-    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
-        datamodel.assign(&self.location, &self.expr);
+    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
+        datamodel.assign(&self.location, &self.expr)
     }
 
     fn get_type(&self) -> u8 {
@@ -261,9 +261,10 @@ impl Debug for Raise {
 }
 
 impl ExecutableContent for Raise {
-    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         let event = Event::new("", &self.event, None, None, EventType::internal);
         get_global!(datamodel).enqueue_internal(event);
+        true
     }
 
     fn get_type(&self) -> u8 {
@@ -284,10 +285,13 @@ impl Script {
 }
 
 impl ExecutableContent for Script {
-    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool {
         for s in &self.content {
-            datamodel.executeContent(fsm, *s);
+            if !datamodel.executeContent(fsm, *s) {
+                return false;
+            }
         }
+        true
     }
 
     fn get_type(&self) -> u8 {
@@ -309,8 +313,9 @@ impl Expression {
 }
 
 impl ExecutableContent for Expression {
-    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
-        let _l = datamodel.execute(&self.content);
+    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
+        let r = datamodel.execute(&self.content);
+        r.is_ok()
     }
 
     fn get_type(&self) -> u8 {
@@ -332,12 +337,13 @@ impl Log {
 }
 
 impl ExecutableContent for Log {
-    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         match &datamodel.execute(&self.expression) {
             Ok(msg) => {
                 datamodel.log(msg);
+                true
             }
-            Err(_msg) => {}
+            Err(_msg) => false,
         }
     }
 
@@ -361,7 +367,7 @@ impl If {
 }
 
 impl ExecutableContent for If {
-    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool {
         let r = datamodel
             .execute_condition(&self.condition)
             .unwrap_or_else(|e| {
@@ -371,14 +377,19 @@ impl ExecutableContent for If {
         if r {
             if self.content != 0 {
                 for e in fsm.executableContent.get(&self.content).unwrap() {
-                    e.execute(datamodel, fsm);
+                    if !e.execute(datamodel, fsm) {
+                        return false;
+                    }
                 }
             }
         } else if self.else_content != 0 {
             for e in fsm.executableContent.get(&self.else_content).unwrap() {
-                e.execute(datamodel, fsm);
+                if !e.execute(datamodel, fsm) {
+                    return false;
+                }
             }
         }
+        true
     }
 
     fn get_type(&self) -> u8 {
@@ -406,19 +417,22 @@ impl ForEach {
 }
 
 impl ExecutableContent for ForEach {
-    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool {
         let idx = if self.index.is_empty() {
             INDEX_TEMP.to_string()
         } else {
             self.index.clone()
         };
-        datamodel.execute_for_each(&self.array, &self.item, &idx, &mut |datamodel| {
+        datamodel.execute_for_each(&self.array, &self.item, &idx, &mut |datamodel| -> bool {
             if self.content != 0 {
                 for e in fsm.executableContent.get(&self.content).unwrap() {
-                    e.execute(datamodel, fsm);
+                    if !e.execute(datamodel, fsm) {
+                        return false;
+                    }
                 }
             }
-        });
+            true
+        })
     }
 
     fn get_type(&self) -> u8 {
@@ -465,12 +479,13 @@ impl ExecutableContent for Cancel {
     /// same session. The Processor SHOULD make its best attempt to cancel all delayed events with
     /// the specified id. Note, however, that it can not be guaranteed to succeed, for example if
     /// the event has already been delivered by the time the \<cancel> tag executes.
-    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         if let Ok(send_id) = datamodel
             .get_expression_alternative_value(self.send_id.as_str(), self.send_id_expr.as_str())
         {
             get_global!(datamodel).delayed_send.remove(&send_id);
         };
+        true
     }
 
     fn get_type(&self) -> u8 {
@@ -492,14 +507,14 @@ impl ExecutableContent for Cancel {
 impl ExecutableContent for SendParameters {
     /// If unable to dispatch, place "error.communication" in internal queue
     /// If target is not supported, place "error.execution" in internal queue
-    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) {
+    fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool {
         let target = match datamodel
             .get_expression_alternative_value(self.target.as_str(), self.target_expr.as_str())
         {
             Ok(value) => value,
             Err(_) => {
                 // Error -> abort
-                return;
+                return false;
             }
         };
 
@@ -509,13 +524,13 @@ impl ExecutableContent for SendParameters {
             Ok(value) => value,
             Err(_) => {
                 // Error -> abort
-                return;
+                return false;
             }
         };
 
         let send_id = if self.name_location.is_empty() {
             if self.name.is_empty() {
-               None
+                None
             } else {
                 Some(self.name.clone())
             }
@@ -555,7 +570,7 @@ impl ExecutableContent for SendParameters {
                 match datamodel.get_by_location(name) {
                     Err(_msg) => {
                         // Error -> Abort
-                        return;
+                        return false;
                     }
                     Ok(value) => {
                         data_vec.push(ParamPair::new(name.as_str(), &value));
@@ -568,7 +583,7 @@ impl ExecutableContent for SendParameters {
             match datamodel.execute(&self.delay_expr) {
                 Err(_msg) => {
                     // Error -> Abort
-                    return;
+                    return false;
                 }
                 Ok(delay) => parse_duration_to_milliseconds(&delay),
             }
@@ -580,14 +595,14 @@ impl ExecutableContent for SendParameters {
             // Delay is invalid -> Abort
             error!("Send: delay {} is negative", self.delay_expr);
             datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
-            return;
+            return false;
         }
 
         if delay_ms > 0 && target.eq(SCXML_TARGET_INTERNAL) {
             // Can't send via internal queue
             error!("Send: illegal delay for target {}", target);
             datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
-            return;
+            return false;
         }
         let type_result = datamodel
             .get_expression_alternative_value(self.type_value.as_str(), self.type_expr.as_str());
@@ -597,7 +612,7 @@ impl ExecutableContent for SendParameters {
             Err(err) => {
                 error!("Failed to evaluate send type: {}", err);
                 datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
-                return;
+                return false;
             }
         };
 
@@ -640,16 +655,22 @@ impl ExecutableContent for SendParameters {
                 });
                 if let Some(g) = tg {
                     if let Some(sid) = &send_id {
-                        datamodel.global().lock().delayed_send.insert(sid.clone(), g);
+                        datamodel
+                            .global()
+                            .lock()
+                            .delayed_send
+                            .insert(sid.clone(), g);
                     } else {
                         g.ignore();
                     }
                 };
+                true
             }
             None => {
                 // W3C:  If the SCXML Processor does not support the type that is specified,
                 // it must place the event error.execution on the internal event queue.
                 datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
+                false
             }
         }
     }

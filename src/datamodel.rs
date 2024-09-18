@@ -210,8 +210,8 @@ pub trait Datamodel {
         array_expression: &str,
         item: &str,
         index: &str,
-        execute_body: &mut dyn FnMut(&mut dyn Datamodel),
-    );
+        execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
+    ) -> bool;
 
     /// *W3C says*:
     /// The set of operators in conditional expressions varies depending on the data model,
@@ -224,7 +224,7 @@ pub trait Datamodel {
     fn execute_condition(&mut self, script: &str) -> Result<bool, String>;
 
     #[allow(non_snake_case)]
-    fn executeContent(&mut self, fsm: &Fsm, contentId: ExecutableContentId);
+    fn executeContent(&mut self, fsm: &Fsm, contentId: ExecutableContentId) -> bool;
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
     fn internal_error_execution_with_event(&mut self, event: &Event) {
@@ -232,7 +232,11 @@ pub trait Datamodel {
     }
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
-    fn internal_error_execution_for_event(&mut self, send_id: &Option<String>, invoke_id: &Option<InvokeId>) {
+    fn internal_error_execution_for_event(
+        &mut self,
+        send_id: &Option<String>,
+        invoke_id: &Option<InvokeId>,
+    ) {
         get_global!(self).enqueue_internal(Event::error_execution(send_id, invoke_id));
     }
 
@@ -417,7 +421,7 @@ impl Datamodel for NullDatamodel {
         info!("Log: {}", msg);
     }
 
-    fn execute(&mut self, _script: &str) -> Result<String,String> {
+    fn execute(&mut self, _script: &str) -> Result<String, String> {
         Err("unimplemented".to_string())
     }
 
@@ -426,9 +430,10 @@ impl Datamodel for NullDatamodel {
         _array_expression: &str,
         _item: &str,
         _index: &str,
-        _execute_body: &mut dyn FnMut(&mut dyn Datamodel),
-    ) {
+        _execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
+    ) -> bool {
         // nothing to do
+        true
     }
 
     /// *W3C says*:
@@ -462,8 +467,9 @@ impl Datamodel for NullDatamodel {
     }
 
     #[allow(non_snake_case)]
-    fn executeContent(&mut self, _fsm: &Fsm, _content_id: ExecutableContentId) {
+    fn executeContent(&mut self, _fsm: &Fsm, _content_id: ExecutableContentId) -> bool {
         // Nothing
+        true
     }
 }
 

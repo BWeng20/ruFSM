@@ -9,7 +9,7 @@
 | test152.txml.scxml   | OK       | test that an illegal array or item value causes error.execution and results in executable content not being executed. |
 | test153.txml.scxml   | OK       | test that foreach goes over the array in the right order.  since the array contains 1 2 3, we compare the current  value with the previous value, which is stored in var1. The current value should always be larger.  If it ever isn't, set Var4 to 0, indicating failure |
 | test155.txml.scxml   | OK       | test that foreach executes the executable content once for each item in the list '(1,2,3)'. The executable content sums the items into var1 so it should be 6 at the end |
-| test156.txml.scxml   | _Failed_ | test that an error causes the foreach to stop execution.  The second piece of executable content should cause an error, so var1 should be incremented only once |
+| test156.txml.scxml   | OK       | test that an error causes the foreach to stop execution.  The second piece of executable content should cause an error, so var1 should be incremented only once |
 | test158.txml.scxml   | OK       | test that executable content executes in document order.  if event1 occurs then event2, succeed, otherwise fail |
 | test159.txml.scxml   | _Failed_ | test that any error raised by an element of executable content causes all subsequent elements to be skipped. The send tag will raise an error so var1 should not be incremented.  If it is fail, otherwise succeed |
 | test172.txml.scxml   | OK       | we test that eventexpr uses the current value of var1, not its initial value  |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 146 of 160 tests succeeded
+__Result__: 147 of 160 tests succeeded

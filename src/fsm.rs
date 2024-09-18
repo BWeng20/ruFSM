@@ -704,7 +704,7 @@ impl Event {
         id: &str,
         data_params: Option<Vec<ParamPair>>,
         data_content: Option<String>,
-        event_type: EventType
+        event_type: EventType,
     ) -> Event {
         Event {
             name: format!("{}{}", prefix, id),
@@ -760,7 +760,7 @@ impl Event {
     }
 
     /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
-    pub fn error_execution(send_id : &Option<String>, invoke_id: &Option<InvokeId>) -> Event {
+    pub fn error_execution(send_id: &Option<String>, invoke_id: &Option<InvokeId>) -> Event {
         Event {
             name: "error.execution".to_string(),
             etype: EventType::platform,
@@ -2025,7 +2025,6 @@ impl Fsm {
     ) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("exitStates");
-
 
         let statesToExit = self.computeExitSet(datamodel, enabledTransitions);
 
@@ -3484,7 +3483,7 @@ pub fn create_datamodel(
             }
 
             null_dm
-        },
+        }
         _ => panic!("Unsupported Data Model '{}'", name),
     }
 }
