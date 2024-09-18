@@ -2940,7 +2940,8 @@ impl Fsm {
             type_name = SCXML_INVOKE_TYPE.to_string();
         }
 
-        if (!type_name.is_empty()) && type_name.ne(SCXML_INVOKE_TYPE) {
+        if !(type_name.is_empty() ||
+            (type_name.starts_with(SCXML_INVOKE_TYPE) && type_name.len()<=(SCXML_INVOKE_TYPE.len()+1))) {
             error!("Unsupported <invoke> type {}", type_name);
             return;
         }

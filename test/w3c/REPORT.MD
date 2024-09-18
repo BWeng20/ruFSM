@@ -35,7 +35,7 @@
 | test208.txml.scxml   | OK       | we test that cancel works.  We cancel delayed event1.  If cancel works, we get event2 first and pass.  If we get event1 or an error first, cancel didn't work and we fail.  |
 | test210.txml.scxml   | OK       | we test that sendidexpr works with cancel.  If it takes the most recent value of var1, it should cancel  delayed event1.  Thus we get event2 first and pass.  If we get event1 or an error first, cancel didn't work and we fail.  |
 | test215.txml.scxml   | OK       | we test that typexpr is evaluated at runtime.  If the original value of var1 is used, the invocation will fail (test215sub1.scxml is not of type 'foo', even if the platform supports foo as a type).  If the runtime value is used, the invocation will succeed |
-| test216.txml.scxml   | _Failed_ | we test that srcexpr is evaluated at runtime.  If the original value of var1 is used, the invocation will fail (assuming that there is no script named 'foo').  If the runtime value is used, the invocation will succeed |
+| test216.txml.scxml   | OK       | we test that srcexpr is evaluated at runtime.  If the original value of var1 is used, the invocation will fail (assuming that there is no script named 'foo').  If the runtime value is used, the invocation will succeed |
 | test220.txml.scxml   | OK       | we test that the scxml type is supported.   |
 | test223.txml.scxml   | OK       | we test that idlocation is supported.   |
 | test224.txml.scxml   | OK       | we test that the automatically generated id has the form stateid.platformid.   |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 148 of 160 tests succeeded
+__Result__: 149 of 160 tests succeeded
