@@ -191,6 +191,10 @@ pub trait Datamodel {
     /// Get _ioprocessors.
     fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>>;
 
+    /// Send an event via io-processor.
+    /// Mainly here because of optimization reasons (spares copies).
+    fn send(&mut self, ioc_processor: &str, target: &str, event: Event) -> bool;
+
     fn get_mut(&mut self, name: &str) -> Option<&mut Data>;
 
     /// Clear all.
@@ -409,6 +413,15 @@ impl Datamodel for NullDatamodel {
 
     fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
         &mut self.io_processors
+    }
+
+    fn send(&mut self, ioc_processor: &str, target: &str, event: Event) -> bool {
+        let ioc = self.io_processors.get_mut(ioc_processor);
+        if let Some(ic) = ioc {
+            ic.send(&self.global, target, event)
+        } else {
+            false
+        }
     }
 
     fn get_mut(&mut self, _name: &str) -> Option<&mut Data> {

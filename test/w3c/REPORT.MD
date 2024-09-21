@@ -57,7 +57,7 @@
 | test244.txml.scxml   | OK       | test that datamodel values can be specified by  namelist. invoked child will return success ifits Var1 is set to 1, failure otherwise.   This test will fail schema validation due to multiple occurrences of Var1, but should run correctly. |
 | test245.txml.scxml   | OK       | test that non-existent datamodel values are not set.  Var2 is not defined in  invoked child's datamodel.  It will will return success if its Var2 remains unbound, failure otherwise.  |
 | test247.txml.scxml   | OK       | test that we get done.invoke.  timeout indicates failure  |
-| test252.txml.scxml   | _Failed_ | test that we don't process any events received from the invoked process once it is cancelled.  child process tries to send us childToParent in an onexit handler.  If we get it, we fail.   timeout indicates success.   |
+| test252.txml.scxml   | OK       | test that we don't process any events received from the invoked process once it is cancelled.  child process tries to send us childToParent in an onexit handler.  If we get it, we fail.   timeout indicates success.   |
 | test253.txml.scxml   | OK       | test that the scxml event processor is used in both directions.  If child process uses the  scxml event i/o processor to communicate with us, send it an event.  It will send back success if this process uses the scxml processor to send the message to it, otherwise failure.  For this test we allow  'scxml' as an alternative to the full url.   |
 | test276.txml.scxml   | OK       | test that values passed in from parent process override default values specified in the child, test276sub1.scxml. The child returns event1 if var1 has value 1, event0 if it has default value 0.  |
 | test277.txml.scxml   | _Failed_ | test that platform creates undound variable if we assign an illegal value to it.  Thus  we can assign to it later in state s1.  |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 149 of 160 tests succeeded
+__Result__: 150 of 160 tests succeeded

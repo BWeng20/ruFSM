@@ -12,6 +12,7 @@ use rfsm::fsm::{Event, EventType};
 use rfsm::fsm_executor::FsmExecutor;
 #[cfg(feature = "Trace")]
 use rfsm::handle_trace;
+use rfsm::init_logging;
 use rfsm::scxml_reader::INCLUDE_PATH_ARGUMENT_OPTION;
 #[cfg(feature = "Trace")]
 use rfsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
@@ -19,8 +20,7 @@ use rfsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
 /// Loads the specified FSM and prompts for Events.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    #[cfg(feature = "EnvLog")]
-    env_logger::init();
+    init_logging();
 
     let (named_opt, final_args) = rfsm::get_arguments(&[
         #[cfg(feature = "Trace")]

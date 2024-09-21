@@ -13,10 +13,11 @@ use rfsm::test::{abort_test, load_fsm, run_test, TestSpecification, TestUseCase}
 #[cfg(feature = "Trace")]
 use rfsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
 
+use rfsm::init_logging;
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    #[cfg(feature = "EnvLog")]
-    env_logger::init();
+    init_logging();
 
     let (named_opt, final_args) = rfsm::get_arguments(&[
         #[cfg(feature = "Trace")]

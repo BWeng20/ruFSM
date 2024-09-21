@@ -6,8 +6,10 @@
 
 extern crate core;
 
+use chrono::Local;
 use std::collections::HashMap;
 use std::env;
+use std::io::Write;
 #[cfg(feature = "Trace")]
 use std::str::FromStr;
 #[cfg(feature = "Trace")]
@@ -135,4 +137,29 @@ pub fn get_arguments(arguments: &[&ArgOption]) -> (HashMap<&'static str, String>
         }
     }
     (map, final_args)
+}
+
+pub fn init_logging() {
+    #[cfg(feature = "EnvLog")]
+    {
+        env_logger::builder()
+            .format(|buf, record| {
+                let thread_name = {
+                    if let Some(n) = std::thread::current().name() {
+                        n.to_string()
+                    } else {
+                        format!("{:?}", std::thread::current().id())
+                    }
+                };
+                writeln!(
+                    buf,
+                    "{} [{:15}] {:5} {}",
+                    Local::now().format("%m-%d %H:%M:%S%.3f"),
+                    thread_name,
+                    record.level(),
+                    record.args()
+                )
+            })
+            .init();
+    }
 }

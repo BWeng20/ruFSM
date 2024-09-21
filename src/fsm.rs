@@ -48,6 +48,8 @@ pub const EVENT_DONE_INVOKE_PREFIX: &str = "done.invoke.";
 
 pub static PLATFORM_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
+pub static THREAD_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+
 /// Starts the FSM inside a worker thread.
 ///
 pub fn start_fsm(sm: Box<Fsm>, executor: Box<FsmExecutor>) -> ScxmlSession {
@@ -109,7 +111,10 @@ pub fn start_fsm_with_data_and_finish_mode(
     let global_data = session.global_data.clone();
 
     let thread = thread::Builder::new()
-        .name("fsm_interpret".to_string())
+        .name(format!(
+            "fsm_{}",
+            THREAD_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ))
         .spawn(move || {
             info!("SM starting...");
             {
@@ -1028,6 +1033,16 @@ pub struct ScxmlSession {
     pub state_id: Option<StateId>,
 }
 
+impl Debug for ScxmlSession {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ScxmlSession")
+            .field("session_id", &self.session_id)
+            .field("inv_doc_id", &self.invoke_doc_id)
+            .field("state_id", &self.state_id)
+            .finish()
+    }
+}
+
 impl ScxmlSession {
     pub fn new_without_join_handle(id: SessionId, sender: Sender<Box<Event>>) -> ScxmlSession {
         ScxmlSession {
@@ -1447,6 +1462,13 @@ impl Fsm {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("mainEventLoop");
 
+        let caller_invoke_id = {
+            match &self.caller_invoke_id {
+                None => "".to_string(),
+                Some(cid) => cid.clone(),
+            }
+        };
+
         while get_global!(datamodel).running {
             let mut enabledTransitions;
             let mut macrostepDone = false;
@@ -1510,7 +1532,40 @@ impl Fsm {
                 // but here we assume it’s a special event we receive
                 #[cfg(feature = "Trace_Method")]
                 self.tracer.enter_method("externalQueue.dequeue");
-                externalEvent = externalQueue_receiver.lock().unwrap().recv().unwrap();
+                loop {
+                    let externalEventTmp = externalQueue_receiver.lock().unwrap().recv().unwrap();
+                    if externalEventTmp.name.starts_with(EVENT_DONE_INVOKE_PREFIX) {
+                        externalEvent = externalEventTmp;
+                        break;
+                    }
+                    if let Some(invoke_id) = &externalEventTmp.invoke_id {
+                        if caller_invoke_id.ne(invoke_id) {
+                            // W3C says:
+                            //    Once it cancels the invoked session, the Processor MUST ignore any events
+                            //    it receives from that session. In particular it MUST NOT not insert them
+                            //    into the external event queue of the invoking session.
+                            // Check if the session is active.
+                            if get_global!(datamodel)
+                                .child_sessions
+                                .contains_key(invoke_id)
+                            {
+                                externalEvent = externalEventTmp;
+                                break;
+                            } else {
+                                debug!(
+                                    "Ignore event {} from invoke {}",
+                                    externalEventTmp.name, invoke_id
+                                );
+                            }
+                        } else {
+                            externalEvent = externalEventTmp;
+                            break;
+                        }
+                    } else {
+                        externalEvent = externalEventTmp;
+                        break;
+                    }
+                }
                 #[cfg(feature = "Trace_Method")]
                 self.tracer.exit_method("externalQueue.dequeue");
                 #[cfg(feature = "Trace_Event")]
@@ -1636,14 +1691,9 @@ impl Fsm {
                 session_id_list.push(session.session_id);
             }
             if !session_id_list.is_empty() {
-                let mut ioc = datamodel
-                    .get_io_processors()
-                    .get(SCXML_EVENT_PROCESSOR_SHORT_TYPE)
-                    .unwrap()
-                    .get_copy();
                 for session_id in session_id_list {
-                    ioc.send(
-                        datamodel.global(),
+                    datamodel.send(
+                        SCXML_EVENT_PROCESSOR_SHORT_TYPE,
                         format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
                         Event::new_simple(EVENT_CANCEL_SESSION),
                     );
@@ -1702,13 +1752,8 @@ impl Fsm {
                             EventType::external,
                         );
                         event.invoke_id = Some(invoke_id);
-                        let mut ioc = datamodel
-                            .get_io_processors()
-                            .get(SCXML_EVENT_PROCESSOR_SHORT_TYPE)
-                            .unwrap()
-                            .get_copy();
-                        ioc.send(
-                            datamodel.global(),
+                        datamodel.send(
+                            SCXML_EVENT_PROCESSOR_SHORT_TYPE,
                             format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
                             event,
                         );
@@ -2078,14 +2123,16 @@ impl Fsm {
                     exitList.push(*ec);
                 }
             }
-            let mut session_ids = Vec::new();
-            for session in get_global!(datamodel).child_sessions.values() {
-                if invoke_doc_ids.contains(&session.invoke_doc_id) {
-                    session_ids.push(session.session_id);
+            if !invoke_doc_ids.is_empty() {
+                let mut session_ids = Vec::new();
+                for (invoke_id, session) in &get_global!(datamodel).child_sessions {
+                    if invoke_doc_ids.contains(&session.invoke_doc_id) {
+                        session_ids.push((invoke_id.clone(), session.session_id));
+                    }
                 }
-            }
-            for session_id in session_ids {
-                self.cancelInvoke(datamodel, session_id);
+                for (invoke_id, session_id) in &session_ids {
+                    self.cancelInvoke(datamodel, invoke_id, *session_id);
+                }
             }
 
             for ec in exitList.iterator() {
@@ -2940,8 +2987,10 @@ impl Fsm {
             type_name = SCXML_INVOKE_TYPE.to_string();
         }
 
-        if !(type_name.is_empty() ||
-            (type_name.starts_with(SCXML_INVOKE_TYPE) && type_name.len()<=(SCXML_INVOKE_TYPE.len()+1))) {
+        if !(type_name.is_empty()
+            || (type_name.starts_with(SCXML_INVOKE_TYPE)
+                && type_name.len() <= (SCXML_INVOKE_TYPE.len() + 1)))
+        {
             error!("Unsupported <invoke> type {}", type_name);
             return;
         }
@@ -3056,17 +3105,22 @@ impl Fsm {
     }
 
     #[allow(non_snake_case)]
-    fn cancelInvoke(&mut self, datamodel: &mut dyn Datamodel, session_id: SessionId) {
-        let mut ioc = datamodel
-            .get_io_processors()
-            .get(SCXML_EVENT_PROCESSOR_SHORT_TYPE)
-            .unwrap()
-            .get_copy();
-        ioc.send(
-            datamodel.global(),
+    fn cancelInvoke(
+        &mut self,
+        datamodel: &mut dyn Datamodel,
+        invoke_id: &InvokeId,
+        session_id: SessionId,
+    ) {
+        #[cfg(feature = "Trace_Method")]
+        self.tracer.enter_method("cancelInvoke");
+        get_global!(datamodel).child_sessions.remove(invoke_id);
+        datamodel.send(
+            SCXML_EVENT_PROCESSOR_SHORT_TYPE,
             format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
             Event::new_simple(EVENT_CANCEL_SESSION),
         );
+        #[cfg(feature = "Trace_Method")]
+        self.tracer.exit_method("cancelInvoke");
     }
 
     /// *W3C says*:

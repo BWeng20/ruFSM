@@ -32,7 +32,7 @@ use crate::event_io_processor::{EventIOProcessor, SYS_IO_PROCESSORS};
 use crate::executable_content::{
     DefaultExecutableContentTracer, ExecutableContent, ExecutableContentTracer,
 };
-use crate::fsm::{ExecutableContentId, Fsm, State, StateId};
+use crate::fsm::{Event, ExecutableContentId, Fsm, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
 pub const ECMA_SCRIPT_LC: &str = "ecmascript";
@@ -475,6 +475,15 @@ impl Datamodel for ECMAScriptDatamodel {
 
     fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
         &mut self.io_processors
+    }
+
+    fn send(&mut self, ioc_processor: &str, target: &str, event: Event) -> bool {
+        let ioc = self.io_processors.get_mut(ioc_processor);
+        if let Some(ic) = ioc {
+            ic.send(&self.global_data, target, event)
+        } else {
+            false
+        }
     }
 
     fn get_mut(&mut self, name: &str) -> Option<&mut Data> {
