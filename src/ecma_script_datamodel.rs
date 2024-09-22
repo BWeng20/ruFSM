@@ -390,7 +390,7 @@ impl Datamodel for ECMAScriptDatamodel {
     fn set_event(&mut self, event: &crate::fsm::Event) {
         let data_value = match &event.param_values {
             None => match &event.content {
-                None => JsValue::Null,
+                None => JsValue::Undefined,
                 Some(c) => JsValue::String(js_string!(c.clone())),
             },
             Some(pv) => {
