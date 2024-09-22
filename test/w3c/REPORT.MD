@@ -67,9 +67,9 @@
 | test287.txml.scxml   | OK       | a simple test that a legal value may be assigned to a valid data model location |
 | test294.txml.scxml   | OK       | test that a param inside donedata ends up in the data field of the done event and that content inside donedata sets the full value of the event.data field |
 | test298.txml.scxml   | OK       | reference a non-existent data model location in param in donedata and see that the right error is raised |
-| test302.txml.scxml   | _Failed_ | test that a script is evaluated at load time.  \<conf:script> shoudl assign the value 1 to  Var1.  Hence, if script is evaluated at download time, Var1 has a value in the initial state s0. This test is valid only for datamodels that support scripting |
+| test302.txml.scxml   | OK       | test that a script is evaluated at load time.  \<conf:script> shoudl assign the value 1 to  Var1.  Hence, if script is evaluated at download time, Var1 has a value in the initial state s0. This test is valid only for datamodels that support scripting |
 | test303.txml.scxml   | OK       | to test that scripts are run as part of executable content, we check that it changes the value of a var at the right point. This test is valid only for datamodels that support scripting |
-| test304.txml.scxml   | _Failed_ | test that a variable declared by a script can be accessed like any other part of the data model |
+| test304.txml.scxml   | OK       | test that a variable declared by a script can be accessed like any other part of the data model |
 | test309.txml.scxml   | OK       | test that an expression that cannot be interpreted as a boolean is treated as false |
 | test310.txml.scxml   | OK       | simple test of the in() predicate |
 | test311.txml.scxml   | OK       | test that assignment to a non-existent location yields an error |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 152 of 160 tests succeeded
+__Result__: 154 of 160 tests succeeded

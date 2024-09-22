@@ -988,18 +988,26 @@ impl ReaderState {
     }
 
     fn start_script(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
-        self.verify_parent_tag(
-            TAG_SCRIPT,
-            &[
-                TAG_SCXML,
-                TAG_TRANSITION,
-                TAG_ON_EXIT,
-                TAG_ON_ENTRY,
-                TAG_IF,
-                TAG_FOR_EACH,
-                TAG_FINALIZE,
-            ],
-        );
+        let at_root = self.get_parent_tag().eq(TAG_SCXML);
+
+        if !at_root {
+            self.verify_parent_tag(
+                TAG_SCRIPT,
+                &[
+                    TAG_SCXML,
+                    TAG_TRANSITION,
+                    TAG_ON_EXIT,
+                    TAG_ON_ENTRY,
+                    TAG_IF,
+                    TAG_FOR_EACH,
+                    TAG_FINALIZE,
+                ],
+            );
+        };
+
+        if at_root {
+            self.start_executable_content_region(false, TAG_SCRIPT);
+        }
 
         let mut s = Expression::new();
 
@@ -1012,7 +1020,6 @@ impl ReaderState {
             match self.read_from_uri(file_src) {
                 Ok(source) => {
                     #[cfg(feature = "Debug_Reader")]
-
                     debug!("src='{}':\n{}", file_src, source);
                     s.content = source;
                 }
@@ -1038,6 +1045,9 @@ impl ReaderState {
         }
 
         self.add_executable_content(Box::new(s));
+        if at_root {
+            self.fsm.script = self.end_executable_content_region(TAG_SCRIPT);
+        }
     }
 
     fn start_for_each(&mut self, attr: &AttributeMap) {
@@ -1653,7 +1663,6 @@ impl ReaderState {
         }
         self.fsm.pseudo_root = self.get_or_create_state_with_attributes(attr, false, 0);
         self.current.current_state = self.fsm.pseudo_root;
-        self.start_executable_content_region(false, TAG_SCXML);
     }
 
     fn end_scxml(&mut self) {
