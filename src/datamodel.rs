@@ -293,7 +293,7 @@ pub trait Datamodel {
                                 // 'error.execution' on the internal event queue and must ignore the name
                                 // and value.
                                 error!("location of param {} is invalid ({})", param, msg);
-                                self.internal_error_execution();
+                                // get_by_location already added "error.execution"
                             }
                             Ok(value) => {
                                 values.push(ParamPair::new_moved(param.name.clone(), value));
