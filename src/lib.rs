@@ -153,7 +153,7 @@ pub fn init_logging() {
                 };
                 writeln!(
                     buf,
-                    "{} [{:15}] {:5} {}",
+                    "{} [{:8}] {:5} {}",
                     Local::now().format("%m-%d %H:%M:%S%.3f"),
                     thread_name,
                     record.level(),
