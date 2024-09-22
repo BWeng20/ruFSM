@@ -1113,6 +1113,8 @@ pub struct Fsm {
     pub timer: timer::Timer,
 
     pub generate_id_count: u32,
+
+    pub print_transitions: bool,
 }
 
 impl Default for Fsm {
@@ -1185,6 +1187,7 @@ impl Fsm {
             executableContent: HashMap::new(),
             timer: timer::Timer::new(),
             generate_id_count: 0,
+            print_transitions: true,
         }
     }
 
@@ -1259,11 +1262,12 @@ impl Fsm {
         &mut self,
         datamodel: &mut dyn Datamodel,
         state_id: StateId,
+        set_data: bool,
     ) {
-        datamodel.initializeDataModel(self, state_id);
+        datamodel.initializeDataModel(self, state_id, set_data);
 
         for child_state in self.getChildStates(state_id).iterator() {
-            self.initialize_data_models_recursive(datamodel, *child_state);
+            self.initialize_data_models_recursive(datamodel, *child_state, set_data);
         }
     }
 
@@ -1327,9 +1331,7 @@ impl Fsm {
 
             datamodel.implement_mandatory_functionality(self);
 
-            if self.binding == BindingType::Early {
-                self.initialize_data_models_recursive(datamodel, self.pseudo_root);
-            }
+            self.initialize_data_models_recursive(datamodel, self.pseudo_root, self.binding == BindingType::Early);
         }
         self.executeGlobalScriptElement(datamodel);
 
@@ -2019,6 +2021,21 @@ impl Fsm {
     ) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("microstep");
+        if self.print_transitions && enabledTransitions.size() > 0 {
+            if enabledTransitions.size() > 1 {
+                info!("Enabled Transitions:");
+                for t in enabledTransitions.iterator() {
+                    if let Some(transition) = self.transitions.get(t) {
+                        info!("\t{}", transition);
+                    }
+                }
+            } else {
+                let t = enabledTransitions.head();
+                if let Some(transition) = self.transitions.get(t) {
+                    info!("Enabled Transition {}", transition);
+                }
+            }
+        }
         self.exitStates(datamodel, enabledTransitions);
         self.executeTransitionContent(datamodel, enabledTransitions);
         self.enterStates(datamodel, enabledTransitions);
@@ -2228,7 +2245,7 @@ impl Fsm {
                 }
             }
             if to_init != 0 {
-                datamodel.initializeDataModel(self, to_init);
+                datamodel.initializeDataModel(self, to_init, true );
             }
             let mut exe = Vec::new();
             {

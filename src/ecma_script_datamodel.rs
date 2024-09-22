@@ -117,23 +117,34 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    pub fn set_from_data_store(&mut self, data: &DataStore) {
+    pub fn set_from_data_store(&mut self, data: &DataStore, set_data: bool) {
         for (name, data) in &data.values {
-            match &data.value {
-                None => {
-                    self.set_js_property(name.as_str(), JsValue::Null);
-                }
-                Some(dv) => {
-                    let rs = self.context.eval(Source::from_bytes(dv.as_str()));
-                    match rs {
-                        Ok(val) => {
-                            self.set_js_property(name.as_str(), val);
-                        }
-                        Err(err) => {
-                            error!("Error on Initialize '{}': {}", name, err);
+            if set_data {
+                match &data.value {
+                    None => {
+                        self.set_js_property(name.as_str(), JsValue::Null);
+                    }
+                    Some(dv) => {
+                        let rs = self.context.eval(Source::from_bytes(dv.as_str()));
+                        match rs {
+                            Ok(val) => {
+                                self.set_js_property(name.as_str(), val);
+                            }
+                            Err(err) => {
+                                error!("Error on Initialize '{}': {}", name, err);
+                                // W3C says:
+                                // If the value specified for a <data> element (by 'src', children, or
+                                // the environment) is not a legal data value, the SCXML Processor MUST
+                                // raise place error.execution in the internal event queue and MUST
+                                // create an empty data element in the data model with the specified id.
+                                self.set_js_property(name.as_str(), JsValue::Undefined);
+                                self.internal_error_execution();
+                            }
                         }
                     }
                 }
+            } else {
+                self.set_js_property(name.as_str(), JsValue::Undefined);
             }
         }
     }
@@ -344,14 +355,14 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     #[allow(non_snake_case)]
-    fn initializeDataModel(&mut self, fsm: &mut Fsm, data_state: StateId) {
+    fn initializeDataModel(&mut self, fsm: &mut Fsm, data_state: StateId, set_data: bool) {
         let state_obj: &State = fsm.get_state_by_id_mut(data_state);
         // Set all (simple) global variables.
-        self.set_from_data_store(&state_obj.data);
+        self.set_from_data_store(&state_obj.data, set_data);
         if data_state == fsm.pseudo_root {
             let mut ds = DataStore::new();
             ds.values = self.global_data.lock().environment.values.clone();
-            self.set_from_data_store(&ds);
+            self.set_from_data_store(&ds, true);
         }
     }
 

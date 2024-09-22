@@ -15,8 +15,8 @@ use regex::Regex;
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
-    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter,
-    StateId,
+    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair,
+    Parameter, StateId,
 };
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
@@ -145,7 +145,7 @@ pub trait Datamodel {
     /// Initialize the data model for one data-store.
     /// This method is called for the global data and for the data of each state.
     #[allow(non_snake_case)]
-    fn initializeDataModel(&mut self, fsm: &mut Fsm, state: StateId);
+    fn initializeDataModel(&mut self, fsm: &mut Fsm, state: StateId, set_data: bool);
 
     /// Initialize a global read-only variable.
     fn initialize_read_only(&mut self, name: &str, value: &str);
@@ -386,7 +386,7 @@ impl Datamodel for NullDatamodel {
     }
 
     #[allow(non_snake_case)]
-    fn initializeDataModel(&mut self, _fsm: &mut Fsm, _dataState: StateId) {
+    fn initializeDataModel(&mut self, _fsm: &mut Fsm, _dataState: StateId, _set_data: bool) {
         // nothing to do
     }
 
