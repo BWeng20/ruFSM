@@ -3949,6 +3949,7 @@ mod tests {
 
     #[test]
     fn fsm_shall_exit() {
+        // init_logging();
         println!("Creating The SM:");
         let sm = scxml_reader::parse_from_xml(
             r"<scxml initial='Main' datamodel='ecmascript'>
@@ -4003,7 +4004,7 @@ mod tests {
                             sendid: Some("0".to_string()),
                             origin: None,
                             origin_type: None,
-                            invoke_id: Some(1.to_string()),
+                            invoke_id: None,
                             param_values: None,
                             content: None,
                         },
@@ -4016,7 +4017,7 @@ mod tests {
                             sendid: Some("0".to_string()),
                             origin: None,
                             origin_type: None,
-                            invoke_id: Some(2.to_string()),
+                            invoke_id: None,
                             param_values: None,
                             content: None,
                         },

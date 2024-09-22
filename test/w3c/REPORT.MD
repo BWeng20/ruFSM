@@ -93,7 +93,7 @@
 | test338.txml.scxml   | OK       | test that invokeid is set correctly in events received from an invoked process.  timeout event catches the  case where the invoke doesn't work correctly |
 | test339.txml.scxml   | OK       | test that invokeid is blank in an event that wasn't returned from an invoked process |
 | test342.txml.scxml   | OK       | test that eventexpr works and sets the name field of the resulting event |
-| test343.txml.scxml   | _Failed_ |  test that illegal \<param> produces error.execution and empty event.data |
+| test343.txml.scxml   | OK       |  test that illegal \<param> produces error.execution and empty event.data |
 | test344.txml.scxml   | OK       | test that a cond expression that cannot be evaluated as a  boolean cond expression evaluates to false and causes error.execution to be raised. In some languages, any valid expression/object can be converted to a boolean, so conf:nonBoolean will have to be mapped onto something that produces a syntax error or something similarly invalid |
 | test346.txml.scxml   | OK       | test that any attempt to change the value of a system variable causes error.execution to be raised.   Event1..4 are there to catch the case where the error event is not raised. In cases where it is, we have to dispose of eventn in the next state, hence the targetless transitions (which simply throw away the event.) |
 | test347.txml.scxml   | OK       | test that the scxml event I/O processor works by sending events back and forth between an invoked child and its parent process |
@@ -135,7 +135,7 @@
 | test423.txml.scxml   | OK       | test that we keep pulling external events off the queue till we find one that matches a transition. |
 | test436.txml.scxml   | OK       | test that in() predicate works in null data model |
 | test487.txml.scxml   | OK       | test illegal assignment.  error.execution should be raised.  |
-| test488.txml.scxml   | _Failed_ |  test that illegal expr in \<param> produces error.execution and empty event.data |
+| test488.txml.scxml   | OK       |  test that illegal expr in \<param> produces error.execution and empty event.data |
 | test495.txml.scxml   | OK       | test that the scxml event i/o processor puts events in the correct queues.|
 | test496.txml.scxml   | OK       ||
 | test500.txml.scxml   | OK       | test that location field is found inside entry for SCXML Event I/O processor |
@@ -147,7 +147,7 @@
 | test521.txml.scxml   | OK       | we test that the processor raises error.communication if it cannot dispatch the event. (To create an undispatchable event, we choose a non-existent session as target).  If it raises the error event, we succeed.  Otherwise we eventually timeout and fail.  |
 | test525.txml.scxml   | OK       | test that \<foreach> does a shallow copy, so that modifying the array does not change the iteration behavior. |
 | test527.txml.scxml   | OK       | simple test that 'expr' works with \<content> |
-| test528.txml.scxml   | _Failed_ |  test that illegal 'expr' produces error.execution and empty event.data |
+| test528.txml.scxml   | OK       |  test that illegal 'expr' produces error.execution and empty event.data |
 | test529.txml.scxml   | OK       | simple test that children workn with \<content> |
 | test530.txml.scxml   | OK       | test that \<content> child is evaluated when \<invoke> is. Var1 is initialized with an integer value, then set to an scxml script in the onentry to s0.  If \<content> is evaluated at the right time, we should get invoke.done, otherwise an error  |
 | test533.txml.scxml   | OK       | test that an internal transition whose source state is not compound does  exit its source state |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 157 of 160 tests succeeded
+__Result__: 160 of 160 tests succeeded
