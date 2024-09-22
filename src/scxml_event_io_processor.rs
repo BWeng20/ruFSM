@@ -48,7 +48,7 @@ impl ScxmlEventIOProcessor {
         info!("Scxml Event Processor starting");
 
         ScxmlEventIOProcessor {
-            location: "scxml-processor".to_string(),
+            location: SCXML_TARGET_SESSION_ID_PREFIX.to_string(),
             handle: EventIOProcessorHandle::new(),
         }
     }
@@ -85,7 +85,7 @@ const TYPES: &[&str] = &[SCXML_EVENT_PROCESSOR, SCXML_EVENT_PROCESSOR_SHORT_TYPE
 
 impl EventIOProcessor for ScxmlEventIOProcessor {
     fn get_location(&self, id: SessionId) -> String {
-        format!("{}/{}", self.location, id)
+        format!("{}{}", self.location, id)
     }
 
     /// Returns the type of this processor.

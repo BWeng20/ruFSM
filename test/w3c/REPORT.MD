@@ -88,7 +88,7 @@
 | test332.txml.scxml   | OK       | test that sendid is present in error events triggered by send errors |
 | test333.txml.scxml   | OK       | make sure sendid is blank in a non-error event |
 | test335.txml.scxml   | OK       | test that origin field is blank for internal events |
-| test336.txml.scxml   | _Failed_ | test that the origin field of an external event contains a URL that lets you send back to the originator.  In this case it's the same session, so if we get bar we succeed |
+| test336.txml.scxml   | OK       | test that the origin field of an external event contains a URL that lets you send back to the originator.  In this case it's the same session, so if we get bar we succeed |
 | test337.txml.scxml   | OK       | test that origintype is blank on internal events |
 | test338.txml.scxml   | OK       | test that invokeid is set correctly in events received from an invoked process.  timeout event catches the  case where the invoke doesn't work correctly |
 | test339.txml.scxml   | OK       | test that invokeid is blank in an event that wasn't returned from an invoked process |
@@ -98,7 +98,7 @@
 | test346.txml.scxml   | OK       | test that any attempt to change the value of a system variable causes error.execution to be raised.   Event1..4 are there to catch the case where the error event is not raised. In cases where it is, we have to dispose of eventn in the next state, hence the targetless transitions (which simply throw away the event.) |
 | test347.txml.scxml   | OK       | test that the scxml event I/O processor works by sending events back and forth between an invoked child and its parent process |
 | test348.txml.scxml   | OK       ||
-| test349.txml.scxml   | _Failed_ | test that value in origin field can be used to send an event back to the sender |
+| test349.txml.scxml   | OK       | test that value in origin field can be used to send an event back to the sender |
 | test350.txml.scxml   | OK       | test that target value is used to decide what session to deliver the event to.  A session should be able to send an event to itself using its own session ID as the target |
 | test351.txml.scxml   | OK       | test that sendid is set in event if present in send, blank otherwise |
 | test352.txml.scxml   | OK       | test the origintype is 'http://www.w3.org/TR/scxml/#SCXMLEventProcessor' |
@@ -139,7 +139,7 @@
 | test495.txml.scxml   | OK       | test that the scxml event i/o processor puts events in the correct queues.|
 | test496.txml.scxml   | OK       ||
 | test500.txml.scxml   | OK       | test that location field is found inside entry for SCXML Event I/O processor |
-| test501.txml.scxml   | _Failed_ | test that the location entry for the SCXML Event I/O processor can be used as the target for an event |
+| test501.txml.scxml   | OK       | test that the location entry for the SCXML Event I/O processor can be used as the target for an event |
 | test503.txml.scxml   | OK       | test that a targetless transition does not exit and reenter its source state |
 | test504.txml.scxml   | OK       | test that an external transition exits all states up the the LCCA |
 | test505.txml.scxml   | OK       | test that an internal transition does not exit its source state |
@@ -161,4 +161,4 @@
 | test579.txml.scxml   | OK       | test that default history content is executed correctly.   The Process MUST execute any executable content in the transition after the parent state's onentry handlers, and, in the case where the history pseudo-state is the target of an \<initial> transition,  the executable content inside the \<initial> transition.  However the Processor MUST execute this content only if there is no stored history.  Once the history state's parent state has been visited and exited, the default history content must not be executed |
 | test580.txml.scxml   | OK       | test that a history state never ends up part of the configuration |
 
-__Result__: 154 of 160 tests succeeded
+__Result__: 157 of 160 tests succeeded
