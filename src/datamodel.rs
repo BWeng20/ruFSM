@@ -189,7 +189,7 @@ pub trait Datamodel {
     }
 
     /// Get _ioprocessors.
-    fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>>;
+    fn get_io_processor(&mut self, name: &str) -> Option<Arc<Mutex<Box<dyn EventIOProcessor>>>>;
 
     /// Send an event via io-processor.
     /// Mainly here because of optimization reasons (spares copies).
@@ -352,7 +352,6 @@ pub trait Datamodel {
 ///   supported in the Null Data Model.
 pub struct NullDatamodel {
     pub global: GlobalDataAccess,
-    pub io_processors: HashMap<String, Box<dyn EventIOProcessor>>,
     pub state_name_to_id: HashMap<String, StateId>,
 }
 
@@ -360,7 +359,6 @@ impl NullDatamodel {
     pub fn new(global_data: GlobalDataAccess) -> NullDatamodel {
         NullDatamodel {
             global: global_data,
-            io_processors: HashMap::new(),
             state_name_to_id: HashMap::new(),
         }
     }
@@ -411,14 +409,15 @@ impl Datamodel for NullDatamodel {
         Err("unimplemented".to_string())
     }
 
-    fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
-        &mut self.io_processors
+    fn get_io_processor(&mut self, name: &str) -> Option<Arc<Mutex<Box<dyn EventIOProcessor>>>> {
+        self.global.lock().io_processors.get(name).cloned()
     }
 
     fn send(&mut self, ioc_processor: &str, target: &str, event: Event) -> bool {
-        let ioc = self.io_processors.get_mut(ioc_processor);
+        let ioc = self.get_io_processor(ioc_processor);
         if let Some(ic) = ioc {
-            ic.send(&self.global, target, event)
+            let mut icg = ic.lock().unwrap();
+            icg.send(&self.global, target, event)
         } else {
             false
         }

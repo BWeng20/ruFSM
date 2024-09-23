@@ -4,8 +4,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::mpsc::Sender;
-
-use log::info;
+use log::debug;
 
 use crate::datamodel::{Datamodel, GlobalDataAccess, ToAny};
 use crate::fsm::SessionId;
@@ -28,8 +27,9 @@ impl EventIOProcessorHandle {
     }
     pub fn shutdown(&mut self) {
         let cancel_event = Event::new_simple(EVENT_CANCEL_SESSION);
-        for (id, sender) in &self.fsms {
-            info!("Send cancel to fsm #{}", id);
+        for (_id, sender) in &self.fsms {
+            #[cfg(feature = "Debug")]
+            debug!("Send cancel to fsm #{}", _id);
             let _ = sender.send(cancel_event.get_copy());
         }
     }

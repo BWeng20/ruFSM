@@ -18,10 +18,15 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::{fmt, thread};
 #[cfg(test)]
-use std::{println as debug, println as info, println as error};
+use std::{println as debug, println as error};
 
 #[cfg(not(test))]
-use log::{debug, error, info};
+use log::error;
+
+#[cfg(not(test))]
+#[cfg(feature = "Debug")]
+use log::debug;
+
 use timer::Guard;
 
 use crate::datamodel::{
@@ -74,15 +79,6 @@ pub fn start_fsm_with_data_and_finish_mode(
     let externalQueue: BlockingQueue<Box<Event>> = BlockingQueue::new();
     let sender = externalQueue.sender.clone();
 
-    let mut vt: Vec<Box<dyn EventIOProcessor>> = Vec::new();
-    {
-        let executor_state_lock = executor.state.lock();
-        let guard = executor_state_lock.unwrap();
-        for p in &guard.processors {
-            vt.push(p.get_copy());
-        }
-    }
-
     let data_copy = data.to_vec();
     let session_id: SessionId = SESSION_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
     let mut session = ScxmlSession::new_without_join_handle(session_id, sender.clone());
@@ -109,6 +105,17 @@ pub fn start_fsm_with_data_and_finish_mode(
     };
 
     let global_data = session.global_data.clone();
+    {
+        let mut gc = global_data.lock();
+        let executor_state_lock = executor.state.lock();
+        let guard = executor_state_lock.unwrap();
+        for p in &guard.processors {
+            let pg = p.lock().unwrap();
+            for t in pg.get_types() {
+                gc.io_processors.insert( t.to_string(), p.clone());
+            }
+        }
+    }
 
     let thread = thread::Builder::new()
         .name(format!(
@@ -116,10 +123,11 @@ pub fn start_fsm_with_data_and_finish_mode(
             THREAD_ID_COUNTER.fetch_add(1, Ordering::Relaxed)
         ))
         .spawn(move || {
-            info!("SM starting...");
+            #[cfg(feature = "Debug")]
+            debug!("SM starting...");
             {
                 let mut datamodel =
-                    create_datamodel(sm.datamodel.as_str(), global_data, &vt, &options);
+                    create_datamodel(sm.datamodel.as_str(), global_data, &options);
                 {
                     let mut global = get_global!(datamodel);
                     global.externalQueue = externalQueue;
@@ -145,7 +153,8 @@ pub fn start_fsm_with_data_and_finish_mode(
                 }
                 sm.interpret(datamodel.deref_mut());
             }
-            info!("SM finished");
+            #[cfg(feature = "Debug")]
+            debug!("SM finished");
         });
 
     let _ = session.session_thread.insert(thread.unwrap());
@@ -981,6 +990,7 @@ pub struct GlobalData {
 
     /// Stores any delayed send (with a "sendid"), Key: sendid
     pub delayed_send: HashMap<String, Guard>,
+    pub io_processors: HashMap<String,Arc<Mutex<Box<dyn EventIOProcessor>>>>,
 }
 
 impl GlobalData {
@@ -1000,6 +1010,7 @@ impl GlobalData {
             final_configuration: None,
             environment: DataStore::new(),
             delayed_send: HashMap::new(),
+            io_processors: HashMap::new(),
         }
     }
 
@@ -1113,8 +1124,6 @@ pub struct Fsm {
     pub timer: timer::Timer,
 
     pub generate_id_count: u32,
-
-    pub print_transitions: bool,
 }
 
 impl Default for Fsm {
@@ -1187,7 +1196,6 @@ impl Fsm {
             executableContent: HashMap::new(),
             timer: timer::Timer::new(),
             generate_id_count: 0,
-            print_transitions: true,
         }
     }
 
@@ -1554,6 +1562,7 @@ impl Fsm {
                                 externalEvent = externalEventTmp;
                                 break;
                             } else {
+                                #[cfg(feature = "Debug")]
                                 debug!(
                                     "Ignore event {} from invoke {}",
                                     externalEventTmp.name, invoke_id
@@ -2021,18 +2030,19 @@ impl Fsm {
     ) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("microstep");
-        if self.print_transitions && enabledTransitions.size() > 0 {
+        #[cfg(feature = "Debug")]
+        if enabledTransitions.size() > 0 {
             if enabledTransitions.size() > 1 {
-                info!("Enabled Transitions:");
+                debug!("Enabled Transitions:");
                 for t in enabledTransitions.iterator() {
                     if let Some(transition) = self.transitions.get(t) {
-                        info!("\t{}", transition);
+                        debug!("\t{}", transition);
                     }
                 }
             } else {
                 let t = enabledTransitions.head();
                 if let Some(transition) = self.transitions.get(t) {
-                    info!("Enabled Transition {}", transition);
+                    debug!("Enabled Transition {}", transition);
                 }
             }
         }
@@ -3056,6 +3066,7 @@ impl Fsm {
         }
         datamodel.evaluate_params(&inv.params, &mut name_values);
 
+        #[cfg(feature = "Debug")]
         debug!(
             "Invoke: type '{}' invokeId '{}' src '{}' namelist '{:?}'",
             type_name, invokeId, src, name_values
@@ -3528,7 +3539,6 @@ impl Transition {
 pub fn create_datamodel(
     name: &str,
     global_data: GlobalDataAccess,
-    processors: &Vec<Box<dyn EventIOProcessor>>,
     options: &HashMap<String, String>,
 ) -> Box<dyn Datamodel> {
     match name.to_lowercase().as_str() {
@@ -3536,25 +3546,13 @@ pub fn create_datamodel(
         #[cfg(feature = "ECMAScript")]
         ECMA_SCRIPT_LC => {
             let mut ecma = Box::new(ECMAScriptDatamodel::new(global_data));
-            for p in processors {
-                for t in p.as_ref().get_types() {
-                    ecma.io_processors.insert(t.to_string(), p.get_copy());
-                }
-            }
             for (key, value) in options {
                 ecma.set_option(key.as_str(), value.as_str());
             }
             ecma
         }
         NULL_DATAMODEL_LC => {
-            let mut null_dm = Box::new(NullDatamodel::new(global_data));
-            for p in processors {
-                for t in p.as_ref().get_types() {
-                    null_dm.io_processors.insert(t.to_string(), p.get_copy());
-                }
-            }
-
-            null_dm
+            Box::new(NullDatamodel::new(global_data))
         }
         _ => panic!("Unsupported Data Model '{}'", name),
     }

@@ -637,10 +637,10 @@ impl ExecutableContent for SendParameters {
         };
 
         let result = if delay_ms > 0 {
-            let iop_opt = datamodel.get_io_processors().get(type_val_str);
+            let iop_opt = datamodel.get_io_processor(type_val_str);
             if let Some(iop) = iop_opt {
+                let iopc = iop.clone();
                 info!("schedule '{}' for {}", event, delay_ms);
-                let mut iop_copy = iop.get_copy();
                 let global_clone = datamodel.global().clone();
                 let send_id_clone = send_id.clone();
                 let tg = fsm.schedule(delay_ms, move || {
@@ -648,7 +648,7 @@ impl ExecutableContent for SendParameters {
                     if let Some(sid) = &send_id_clone {
                         global_clone.lock().delayed_send.remove(sid);
                     }
-                    iop_copy.send(&global_clone, target.as_str(), event.clone());
+                    iopc.lock().unwrap().send(&global_clone, target.as_str(), event.clone());
                 });
                 if let Some(g) = tg {
                     if let Some(sid) = &send_id {

@@ -35,6 +35,7 @@ Trace = []
 Debug_Reader = []
 Debug_Serializer = []
 xml = ["quick-xml", "reqwest"]
+Debug = []
 
 [dependencies]
 log = "0.4"

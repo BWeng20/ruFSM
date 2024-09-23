@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::string::ToString;
 #[cfg(test)]
 use std::{println as debug, println as info, println as warn, println as error};
+use std::sync::{Arc, Mutex};
 
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
@@ -53,7 +54,6 @@ pub struct ECMAScriptDatamodel {
     pub global_data: GlobalDataAccess,
     pub context: Context,
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
-    pub io_processors: HashMap<String, Box<dyn EventIOProcessor>>,
     pub strict_mode: bool,
 }
 
@@ -99,7 +99,6 @@ impl ECMAScriptDatamodel {
             global_data,
             context: ContextBuilder::new().build().unwrap(),
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
-            io_processors: HashMap::new(),
             strict_mode: false,
         }
     }
@@ -108,7 +107,8 @@ impl ECMAScriptDatamodel {
         if let Some(ecma_option) = name.strip_prefix(ECMA_OPTION_INFIX) {
             match ecma_option {
                 ECMA_OPTION_STRICT_POSTFIX => {
-                    info!("Running ECMA in strict mode");
+                    #[cfg(feature = "Debug")]
+                    debug!("Running ECMA in strict mode");
                     self.strict_mode = true;
                     self.context.strict(true);
                 }
@@ -154,12 +154,14 @@ impl ECMAScriptDatamodel {
         match result {
             Ok(res) => {
                 if res.is_undefined() {
+                    #[cfg(feature = "Debug")]
                     debug!("Execute: {} => undefined", script);
                     Ok("".to_string())
                 } else {
                     match res.to_string(&mut self.context) {
                         Ok(str) => {
                             let r = str.to_std_string_escaped();
+                            #[cfg(feature = "Debug")]
                             debug!("Execute: {} => {}", script, r);
                             Ok(r)
                         }
@@ -274,7 +276,8 @@ impl ECMAScriptDatamodel {
         for arg in args {
             msg.push_str(js_to_string(arg, ctx).as_str());
         }
-        info!("{}", msg);
+        #[cfg(feature = "Debug")]
+        debug!("{}", msg);
         Ok(JsValue::Null)
     }
 }
@@ -328,9 +331,9 @@ impl Datamodel for ECMAScriptDatamodel {
         {
             // Create I/O-Processor Objects.
             let io_processors_js = JsMap::new(ctx);
-            for (name, processor) in &self.io_processors {
+            for (name, processor) in &self.global_data.lock().io_processors {
                 let processor_js = JsMap::new(ctx);
-                let location = js_string!(processor.get_location(session_id));
+                let location = js_string!(processor.lock().unwrap().get_location(session_id));
                 _ = processor_js.create_data_property(js_string!("location"), location, ctx);
                 // @TODO
                 _ = io_processors_js.create_data_property(
@@ -484,14 +487,15 @@ impl Datamodel for ECMAScriptDatamodel {
         }
     }
 
-    fn get_io_processors(&mut self) -> &mut HashMap<String, Box<dyn EventIOProcessor>> {
-        &mut self.io_processors
+    fn get_io_processor(&mut self, name: &str) -> Option<Arc<Mutex<Box<dyn EventIOProcessor>>>> {
+        self.global_data.lock().io_processors.get(name).cloned()
     }
 
     fn send(&mut self, ioc_processor: &str, target: &str, event: Event) -> bool {
-        let ioc = self.io_processors.get_mut(ioc_processor);
+        let ioc = self.get_io_processor(ioc_processor);
         if let Some(ic) = ioc {
-            ic.send(&self.global_data, target, event)
+            let mut icg = ic.lock().unwrap();
+            icg.send(&self.global_data, target, event)
         } else {
             false
         }
@@ -521,6 +525,7 @@ impl Datamodel for ECMAScriptDatamodel {
         index: &str,
         execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
     ) -> bool {
+        #[cfg(feature = "Debug")]
         debug!("ForEach: array: {}", array_expression);
         match self.context.eval(Source::from_bytes(array_expression)) {
             Ok(r) => {

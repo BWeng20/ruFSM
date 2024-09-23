@@ -7,13 +7,11 @@ use std::fs::File;
 use std::io::BufReader;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
-#[cfg(test)]
-use std::println as info;
 use std::sync::mpsc::{SendError, Sender};
 use std::sync::{Arc, Mutex};
 
-#[cfg(not(test))]
-use log::info;
+#[cfg(feature = "Debug")]
+use log::debug;
 
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
@@ -32,7 +30,7 @@ use crate::tracer::TraceMode;
 
 #[derive(Default)]
 pub struct ExecuteState {
-    pub processors: Vec<Box<dyn EventIOProcessor>>,
+    pub processors: Vec<Arc<Mutex<Box<dyn EventIOProcessor>>>>,
     pub sessions: HashMap<SessionId, ScxmlSession>,
     pub datamodel_options: HashMap<String, String>,
 }
@@ -57,7 +55,7 @@ pub struct FsmExecutor {
 
 impl FsmExecutor {
     pub fn add_processor(&mut self, processor: Box<dyn EventIOProcessor>) {
-        self.state.lock().unwrap().processors.push(processor);
+        self.state.lock().unwrap().processors.push(Arc::new(Mutex::new(processor)));
     }
 
     pub fn new_without_io_processor() -> FsmExecutor {
@@ -120,8 +118,8 @@ impl FsmExecutor {
     pub fn shutdown(&mut self) {
         let mut guard = self.state.lock().unwrap();
         while !guard.processors.is_empty() {
-            if let Some(mut pp) = guard.processors.pop() {
-                pp.shutdown();
+            if let Some(pp) = guard.processors.pop() {
+                pp.lock().unwrap().shutdown();
             }
         }
     }
@@ -158,13 +156,15 @@ impl FsmExecutor {
         // Use reader to parse the scxml file:
         #[cfg(feature = "xml")]
         if extension.eq_ignore_ascii_case("scxml") || extension.eq_ignore_ascii_case("xml") {
-            info!("Loading FSM from XML {}", uri);
+            #[cfg(feature = "Debug")]
+            debug!("Loading FSM from XML {}", uri);
             sm = scxml_reader::parse_from_uri(uri.to_string(), &self.include_paths);
         }
 
         #[cfg(feature = "serializer")]
         if extension.eq_ignore_ascii_case("rfsm") {
-            info!("Loading FSM from binary {}", uri);
+            #[cfg(feature = "Debug")]
+            debug!("Loading FSM from binary {}", uri);
             sm = match File::open(uri) {
                 Ok(f) => {
                     let protocol = DefaultProtocolReader::new(BufReader::new(f));
@@ -201,7 +201,8 @@ impl FsmExecutor {
         finish_mode: FinishMode,
         #[cfg(feature = "Trace")] trace: TraceMode,
     ) -> Result<ScxmlSession, String> {
-        info!("Loading FSM from XML");
+        #[cfg(feature = "Debug")]
+        debug!("Loading FSM from XML");
 
         // Use reader to parse the XML:
         #[cfg(feature = "xml")]

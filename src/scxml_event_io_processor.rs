@@ -2,13 +2,15 @@
 //! I/O Processor implementation for type "http://www.w3.org/TR/scxml/#SCXMLEventProcessor" (or short-cut "scxml").
 //! See [W3C:SCXML - SCXML Event I/O Processor](/doc/W3C_SCXML_2024_07_13/index.html#/#SCXMLEventProcessor).
 
+#[cfg(feature = "Debug")]
+#[cfg(not(test))]
+use log::debug;
+
 use log::error;
 use std::fmt::Debug;
-#[cfg(test)]
-use std::println as info;
 
-#[cfg(not(test))]
-use log::info;
+#[cfg(test)]
+use std::println as debug;
 
 use crate::datamodel::{GlobalDataAccess, GlobalDataLock, SCXML_EVENT_PROCESSOR};
 use crate::event_io_processor::{EventIOProcessor, EventIOProcessorHandle};
@@ -45,7 +47,8 @@ pub struct ScxmlEventIOProcessor {
 
 impl ScxmlEventIOProcessor {
     pub fn new() -> ScxmlEventIOProcessor {
-        info!("Scxml Event Processor starting");
+        #[cfg(feature = "Debug")]
+        debug!("Scxml Event Processor starting");
 
         ScxmlEventIOProcessor {
             location: SCXML_TARGET_SESSION_ID_PREFIX.to_string(),
@@ -64,7 +67,8 @@ impl ScxmlEventIOProcessor {
                 panic!("Executor not available");
             }
             Some(executor) => {
-                info!("Send '{}' to Session #{}", event, session_id);
+                #[cfg(feature = "Debug")]
+                debug!("Send '{}' to Session #{}", event, session_id);
                 match executor.send_to_session(session_id, event.clone()) {
                     Ok(_) => {
                         // TODO
@@ -200,7 +204,8 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     /// This processor doesn't really need a shutdown.
     /// The implementation does nothing.
     fn shutdown(&mut self) {
-        info!("Scxml Event IO Processor shutdown...");
+        #[cfg(feature = "Debug")]
+        debug!("Scxml Event IO Processor shutdown...");
         self.handle.shutdown();
     }
 }
