@@ -20,6 +20,8 @@ See [Test Readme](test/w3c/README.md) and the [Test Report](test/w3c/REPORT.MD).
 > 
 > + XML inside &lt;content> is not handled according to _[content_and_namespaces](doc/W3C_SCXML_2024_07_13/index.html#content_and_namespaces)_. The content inside &lt;content> is not
 >  interpreted and send to the receiver unmodified.
+> + BasicHTTP Event I/O processor doesn't set the '_event.raw' member, that is needed for optional 
+>   tests 178, 509, 519, 520 and 534.
 
 ## SW Design
 

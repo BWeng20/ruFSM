@@ -30,9 +30,11 @@ use crate::datamodel::{
     EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::{EventIOProcessor, SYS_IO_PROCESSORS};
-use crate::executable_content::{
-    DefaultExecutableContentTracer, ExecutableContent, ExecutableContentTracer,
-};
+
+#[cfg(feature = "Trace")]
+use crate::executable_content::DefaultExecutableContentTracer;
+
+use crate::executable_content::{ ExecutableContent, ExecutableContentTracer };
 use crate::fsm::{Event, ExecutableContentId, Fsm, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
@@ -98,7 +100,10 @@ impl ECMAScriptDatamodel {
             data: DataStore::new(),
             global_data,
             context: ContextBuilder::new().build().unwrap(),
+            #[cfg(feature = "Trace")]
             tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
+            #[cfg(not(feature = "Trace"))]
+            tracer: None,
             strict_mode: false,
         }
     }

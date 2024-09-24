@@ -9,6 +9,10 @@ use std::{println as info, println as warn};
 
 use lazy_static::lazy_static;
 use log::error;
+
+#[cfg(feature = "Debug")]
+use log::debug;
+
 #[cfg(not(test))]
 use log::{info, warn};
 use regex::Regex;
@@ -640,11 +644,13 @@ impl ExecutableContent for SendParameters {
             let iop_opt = datamodel.get_io_processor(type_val_str);
             if let Some(iop) = iop_opt {
                 let iopc = iop.clone();
-                info!("schedule '{}' for {}", event, delay_ms);
+                #[cfg(feature = "Debug")]
+                debug!("schedule '{}' for {}", event, delay_ms);
                 let global_clone = datamodel.global().clone();
                 let send_id_clone = send_id.clone();
                 let tg = fsm.schedule(delay_ms, move || {
-                    info!("send '{}' to '{}'", event, target);
+                    #[cfg(feature = "Debug")]
+                    debug!("send '{}' to '{}'", event, target);
                     if let Some(sid) = &send_id_clone {
                         global_clone.lock().delayed_send.remove(sid);
                     }
@@ -667,7 +673,8 @@ impl ExecutableContent for SendParameters {
                 false
             }
         } else {
-            info!("send '{}' to '{}'", event, target);
+            #[cfg(feature = "Debug")]
+            debug!("send '{}' to '{}'", event, target);
             datamodel.send(type_val_str, target.as_str(), event.clone())
         };
 

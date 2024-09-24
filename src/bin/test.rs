@@ -1,5 +1,8 @@
 use std::path::Path;
 
+#[cfg(feature = "Debug")]
+use log::debug;
+
 use rfsm::fsm::Fsm;
 #[cfg(feature = "xml")]
 use rfsm::scxml_reader;
@@ -94,10 +97,12 @@ async fn main() {
                     }
                     test_spec_file = test_spec.file.clone().unwrap();
                     match load_fsm(test_spec_file.as_str(), &include_paths) {
+                        #[allow(unused_mut)]
                         Ok(mut fsm) => {
                             #[cfg(feature = "Trace")]
                             fsm.tracer.enable_trace(trace);
-                            println!("Loaded {}", test_spec_file);
+                            #[cfg(feature = "Debug")]
+                            debug!("Loaded {}", test_spec_file);
                             Some(fsm)
                         }
                         Err(_err) => abort_test(

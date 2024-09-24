@@ -32,7 +32,7 @@ impl EventIOProcessorHandle {
         #[allow(unused_variables)]
         for (id, sender) in &self.fsms {
             #[cfg(feature = "Debug")]
-            dbug!("Send cancel to fsm #{}", id);
+            debug!("Send cancel to fsm #{}", id);
             let _ = sender.send(cancel_event.get_copy());
         }
     }

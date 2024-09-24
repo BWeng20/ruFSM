@@ -4,7 +4,11 @@
 use crate::serializer::default_protocol_definitions::*;
 use crate::serializer::protocol_reader::ProtocolReader;
 use byteorder::ReadBytesExt;
-use log::{debug, error};
+
+#[cfg(feature = "Debug_Serializer")]
+use log::debug;
+
+use log::error;
 use std::io::Read;
 
 pub struct DefaultProtocolReader<R>

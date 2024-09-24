@@ -4,7 +4,11 @@
 use crate::serializer::default_protocol_definitions::*;
 use crate::serializer::protocol_writer::ProtocolWriter;
 use byteorder::WriteBytesExt;
-use log::{debug, error};
+
+#[cfg(feature = "Debug_Serializer")]
+use log::debug;
+
+use log::error;
 use std::io::Write;
 
 pub struct DefaultProtocolWriter<W> {

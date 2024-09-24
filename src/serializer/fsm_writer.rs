@@ -1,6 +1,7 @@
 //! Module to write a persistent binary version of a Fsm.\
 //! The format is independent of the platform byte-order
 
+#[cfg(feature = "Debug_Serializer")]
 use log::debug;
 use std::io::Write;
 

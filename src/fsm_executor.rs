@@ -5,7 +5,7 @@ extern crate core;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::net::{IpAddr, Ipv4Addr};
+
 use std::path::PathBuf;
 use std::sync::mpsc::{SendError, Sender};
 use std::sync::{Arc, Mutex};
@@ -13,6 +13,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "Debug")]
 use log::debug;
 
+#[cfg(feature = "BasicHttpEventIOProcessor")]
+use std::net::{IpAddr, Ipv4Addr};
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
 use crate::datamodel::DATAMODEL_OPTION_PREFIX;
