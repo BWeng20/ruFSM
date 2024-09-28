@@ -356,7 +356,6 @@ where
 
 #[cfg(test)]
 mod tests {
-
     pub const FSM_SRC: &str = r###"
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A Simple FSM that wait for some event -->
@@ -382,7 +381,6 @@ mod tests {
     use crate::serializer::default_protocol_reader::DefaultProtocolReader;
     use crate::serializer::default_protocol_writer::DefaultProtocolWriter;
     use crate::serializer::fsm_writer::FsmWriter;
-    use hyper::body::Buf;
 
     struct TestEnvironment {
         fsm: Box<Fsm>,
@@ -407,7 +405,7 @@ mod tests {
     #[test]
     fn shall_read_fsm<'a>() {
         let env = setup();
-        let r = Box::new(DefaultProtocolReader::new(env.buffer.reader()));
+        let r = Box::new(DefaultProtocolReader::new(&env.buffer[..]));
         let mut fsm_reader = FsmReader::new(r);
         let result = fsm_reader.read();
 
