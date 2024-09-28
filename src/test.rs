@@ -209,10 +209,8 @@ pub fn run_test_manual(
 pub fn run_test_manual_with_send(
     test_name: &str,
     options: &HashMap<&str, String>,
-    #[cfg(feature = "Trace")]
-    mut fsm: Box<Fsm>,
-    #[cfg(not(feature = "Trace"))]
-    fsm: Box<Fsm>,
+    #[cfg(feature = "Trace")] mut fsm: Box<Fsm>,
+    #[cfg(not(feature = "Trace"))] fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
     #[cfg(feature = "Trace")] trace_mode: TraceMode,
     timeout: u64,

@@ -112,7 +112,7 @@ pub fn start_fsm_with_data_and_finish_mode(
         for p in &guard.processors {
             let pg = p.lock().unwrap();
             for t in pg.get_types() {
-                gc.io_processors.insert( t.to_string(), p.clone());
+                gc.io_processors.insert(t.to_string(), p.clone());
             }
         }
     }
@@ -126,8 +126,7 @@ pub fn start_fsm_with_data_and_finish_mode(
             #[cfg(feature = "Debug")]
             debug!("SM starting...");
             {
-                let mut datamodel =
-                    create_datamodel(sm.datamodel.as_str(), global_data, &options);
+                let mut datamodel = create_datamodel(sm.datamodel.as_str(), global_data, &options);
                 {
                     let mut global = get_global!(datamodel);
                     global.externalQueue = externalQueue;
@@ -1014,7 +1013,7 @@ pub struct GlobalData {
 
     /// Stores any delayed send (with a "sendid"), Key: sendid
     pub delayed_send: HashMap<String, Guard>,
-    pub io_processors: HashMap<String,Arc<Mutex<Box<dyn EventIOProcessor>>>>,
+    pub io_processors: HashMap<String, Arc<Mutex<Box<dyn EventIOProcessor>>>>,
 }
 
 impl GlobalData {
@@ -1349,7 +1348,7 @@ impl Fsm {
 
             // Initialize session variables "_name" and "_sessionid"
 
-            let session_id = datamodel.global().lock().session_id;
+            let session_id = datamodel.global_s().lock().session_id;
             datamodel
                 .initialize_read_only(SESSION_ID_VARIABLE_NAME, session_id.to_string().as_str());
             datamodel.initialize_read_only(SESSION_NAME_VARIABLE_NAME, self.name.as_str());
@@ -1363,7 +1362,11 @@ impl Fsm {
 
             datamodel.implement_mandatory_functionality(self);
 
-            self.initialize_data_models_recursive(datamodel, self.pseudo_root, self.binding == BindingType::Early);
+            self.initialize_data_models_recursive(
+                datamodel,
+                self.pseudo_root,
+                self.binding == BindingType::Early,
+            );
         }
         self.executeGlobalScriptElement(datamodel);
 
@@ -2279,7 +2282,7 @@ impl Fsm {
                 }
             }
             if to_init != 0 {
-                datamodel.initializeDataModel(self, to_init, true );
+                datamodel.initializeDataModel(self, to_init, true);
             }
             let mut exe = Vec::new();
             {
@@ -3575,9 +3578,7 @@ pub fn create_datamodel(
             }
             ecma
         }
-        NULL_DATAMODEL_LC => {
-            Box::new(NullDatamodel::new(global_data))
-        }
+        NULL_DATAMODEL_LC => Box::new(NullDatamodel::new(global_data)),
         _ => panic!("Unsupported Data Model '{}'", name),
     }
 }

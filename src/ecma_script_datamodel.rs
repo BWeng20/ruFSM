@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::string::ToString;
+use std::sync::{Arc, Mutex};
 #[cfg(test)]
 use std::{println as debug, println as info, println as warn, println as error};
-use std::sync::{Arc, Mutex};
 
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
@@ -34,7 +34,7 @@ use crate::event_io_processor::{EventIOProcessor, SYS_IO_PROCESSORS};
 #[cfg(feature = "Trace")]
 use crate::executable_content::DefaultExecutableContentTracer;
 
-use crate::executable_content::{ ExecutableContent, ExecutableContentTracer };
+use crate::executable_content::{ExecutableContent, ExecutableContentTracer};
 use crate::fsm::{Event, ExecutableContentId, Fsm, State, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
@@ -300,7 +300,7 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
-        let session_id = self.global().lock().session_id;
+        let session_id = self.global_s().lock().session_id;
         let ctx = &mut self.context;
 
         // Implement "In" function.

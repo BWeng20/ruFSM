@@ -8,12 +8,10 @@ use crate::datamodel::GlobalDataAccess;
 
 pub struct ActionContext {
     pub global: GlobalDataAccess,
-
 }
 
 /// Trait to inject custom actions into the datamodel.
 pub trait Action {
-
     /// Executes the action.\
-    fn execute(&mut self, context: &mut ActionContext) -> &mut Result<String,String>;
+    fn execute(&mut self, context: &mut ActionContext) -> &mut Result<String, String>;
 }

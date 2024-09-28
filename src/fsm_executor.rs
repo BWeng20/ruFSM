@@ -14,8 +14,6 @@ use std::sync::{Arc, Mutex};
 use log::debug;
 
 #[cfg(feature = "BasicHttpEventIOProcessor")]
-use std::net::{IpAddr, Ipv4Addr};
-#[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
 use crate::datamodel::DATAMODEL_OPTION_PREFIX;
 use crate::event_io_processor::EventIOProcessor;
@@ -29,6 +27,8 @@ use crate::serializer::default_protocol_reader::DefaultProtocolReader;
 use crate::serializer::fsm_reader::FsmReader;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
+#[cfg(feature = "BasicHttpEventIOProcessor")]
+use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Default)]
 pub struct ExecuteState {
@@ -57,7 +57,11 @@ pub struct FsmExecutor {
 
 impl FsmExecutor {
     pub fn add_processor(&mut self, processor: Box<dyn EventIOProcessor>) {
-        self.state.lock().unwrap().processors.push(Arc::new(Mutex::new(processor)));
+        self.state
+            .lock()
+            .unwrap()
+            .processors
+            .push(Arc::new(Mutex::new(processor)));
     }
 
     pub fn new_without_io_processor() -> FsmExecutor {

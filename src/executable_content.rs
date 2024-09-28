@@ -646,7 +646,7 @@ impl ExecutableContent for SendParameters {
                 let iopc = iop.clone();
                 #[cfg(feature = "Debug")]
                 debug!("schedule '{}' for {}", event, delay_ms);
-                let global_clone = datamodel.global().clone();
+                let global_clone = datamodel.global_s().clone();
                 let send_id_clone = send_id.clone();
                 let tg = fsm.schedule(delay_ms, move || {
                     #[cfg(feature = "Debug")]
@@ -654,7 +654,9 @@ impl ExecutableContent for SendParameters {
                     if let Some(sid) = &send_id_clone {
                         global_clone.lock().delayed_send.remove(sid);
                     }
-                    iopc.lock().unwrap().send(&global_clone, target.as_str(), event.clone());
+                    iopc.lock()
+                        .unwrap()
+                        .send(&global_clone, target.as_str(), event.clone());
                 });
                 if let Some(g) = tg {
                     if let Some(sid) = &send_id {

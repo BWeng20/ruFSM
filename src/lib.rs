@@ -47,8 +47,8 @@ mod event_io_processor;
 #[cfg(feature = "Trace")]
 pub mod tracer;
 
-pub mod test;
 mod actions;
+pub mod test;
 
 #[cfg(feature = "Trace")]
 pub fn handle_trace(sender: &mut Sender<Box<Event>>, opt: &str, enable: bool) {
