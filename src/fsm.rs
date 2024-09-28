@@ -316,7 +316,7 @@ impl<T: Clone + PartialEq> List<T> {
 /// Note that the algorithm assumes a Lisp-like semantics in which the empty Set null is equivalent
 /// to boolean 'false' and all other entities are equivalent to 'true'.
 ///
-/// The notation [...] is used as a list constructor, so that '[t]' denotes a list whose only member
+/// The notation \[...] is used as a list constructor, so that '\[t]' denotes a list whose only member
 /// is the object t.
 #[derive(Debug, Clone, Default)]
 pub struct OrderedSet<T> {
@@ -529,8 +529,8 @@ impl<T> BlockingQueue<T> {
 }
 
 /// *W3C says*:
-/// table[foo] returns the value associated with foo.
-/// table[foo] = bar sets the value associated with foo to be bar.
+/// table\[foo] returns the value associated with foo.
+/// table\[foo] = bar sets the value associated with foo to be bar.
 /// #Actual implementation:
 /// Instead of the Operators, methods are used.
 #[derive(Debug, Default)]
@@ -665,17 +665,41 @@ impl ParamPair {
 
 /// *W3C says*:
 /// ##The Internal Structure of Events.
-/// Events have an internal structure which is reflected in the _event variable. This variable can be accessed to condition transitions (via boolean expressions in the 'cond' attribute) or to update the data model (via <assign>), etc.
+/// Events have an internal structure which is reflected in the _event variable. This variable can be
+/// accessed to condition transitions (via boolean expressions in the 'cond' attribute) or to update
+/// the data model (via \<assign\>), etc.
 ///
-/// The SCXML Processor must ensure that the following fields are present in all events, whether internal or external.
+/// The SCXML Processor must ensure that the following fields are present in all events, whether
+/// internal or external.
 ///
-/// - name. This is a character string giving the name of the event. The SCXML Processor must set the name field to the name of this event. It is what is matched against the 'event' attribute of \<transition\>. Note that transitions can do additional tests by using the value of this field inside boolean expressions in the 'cond' attribute.
-/// - type. This field describes the event type. The SCXML Processor must set it to: "platform" (for events raised by the platform itself, such as error events), "internal" (for events raised by \<raise\> and \<send\> with target '_internal') or "external" (for all other events).
-/// - sendid. If the sending entity has specified a value for this, the Processor must set this field to that value (see C Event I/O Processors for details). Otherwise, in the case of error events triggered by a failed attempt to send an event, the Processor must set this field to the send id of the triggering <send> element. Otherwise it must leave it blank.
-/// - origin. This is a URI, equivalent to the 'target' attribute on the \<send\> element. For external events, the SCXML Processor should set this field to a value which, when used as the value of 'target', will allow the receiver of the event to <send> a response back to the originating entity via the Event I/O Processor specified in 'origintype'. For internal and platform events, the Processor must leave this field blank.
-/// - origintype. This is equivalent to the 'type' field on the <send> element. For external events, the SCXML Processor should set this field to a value which, when used as the value of 'type', will allow the receiver of the event to <send> a response back to the originating entity at the URI specified by 'origin'. For internal and platform events, the Processor must leave this field blank.
-/// - invokeid. If this event is generated from an invoked child process, the SCXML Processor must set this field to the invoke id of the invocation that triggered the child process. Otherwise it must leave it blank.
-/// - data. This field contains whatever data the sending entity chose to include in this event. The receiving SCXML Processor should reformat this data to match its data model, but must not otherwise modify it. If the conversion is not possible, the Processor must leave the field blank and must place an error 'error.execution' in the internal event queue.
+/// - name. This is a character string giving the name of the event. The SCXML Processor must set
+///   the name field to the name of this event. It is what is matched against the 'event' attribute
+///   of \<transition\>. Note that transitions can do additional tests by using the value of this
+///   field inside boolean expressions in the 'cond' attribute.
+/// - type. This field describes the event type. The SCXML Processor must set it to: "platform"
+///   (for events raised by the platform itself, such as error events), "internal" (for events
+///   raised by \<raise\> and \<send\> with target '_internal') or "external" (for all other events).
+/// - sendid. If the sending entity has specified a value for this, the Processor must set this
+///   field to that value (see C Event I/O Processors for details). Otherwise, in the case of error
+///   events triggered by a failed attempt to send an event, the Processor must set this field to
+///   the send id of the triggering \<send\> element. Otherwise it must leave it blank.
+/// - origin. This is a URI, equivalent to the 'target' attribute on the \<send\> element. For
+///   external events, the SCXML Processor should set this field to a value which, when used as the
+///   value of 'target', will allow the receiver of the event to \<send\> a response back to the
+///   originating entity via the Event I/O Processor specified in 'origintype'. For internal and
+///   platform events, the Processor must leave this field blank.
+/// - origintype. This is equivalent to the 'type' field on the \<send\> element. For external events,
+///   the SCXML Processor should set this field to a value which, when used as the value of 'type',
+///   will allow the receiver of the event to \<send\> a response back to the originating entity at
+///   the URI specified by 'origin'. For internal and platform events, the Processor must leave this
+///   field blank.
+/// - invokeid. If this event is generated from an invoked child process, the SCXML Processor must
+///   set this field to the invoke id of the invocation that triggered the child process. Otherwise
+///   it must leave it blank.
+/// - data. This field contains whatever data the sending entity chose to include in this event.
+///   The receiving SCXML Processor should reformat this data to match its data model, but must not
+///   otherwise modify it. If the conversion is not possible, the Processor must leave the field
+///   blank and must place an error 'error.execution' in the internal event queue.
 ///
 #[derive(Debug, Clone, Default)]
 pub struct Event {
@@ -3270,15 +3294,15 @@ impl DoneData {
 /// |initial|false|MUST NOT be specified in conjunction with the \<initial\> element. MUST NOT occur in atomic states.|IDREFS|none|A legal state specification. See 3.11 Legal State Configurations and Specifications for details.|The id of the default initial state (or states) for this state.|
 ///
 /// 3.3.2 Children
-/// - \<onentry\> Optional element holding executable content to be run upon entering this <state>.
+/// - \<onentry\> Optional element holding executable content to be run upon entering this \<state\>.
 ///    Occurs 0 or more times. See 3.8 \<onentry\>
-/// - \<onexit\> Optional element holding executable content to be run when exiting this <state>.
+/// - \<onexit\> Optional element holding executable content to be run when exiting this \<state\>.
 ///    Occurs 0 or more times. See 3.9 \<onexit\>
 /// - \<transition\> Defines an outgoing transition from this state. Occurs 0 or more times.
-///    See 3.5 <transition>
+///    See 3.5 \<transition\>
 /// - \<initial\> In states that have substates, an optional child which identifies the default
 ///    initial state. Any transition which takes the parent state as its target will result in the
-///    state machine also taking the transition contained inside the <initial> element.\
+///    state machine also taking the transition contained inside the \<initial\> element.\
 ///    See 3.6 \<initial\>
 /// - \<state\> Defines a sequential substate of the parent state. Occurs 0 or more times.
 /// - \<parallel\> Defines a parallel substate. Occurs 0 or more times. See 3.4 \<parallel\>

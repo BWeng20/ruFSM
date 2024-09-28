@@ -1,5 +1,5 @@
 //! Implementation of the SCXML I/O Event Processor.\
-//! I/O Processor implementation for type "http://www.w3.org/TR/scxml/#SCXMLEventProcessor" (or short-cut "scxml").
+//! I/O Processor implementation for type "<http://www.w3.org/TR/scxml/#SCXMLEventProcessor>" (or short-cut "scxml").
 //! See [W3C:SCXML - SCXML Event I/O Processor](/doc/W3C_SCXML_2024_07_13/index.html#/#SCXMLEventProcessor).
 
 #[cfg(feature = "Debug")]

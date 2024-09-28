@@ -70,7 +70,7 @@ pub fn include_path_from_arguments(
 /// *Attributes:*
 /// + __initial__ A legal state specification. See 3.11 Legal State Configurations and Specifications for details. If not specified, the default initial state is the first child state in document order.
 /// + __name__ Any valid NMTOKEN. The name of this state machine. It is for purely informational purposes.
-/// + __xmlns__ The value MUST be "http://www.w3.org/2005/07/scxml".
+/// + __xmlns__ The value MUST be '<http://www.w3.org/2005/07/scxml>'.
 /// + __version__ Decimal, The value MUST be "1.0".
 /// + __datamodel__ NMTOKEN, platform-specific, "null", "ecmascript", "xpath" or other platform-defined values.
 /// + __binding__ "early" or "late", default is "early". See 5.3.3 Data Binding for details.
@@ -115,10 +115,12 @@ pub const ATTR_ID: &str = "id";
 /// + __datamodel__ Defines part or all of the data model. Occurs 0 or 1 times.
 /// + __invoke__ Invokes an external service. Occurs 0 or more times.
 ///
-/// [__Definition__: An atomic state is a <state> that has no <state>, <parallel> or <final> children.]\
-/// [__Definition__: A compound state is a <state> that has <state>, <parallel>, or <final> children (or a combination of these).]\
-/// [__Definition__: The default initial state(s) of a compound state are those specified by the 'initial' attribute or <initial> element, if either is present. Otherwise it is the state's first child state in document order. ]\
-/// In a conformant SCXML document, a compound state may specify either an "initial" attribute or an <initial> element, but not both.
+/// \[__Definition__: An atomic state is a \<state> that has no \<state>, \<parallel> or \<final> children.]\
+/// \[__Definition__: A compound state is a \<state> that has \<state>, \<parallel>, or \<final> children
+/// (or a combination of these).]\
+/// \[__Definition__: The default initial state(s) of a compound state are those specified by the 'initial' attribute or
+/// \<initial\> element, if either is present. Otherwise it is the state's first child state in document order. ]\
+/// In a conformant SCXML document, a compound state may specify either an "initial" attribute or an \<initial\> element, but not both.
 /// See 3.6 \<initial\> for a discussion of the difference between the two notations.
 ///
 pub const TAG_STATE: &str = "state";
@@ -157,15 +159,15 @@ pub const TAG_RAISE: &str = "raise";
 ///                  the result as if it had been entered as the value of 'event'.
 ///                  If the type is "*http:\/\/www\.w3.org/TR/scxml/#SCXMLEventProcessor*", either this attribute or 'event' must be present. Must not occur with 'event'.
 /// + __target__     A valid target URI. The unique identifier of the message target that the platform should send the event to. Must not occur with 'targetexpr'.
-///                  See [6.2.4 The Target of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTargets) for details.
-///                  See [SCXMLEventProcessor](/doc/W3C_SCXML_2024_07_13/index.html#SCXMLEventProcessor) for details about predefined targets.
+///                  See \[6.2.4 The Target of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTargets) for details.
+///                  See \[SCXMLEventProcessor](/doc/W3C_SCXML_2024_07_13/index.html#SCXMLEventProcessor) for details about predefined targets.
 /// + __targetexpr__ An expression evaluating to a valid target URI A dynamic alternative to 'target'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it
 ///                  had been entered as the value of 'target'. Must not occur with 'target'.
 /// + __type__       The URI that identifies the transport mechanism for the message. Must not occur with 'typeexpr'.
-///                  See [6.2.5 The Type of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTypes).
+///                  See \[6.2.5 The Type of Send](/doc/W3C_SCXML_2024_07_13/index.html#SendTypes).
 /// + __typeexpr__   A dynamic alternative to 'type'. If this attribute is present, the SCXML Processor must evaluate it when the parent \<send\> element is evaluated and treat the result as if it had been
 ///                  entered as the value of 'type'. Must not occur with 'type'.
-/// + __id__         Any valid token A string literal to be used as the identifier for this instance of <send>. Must not occur with 'idlocation'.
+/// + __id__         Any valid token A string literal to be used as the identifier for this instance of \<send\>. Must not occur with 'idlocation'.
 /// + __idlocation__ Any location expression evaluating to a data model location in which a system-generated id can be stored. See below for details. Must not occur with 'id'.
 /// + __delay__      A time designation as defined in CSS2 format (RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
 ///                  Indicates how long the processor should wait before dispatching the message.
@@ -183,14 +185,20 @@ pub const TAG_RAISE: &str = "raise";
 /// + __content__ The SCXML Processor must evaluate this element when the parent \<send\> element is evaluated and pass the resulting data to the external service when the message
 ///             is delivered. Occurs 0 or 1 times.
 ///
-/// A conformant SCXML document must specify exactly one of 'event', 'eventexpr' and \<content\>. A conformant document must not specify "namelist" or \<param\> with \<content\>.\
-/// The SCXML Processor must include all attributes and values provided by \<param\> or 'namelist' even if duplicates occur.\
-/// If 'idlocation' is present, the SCXML Processor must generate an id when the parent \<send\> element is evaluated and store it in this location. See [3.14 IDs](/doc/W3C_SCXML_2024_07_13/index.html#IDs) for details.\
-/// If a delay is specified via 'delay' or 'delayexpr', the SCXML Processor must interpret the character string as a time interval. It must dispatch the message only when the delay interval elapses.
-/// (Note that the evaluation of the send tag will return immediately.)\
-/// The Processor must evaluate all arguments to <send> when the <send> element is evaluated, and not when the message is actually dispatched. If the evaluation of \<send\>'s arguments produces an error,
-/// the Processor must discard the message without attempting to deliver it. If the SCXML session terminates before the delay interval has elapsed, the SCXML Processor must discard the message without
-/// attempting to deliver it.
+/// A conformant SCXML document must specify exactly one of 'event', 'eventexpr' and \<content\>.
+/// A conformant document must not specify "namelist" or \<param\> with \<content\>.\
+/// The SCXML Processor must include all attributes and values provided by \<param\> or 'namelist'
+/// even if duplicates occur.\
+/// If 'idlocation' is present, the SCXML Processor must generate an id when the parent \<send\>
+/// element is evaluated and store it in this location. See \[3.14 IDs](/doc/W3C_SCXML_2024_07_13/index.html#IDs) for details.\
+/// If a delay is specified via 'delay' or 'delayexpr', the SCXML Processor must interpret the
+/// character string as a time interval. It must dispatch the message only when the delay interval
+/// elapses. (Note that the evaluation of the send tag will return immediately.)\
+/// The Processor must evaluate all arguments to \<send\> when the \<send\> element is evaluated, and
+/// not when the message is actually dispatched. If the evaluation of \<send\>'s arguments produces an error,
+/// the Processor must discard the message without attempting to deliver it. If the SCXML session terminates
+/// before the delay interval has elapsed, the SCXML Processor must discard the message without attempting
+/// to deliver it.
 pub const TAG_SEND: &str = "send";
 
 pub const ATTR_EVENT: &str = "event";

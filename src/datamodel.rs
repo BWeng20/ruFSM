@@ -188,16 +188,17 @@ pub trait Datamodel {
         }
     }
 
-    /// Get _ioprocessors.
+    /// Get an _ioprocessor by name.
     fn get_io_processor(&mut self, name: &str) -> Option<Arc<Mutex<Box<dyn EventIOProcessor>>>>;
 
     /// Send an event via io-processor.
-    /// Mainly here because of optimization reasons (spares copies).
+    /// Mainly here because of optimization reasons (spared copies).
     fn send(&mut self, ioc_processor: &str, target: &str, event: Event) -> bool;
 
+    /// Get a modifiable data element by name.
     fn get_mut(&mut self, name: &str) -> Option<&mut Data>;
 
-    /// Clear all.
+    /// Clear all data.
     fn clear(&mut self);
 
     /// "log" function, use for \<log\> content.
@@ -209,6 +210,7 @@ pub trait Datamodel {
     /// See [internal_error_execution](Datamodel::internal_error_execution).
     fn execute(&mut self, script: &str) -> Result<String, String>;
 
+    /// Executes a for-each loop
     fn execute_for_each(
         &mut self,
         array_expression: &str,
@@ -217,7 +219,7 @@ pub trait Datamodel {
         execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
     ) -> bool;
 
-    /// *W3C says*:
+    /// *W3C says*:\
     /// The set of operators in conditional expressions varies depending on the data model,
     /// but all data models must support the 'In()' predicate, which takes a state ID as its
     /// argument and returns true if the state machine is in that state.\
@@ -227,15 +229,20 @@ pub trait Datamodel {
     /// no read-only "eval" function and such method may be hard to implement.
     fn execute_condition(&mut self, script: &str) -> Result<bool, String>;
 
+    /// Executes content by id.
     #[allow(non_snake_case)]
     fn executeContent(&mut self, fsm: &Fsm, contentId: ExecutableContentId) -> bool;
 
-    /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
+    /// *W3C says*:\
+    /// Indicates that an error internal to the execution of the document has occurred, such as one
+    /// arising from expression evaluation.
     fn internal_error_execution_with_event(&mut self, event: &Event) {
         get_global!(self).enqueue_internal(Event::error_execution_with_event(event));
     }
 
-    /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
+    /// *W3C says*:\
+    /// Indicates that an error internal to the execution of the document has occurred, such as one
+    /// arising from expression evaluation.
     fn internal_error_execution_for_event(
         &mut self,
         send_id: &Option<String>,
@@ -244,16 +251,21 @@ pub trait Datamodel {
         get_global!(self).enqueue_internal(Event::error_execution(send_id, invoke_id));
     }
 
-    /// W3C: Indicates that an error internal to the execution of the document has occurred, such as one arising from expression evaluation.
+    /// *W3C says*:\
+    /// Indicates that an error internal to the execution of the document has occurred, such as one
+    /// arising from expression evaluation.
     fn internal_error_execution(&mut self) {
         get_global!(self).enqueue_internal(Event::error_execution(&None, &None));
     }
 
+    /// *W3C says*:\
     /// W3C: Indicates that an error has occurred while trying to communicate with an external entity.
     fn internal_error_communication(&mut self, event: &Event) {
         get_global!(self).enqueue_internal(Event::error_communication(event));
     }
 
+    /// Evaluates a content element.\
+    /// Returns the static content or executes the expression.
     fn evaluate_content(&mut self, content: &Option<CommonContent>) -> Option<String> {
         match content {
             None => None,
@@ -279,6 +291,8 @@ pub trait Datamodel {
         }
     }
 
+    /// Evaluates a list of Param-elements and
+    /// returns the resulting data
     fn evaluate_params(&mut self, params: &Option<Vec<Parameter>>, values: &mut Vec<ParamPair>) {
         match &params {
             None => {}

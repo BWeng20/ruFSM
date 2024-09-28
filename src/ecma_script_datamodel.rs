@@ -340,7 +340,6 @@ impl Datamodel for ECMAScriptDatamodel {
                 let processor_js = JsMap::new(ctx);
                 let location = js_string!(processor.lock().unwrap().get_location(session_id));
                 _ = processor_js.create_data_property(js_string!("location"), location, ctx);
-                // @TODO
                 _ = io_processors_js.create_data_property(
                     js_string!(name.as_str()),
                     processor_js,
@@ -460,7 +459,7 @@ impl Datamodel for ECMAScriptDatamodel {
             .global_object()
             .delete_property_or_throw(js_string!(EVENT_VARIABLE_NAME), &mut self.context);
         if let Err(error) = r {
-            error!("Failed to delete old event: {}", error);
+            error!("Failed to delete exiting event: {}", error);
         }
 
         let r = self.context.global_object().define_property_or_throw(

@@ -195,12 +195,12 @@ pub trait Tracer: Send + Debug {
         }
     }
 
-    /// Called by FSM if a state is entered. Calls [traceState].
+    /// Called by FSM if a state is entered. Calls [Tracer::trace_state].
     fn trace_enter_state(&self, s: &State) {
         self.trace_state("Enter", s);
     }
 
-    /// Called by FSM if a state is left. Calls [traceState].
+    /// Called by FSM if a state is left. Calls [Tracer::trace_state].
     fn trace_exit_state(&self, s: &State) {
         self.trace_state("Exit", s);
     }
