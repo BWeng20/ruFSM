@@ -15,8 +15,8 @@ use regex::Regex;
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
-    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair,
-    Parameter, StateId,
+    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter,
+    StateId,
 };
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
@@ -78,14 +78,6 @@ pub const EVENT_VARIABLE_FIELD_DATA: &str = "data";
 macro_rules! get_global {
     ($x:expr) => {
         $x.global().lock()
-    };
-}
-
-/// Gets the global data store from datamodel.
-#[macro_export]
-macro_rules! get_global_s {
-    ($x:expr) => {
-        $x.global_s().lock()
     };
 }
 
