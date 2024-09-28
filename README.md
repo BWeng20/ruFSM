@@ -45,6 +45,13 @@ See [SW Design](SW_Design.md)
 The trace options <i>Trace_xxx</i> still needed to be activated during runtime by settings the trace-mode.
 If none of the <i>Trace_xxx</i> features are used, "Tracer" module is completely removed.
 
+## Tracer
+
+The Tracer module is planed to be used as remote monitor or test interface for events and transitions.<br/>
+If not used, the code can be removed by the above feature-switches.
+
+Currently, it simply prints the traced actions. 
+
 ## How To Use
 
 FSMs normally are used embedded inside other software to control some state-full workflow.<br/> 
