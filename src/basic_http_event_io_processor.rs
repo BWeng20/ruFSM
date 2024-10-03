@@ -27,7 +27,7 @@ use hyper_util::rt::TokioIo;
 use log::{debug, error, info};
 use tokio::net::TcpListener;
 
-use crate::datamodel::{GlobalDataAccess, BASIC_HTTP_EVENT_PROCESSOR};
+use crate::datamodel::{GlobalDataArc, BASIC_HTTP_EVENT_PROCESSOR};
 use crate::event_io_processor::{EventIOProcessor, EventIOProcessorHandle};
 use crate::fsm::{Event, SessionId};
 
@@ -270,7 +270,7 @@ impl EventIOProcessor for BasicHTTPEventIOProcessor {
         Box::new(b)
     }
 
-    fn send(&mut self, _global: &GlobalDataAccess, _target: &str, _event: Event) -> bool {
+    fn send(&mut self, _global: &GlobalDataArc, _target: &str, _event: Event) -> bool {
         // W3C basic html processor:
         // If neither the 'target' nor the 'targetexpr' attribute is specified, the SCXML Processor must add the event error.communication to the internal event queue of the sending session.
 

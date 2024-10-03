@@ -12,7 +12,7 @@ use std::{println as debug, println as info, println as warn, println as error};
 
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
-use boa_engine::object::builtins::JsMap;
+use boa_engine::object::builtins::{JsArray, JsMap};
 use boa_engine::object::ObjectInitializer;
 use boa_engine::property::{Attribute, PropertyDescriptor};
 use boa_engine::value::Type;
@@ -22,9 +22,10 @@ use boa_gc::{empty_trace, Finalize, Trace};
 
 #[cfg(not(test))]
 use log::{debug, error, info, warn};
+use crate::actions::ActionWrapper;
 
 use crate::datamodel::{
-    Data, DataStore, Datamodel, GlobalDataAccess, EVENT_VARIABLE_FIELD_DATA,
+    Data, DataStore, Datamodel, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
     EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
     EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE,
     EVENT_VARIABLE_NAME,
@@ -53,7 +54,7 @@ pub static ECMA_STRICT_ARGUMENT: ArgOption = ArgOption {
 
 pub struct ECMAScriptDatamodel {
     pub data: DataStore,
-    pub global_data: GlobalDataAccess,
+    pub global_data: GlobalDataArc,
     pub context: Context,
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
     pub strict_mode: bool,
@@ -75,7 +76,7 @@ fn option_to_js_value(val: &Option<String>) -> JsValue {
 
 #[derive(JsData, Finalize)]
 struct FsmJSWrapper {
-    pub global_data: GlobalDataAccess,
+    pub global_data: GlobalDataArc,
     pub state_name_to_id: HashMap<String, StateId>,
 }
 
@@ -86,7 +87,7 @@ unsafe impl Trace for FsmJSWrapper {
 }
 
 impl FsmJSWrapper {
-    fn new(gd: GlobalDataAccess) -> FsmJSWrapper {
+    fn new(gd: GlobalDataArc) -> FsmJSWrapper {
         FsmJSWrapper {
             global_data: gd,
             state_name_to_id: HashMap::new(),
@@ -95,7 +96,7 @@ impl FsmJSWrapper {
 }
 
 impl ECMAScriptDatamodel {
-    pub fn new(global_data: GlobalDataAccess) -> ECMAScriptDatamodel {
+    pub fn new(global_data: GlobalDataArc) -> ECMAScriptDatamodel {
         ECMAScriptDatamodel {
             data: DataStore::new(),
             global_data,
@@ -125,11 +126,20 @@ impl ECMAScriptDatamodel {
     pub fn set_from_data_store(&mut self, data: &DataStore, set_data: bool) {
         for (name, data) in &data.values {
             if set_data {
-                match &data.value {
-                    None => {
+                match data {
+                    Data::Null() => {
                         self.set_js_property(name.as_str(), JsValue::Null);
                     }
-                    Some(dv) => {
+                    Data::Integer(v) => {
+                        self.set_js_property(name.as_str(), *v);
+                    }
+                    Data::Double(v) => {
+                        self.set_js_property(name.as_str(), *v);
+                    }
+                    Data::Boolean(v) => {
+                        self.set_js_property(name.as_str(), *v);
+                    }
+                    Data::String(dv) => {
                         let rs = self.context.eval(Source::from_bytes(dv.as_str()));
                         match rs {
                             Ok(val) => {
@@ -253,6 +263,85 @@ impl ECMAScriptDatamodel {
         r
     }
 
+    pub fn js_to_data_value( value : &JsValue, ctx: &mut Context) -> Option<Data> {
+        match value.get_type() {
+            Type::Undefined => { None }
+            Type::Null => {
+                Some( Data::Null() )
+            }
+            Type::Boolean => {
+                Some( Data::Boolean(value.as_boolean().unwrap()) )
+            }
+            Type::Number => {
+                Some( Data::Double(value.as_number().unwrap()) )
+            }
+            Type::Symbol | Type::String => {
+                Some( Data::String(js_to_string(value, ctx)))
+            }
+            Type::BigInt => {
+                match value.to_big_int64(ctx) {
+                    Ok(val) => {
+                        Some( Data::Integer(val) )
+                    }
+                    Err(err) => {
+                        error!("Can't converted '{:?}' to Data::Integer: {}", value, err);
+                        Some( Data::Null() )
+                    }
+                }
+            }
+            Type::Object => {
+                error!("Object type can't be converted to Data");
+                None
+            }
+        }
+    }
+
+    fn call_action(
+        _this: &JsValue,
+        args: &[JsValue],
+        ctx: &mut Context,
+    ) -> JsResult<JsValue> {
+
+        let mut arg_list = Vec::<Data>::new();
+        let action_name = js_to_string(args.get_or_undefined(0), ctx);
+        {
+            let arguments = args.get_or_undefined(1);
+            if let Some(obj) = arguments.as_object() {
+                if obj.is_array() {
+                    let ar = JsArray::from_object(obj.clone()).unwrap();
+                    for i in 0..ar.length(ctx).unwrap() {
+                        let v = ar.get(i, ctx).unwrap();
+                        if let Some(av) = Self::js_to_data_value(&v, ctx) {
+                            arg_list.push(av)
+                        }
+                    }
+                } else {
+                    error!("Objects can't be converted to Action arguments.");
+                }
+            } else if let Some(av) = Self::js_to_data_value(arguments, ctx) {
+                arg_list.push(av);
+            }
+        }
+        if let Some(fsm) = ctx.get_data::<FsmJSWrapper>() {
+            let data = fsm.global_data.lock();
+            if let Some(action) = data.actions.actions.lock().unwrap().get_mut(action_name.as_str()) {
+                // TODO: do it
+                let r = action.execute(&arg_list, &fsm.global_data);
+                return
+                match r {
+                    Ok(v) => {
+                        Ok(JsValue::String(js_string!(v)))
+                    }
+                    Err(v) => {
+                        Err(JsError::from_opaque(JsValue::from(js_string!(v))))
+                    }
+                }
+            };
+        }
+        Err(JsError::from_opaque(JsValue::from(js_string!("Failed"))))
+    }
+
+
     fn in_configuration(
         _this: &JsValue,
         args: &[JsValue],
@@ -288,10 +377,10 @@ impl ECMAScriptDatamodel {
 }
 
 impl Datamodel for ECMAScriptDatamodel {
-    fn global(&mut self) -> &mut GlobalDataAccess {
+    fn global(&mut self) -> &mut GlobalDataArc {
         &mut self.global_data
     }
-    fn global_s(&self) -> &GlobalDataAccess {
+    fn global_s(&self) -> &GlobalDataArc {
         &self.global_data
     }
 
@@ -299,9 +388,29 @@ impl Datamodel for ECMAScriptDatamodel {
         ECMA_SCRIPT
     }
 
+    fn integrate_actions(&mut self, actions: &ActionWrapper) {
+
+        let mut functions = String::new();
+        for name in actions.lock().keys() {
+            functions.push_str( format!("function {}(){{ return __action('{}', arguments); }}\n", name, name).as_str());
+        }
+        debug!("integrate_actions -> {}", functions );
+        let r = self.context.eval(Source::from_bytes( functions.as_str() ));
+        if let Err(err) = r {
+            error!("Failed to add actions: {}", err);
+        }
+    }
+
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
         let session_id = self.global_s().lock().session_id;
         let ctx = &mut self.context;
+
+        // Implement "action" function.
+        let _ = ctx.register_global_callable(
+            js_string!("__action"),
+            2,
+            NativeFunction::from_copy_closure(Self::call_action),
+        );
 
         // Implement "In" function.
         let _ = ctx.register_global_callable(
@@ -389,7 +498,7 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn set(self: &mut ECMAScriptDatamodel, name: &str, data: Data) {
-        let str_val = data.to_string().clone();
+        let str_val = data.to_string();
         self.data.set(name, data);
         self.set_js_property(name, js_string!(str_val));
     }
@@ -487,7 +596,7 @@ impl Datamodel for ECMAScriptDatamodel {
                 self.internal_error_execution();
                 Err(msg)
             }
-            Ok(val) => Ok(Data::new_moved(val)),
+            Ok(val) => Ok(Data::String(val)),
         }
     }
 

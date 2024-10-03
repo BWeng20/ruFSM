@@ -29,6 +29,7 @@ use crate::serializer::fsm_reader::FsmReader;
 use crate::tracer::TraceMode;
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use std::net::{IpAddr, Ipv4Addr};
+use crate::actions::{ActionWrapper};
 
 #[derive(Default)]
 pub struct ExecuteState {
@@ -134,10 +135,12 @@ impl FsmExecutor {
     pub fn execute(
         &mut self,
         uri: &str,
+        actions: ActionWrapper,
         #[cfg(feature = "Trace")] trace: TraceMode,
     ) -> Result<ScxmlSession, String> {
         self.execute_with_data(
             uri,
+            actions,
             &Vec::new(),
             None,
             &"".to_string(),
@@ -146,10 +149,12 @@ impl FsmExecutor {
         )
     }
 
-    /// Loads and starts the specified FSM with some data set.
+    /// Loads and starts the specified FSM with some data set.\
+    /// Normally used if a child-FSM is started from a parent FSM.
     pub fn execute_with_data(
         &mut self,
         uri: &str,
+        actions: ActionWrapper,
         data: &[ParamPair],
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
@@ -190,17 +195,20 @@ impl FsmExecutor {
                 fsm.tracer.enable_trace(trace);
                 fsm.caller_invoke_id = Some(invoke_id.clone());
                 fsm.parent_session_id = parent;
-                let session = fsm::start_fsm_with_data(fsm, Box::new(self.clone()), data);
+                let session = fsm::start_fsm_with_data(fsm,actions, Box::new(self.clone()), data);
                 Ok(session)
             }
             Err(message) => Err(message),
         }
     }
 
-    /// Loads and starts the specified FSM with some data set.
+    /// Loads and starts the specified FSM with some data set.\
+    /// Normally used if a child-FSM is started from a parent FSM, in this case via inline content.
+    #[allow(clippy::too_many_arguments)]
     pub fn execute_with_data_from_xml(
         &mut self,
         xml: &str,
+        actions: ActionWrapper,
         data: &[ParamPair],
         parent: Option<SessionId>,
         invoke_id: &InvokeId,
@@ -224,9 +232,10 @@ impl FsmExecutor {
                 fsm.parent_session_id = parent;
                 let session = fsm::start_fsm_with_data_and_finish_mode(
                     fsm,
+                    actions.get_copy(),
                     Box::new(self.clone()),
                     data,
-                    finish_mode,
+                    finish_mode
                 );
                 Ok(session)
             }
@@ -239,6 +248,7 @@ impl FsmExecutor {
         self.state.lock().unwrap().sessions.remove(&session_id);
     }
 
+    /// Gets a clone of the event-sender of the session.
     pub fn get_session_sender(&self, session_id: SessionId) -> Option<Sender<Box<Event>>> {
         Some(
             self.state
@@ -251,6 +261,7 @@ impl FsmExecutor {
         )
     }
 
+    /// Sends some event to a session.
     pub fn send_to_session(
         &self,
         session_id: SessionId,

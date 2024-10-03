@@ -556,7 +556,7 @@ impl ExecutableContent for SendParameters {
 
             datamodel.set(
                 self.name_location.as_str(),
-                Data::new(generated_id.as_str()),
+                Data::String(generated_id.clone()),
             );
             Some(generated_id)
         };

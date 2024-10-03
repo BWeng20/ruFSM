@@ -6,7 +6,7 @@ use log::debug;
 
 use std::io::Read;
 
-use crate::datamodel::{Data, DataStore};
+use crate::datamodel::{DataStore};
 use crate::executable_content;
 use crate::executable_content::{ExecutableContent, Log};
 use crate::fsm::{
@@ -110,10 +110,7 @@ where
         let len = self.reader.read_usize();
         for _i in 0..len {
             let key = self.reader.read_string();
-            let data = Data {
-                value: self.reader.read_option_string(),
-            };
-            value.values.insert(key, data);
+            value.values.insert(key, self.reader.read_data_value());
         }
     }
 

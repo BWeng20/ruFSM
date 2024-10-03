@@ -12,7 +12,7 @@ use std::fmt::Debug;
 #[cfg(test)]
 use std::println as debug;
 
-use crate::datamodel::{GlobalDataAccess, GlobalDataLock, SCXML_EVENT_PROCESSOR};
+use crate::datamodel::{GlobalDataArc, GlobalDataLock, SCXML_EVENT_PROCESSOR};
 use crate::event_io_processor::{EventIOProcessor, EventIOProcessorHandle};
 use crate::fsm::{Event, EventType, SessionId};
 
@@ -123,7 +123,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     /// <li>#_invokeid. If the target is the special term '#_invokeid', where invokeid is the invokeid of an SCXML session that the sending session has created by <invoke>, the Processor must add the event to the external queue of that session. See 6.4 <invoke> for details.</li>
     /// <li>If neither the 'target' nor the 'targetexpr' attribute is specified, the SCXML Processor must add the event to the external event queue of the sending session.</li>
     /// </ul>
-    fn send(&mut self, global: &GlobalDataAccess, target: &str, mut event: Event) -> bool {
+    fn send(&mut self, global: &GlobalDataArc, target: &str, mut event: Event) -> bool {
         let mut global_lock = global.lock();
         event.origin_type = Some(SCXML_EVENT_PROCESSOR.to_string());
         if event.origin.is_none() {

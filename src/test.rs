@@ -16,6 +16,7 @@ use log::{error, info};
 use serde::Deserialize;
 #[cfg(feature = "yaml-config")]
 use yaml_rust::YamlLoader;
+use crate::actions::ActionWrapper;
 
 use crate::fsm;
 use crate::fsm::{Event, FinishMode, Fsm};
@@ -229,6 +230,7 @@ pub fn run_test_manual_with_send(
     }
     let session = fsm::start_fsm_with_data_and_finish_mode(
         fsm,
+        ActionWrapper::new(),
         Box::new(executor),
         &Vec::new(),
         FinishMode::KEEP_CONFIGURATION,

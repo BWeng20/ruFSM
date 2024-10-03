@@ -4,14 +4,52 @@
 #![allow(clippy::doc_lazy_continuation)]
 #![allow(dead_code)]
 
-use crate::datamodel::GlobalDataAccess;
-
-pub struct ActionContext {
-    pub global: GlobalDataAccess,
-}
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, MutexGuard};
+use crate::datamodel::{Data, GlobalDataArc};
 
 /// Trait to inject custom actions into the datamodel.
-pub trait Action {
-    /// Executes the action.\
-    fn execute(&mut self, context: &mut ActionContext) -> &mut Result<String, String>;
+pub trait Action : Send {
+
+    /// Executes the action.
+    fn execute(&self, arguments: &[Data], global: &GlobalDataArc) -> Result<String, String>;
+
+    fn get_copy(&self) -> Box<dyn Action>;
+
+}
+
+pub type ActionMap = HashMap<String,Box<dyn Action>>;
+
+pub type ActionLock<'a> = MutexGuard<'a, ActionMap>;
+
+#[derive(Default)]
+pub struct  ActionWrapper {
+    pub actions : Arc<Mutex<ActionMap>>
+}
+
+impl ActionWrapper {
+
+    pub fn new() ->  ActionWrapper{
+        ActionWrapper {
+            actions : Arc::new(Mutex::new(HashMap::new()))
+        }
+    }
+
+    pub fn get_copy(&self) -> ActionWrapper {
+        ActionWrapper {
+            actions : self.actions.clone()
+        }
+    }
+
+    pub fn get_map_copy(&self) -> ActionMap {
+        let mut copy = HashMap::new();
+        for (name, action) in self.lock().iter() {
+            copy.insert(name.clone(), action.get_copy() );
+        }
+        copy
+    }
+
+    pub fn lock(&self) -> ActionLock {
+        self.actions.lock().unwrap()
+    }
 }

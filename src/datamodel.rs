@@ -12,6 +12,7 @@ use log::error;
 #[cfg(not(test))]
 use log::info;
 use regex::Regex;
+use crate::actions::{ActionMap, ActionWrapper};
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
@@ -84,21 +85,21 @@ macro_rules! get_global {
 pub type GlobalDataLock<'a> = MutexGuard<'a, GlobalData>;
 
 /// Currently we assume that we need access to the global-data via a mutex.
-/// If not, change this type to "GlobalData" and adapt macros access_global and get_global above.
+/// If not, change this type to "GlobalData" and adapt implementation.
 #[derive(Clone)]
-pub struct GlobalDataAccess {
+pub struct GlobalDataArc {
     arc: Arc<Mutex<GlobalData>>,
 }
 
-impl Default for GlobalDataAccess {
+impl Default for GlobalDataArc {
     fn default() -> Self {
-        GlobalDataAccess::new()
+        GlobalDataArc::new()
     }
 }
 
-impl GlobalDataAccess {
-    pub fn new() -> GlobalDataAccess {
-        GlobalDataAccess {
+impl GlobalDataArc {
+    pub fn new() -> GlobalDataArc {
+        GlobalDataArc {
             arc: Arc::new(Mutex::new(GlobalData::new())),
         }
     }
@@ -123,9 +124,9 @@ pub trait Datamodel {
     /// As the data model needs access to other global variables and rust doesn't like
     /// accessing data of parents (Fsm in this case) from inside a member (the actual Datamodel), most global data is
     /// store in the "GlobalData" struct that is owned by the data model.
-    fn global(&mut self) -> &mut GlobalDataAccess;
+    fn global(&mut self) -> &mut GlobalDataArc;
 
-    fn global_s(&self) -> &GlobalDataAccess;
+    fn global_s(&self) -> &GlobalDataArc;
 
     /// Get the name of the data model as defined by the \<scxml\> attribute "datamodel".
     fn get_name(&self) -> &str;
@@ -134,7 +135,10 @@ pub trait Datamodel {
     /// If needed, adds also "log" function and sets '_ioprocessors'.
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm);
 
-    /// Initialize the data model for one data-store.
+    /// Integrate Action functions.\
+    fn integrate_actions(&mut self, actions: &ActionWrapper);
+
+        /// Initialize the data model for one data-store.
     /// This method is called for the global data and for the data of each state.
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, fsm: &mut Fsm, state: StateId, set_data: bool);
@@ -318,7 +322,7 @@ pub trait Datamodel {
                             Ok(value) => {
                                 values.push(ParamPair::new_moved(
                                     param.name.clone(),
-                                    Data::new_moved(value),
+                                    Data::String(value),
                                 ));
                             }
                         }
@@ -357,25 +361,27 @@ pub trait Datamodel {
 ///   The \<foreach\> element and the elements defined in 5 Data Model and Data Manipulation are not
 ///   supported in the Null Data Model.
 pub struct NullDatamodel {
-    pub global: GlobalDataAccess,
+    pub global: GlobalDataArc,
     pub state_name_to_id: HashMap<String, StateId>,
+    pub actions: ActionMap,
 }
 
 impl NullDatamodel {
-    pub fn new(global_data: GlobalDataAccess) -> NullDatamodel {
+    pub fn new(global_data: GlobalDataArc) -> NullDatamodel {
         NullDatamodel {
             global: global_data,
             state_name_to_id: HashMap::new(),
+            actions: HashMap::new(),
         }
     }
 }
 
 impl Datamodel for NullDatamodel {
-    fn global(&mut self) -> &mut GlobalDataAccess {
+    fn global(&mut self) -> &mut GlobalDataArc {
         &mut self.global
     }
 
-    fn global_s(&self) -> &GlobalDataAccess {
+    fn global_s(&self) -> &GlobalDataArc {
         &self.global
     }
 
@@ -384,9 +390,14 @@ impl Datamodel for NullDatamodel {
     }
 
     fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
+        // TODO: Add actions
         for state in fsm.states.as_slice() {
             self.state_name_to_id.insert(state.name.clone(), state.id);
         }
+    }
+
+    fn integrate_actions(&mut self, actions: &ActionWrapper) {
+        self.actions = actions.get_map_copy()
     }
 
     #[allow(non_snake_case)]
@@ -507,49 +518,40 @@ impl<T: Debug + 'static> ToAny for T {
 }
 
 #[derive(Clone)]
-pub struct Data {
-    pub value: Option<String>,
-}
-
-impl Data {
-    pub fn new(val: &str) -> Data {
-        Data {
-            value: Some(val.to_string()),
-        }
-    }
-    pub fn new_moved(val: String) -> Data {
-        Data { value: Some(val) }
-    }
-
-    pub fn new_null() -> Data {
-        Data { value: None }
-    }
+pub enum Data {
+    Integer(i64),
+    Double(f64),
+    String(String),
+    Boolean(bool),
+    Null()
 }
 
 impl Debug for Data {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match &self.value {
-                Some(v) => {
-                    v.as_str()
-                }
-                None => {
-                    "null"
-                }
-            }
-        )
+        write!(f, "{}", self) // Display
     }
 }
 
+
 impl Display for Data {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let str = match &self.value {
-            Some(v) => v.clone(),
-            None => "null".to_string(),
-        };
-        write!(f, "{}", str)
+        match &self {
+            Data::String(v) => {
+                write!( f, "{}", v)
+            }
+            Data::Integer(v) => {
+                write!( f, "{}", v)
+            }
+            Data::Double(v) => {
+                write!( f, "{}", v)
+            }
+            Data::Boolean(v) => {
+                write!( f, "{}", v)
+            }
+            Data::Null() => {
+                write!( f, "Null" )
+            }
+        }
     }
 }
 

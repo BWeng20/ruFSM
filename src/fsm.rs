@@ -28,9 +28,10 @@ use log::error;
 use log::debug;
 
 use timer::Guard;
+use crate::actions::ActionWrapper;
 
 use crate::datamodel::{
-    Data, DataStore, Datamodel, GlobalDataAccess, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
+    Data, DataStore, Datamodel, GlobalDataArc, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
     SCXML_INVOKE_TYPE, SCXML_INVOKE_TYPE_SHORT, SESSION_ID_VARIABLE_NAME,
     SESSION_NAME_VARIABLE_NAME,
 };
@@ -57,23 +58,25 @@ pub static THREAD_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 /// Starts the FSM inside a worker thread.
 ///
-pub fn start_fsm(sm: Box<Fsm>, executor: Box<FsmExecutor>) -> ScxmlSession {
-    start_fsm_with_data(sm, executor, &Vec::new())
+pub fn start_fsm(sm: Box<Fsm>, actions: ActionWrapper, executor: Box<FsmExecutor>) -> ScxmlSession {
+    start_fsm_with_data(sm, actions, executor, &Vec::new())
 }
 
 pub fn start_fsm_with_data(
     sm: Box<Fsm>,
+    actions: ActionWrapper,
     executor: Box<FsmExecutor>,
     data: &[ParamPair],
 ) -> ScxmlSession {
-    start_fsm_with_data_and_finish_mode(sm, executor, data, FinishMode::DISPOSE)
+    start_fsm_with_data_and_finish_mode(sm, actions, executor, data, FinishMode::DISPOSE)
 }
 
 pub fn start_fsm_with_data_and_finish_mode(
     mut sm: Box<Fsm>,
+    actions: ActionWrapper,
     executor: Box<FsmExecutor>,
     data: &[ParamPair],
-    finish_mode: FinishMode,
+    finish_mode: FinishMode
 ) -> ScxmlSession {
     #![allow(non_snake_case)]
     let externalQueue: BlockingQueue<Box<Event>> = BlockingQueue::new();
@@ -107,6 +110,7 @@ pub fn start_fsm_with_data_and_finish_mode(
     let global_data = session.global_data.clone();
     {
         let mut gc = global_data.lock();
+        gc.actions = actions;
         let executor_state_lock = executor.state.lock();
         let guard = executor_state_lock.unwrap();
         for p in &guard.processors {
@@ -144,8 +148,8 @@ pub fn start_fsm_with_data_and_finish_mode(
                     if !data_copy.is_empty() {
                         let root_state = sm.get_state_by_id_mut(sm.pseudo_root);
                         for val in data_copy {
-                            if let Some(var) = root_state.data.get_mut(&val.name) {
-                                var.value = val.value.value.clone();
+                            if root_state.data.get_mut(&val.name).is_some() {
+                                root_state.data.set( &val.name, val.value.clone() );
                             }
                         }
                     }
@@ -988,6 +992,7 @@ pub struct Parameter {
 #[derive(Default)]
 pub struct GlobalData {
     pub executor: Option<Box<FsmExecutor>>,
+    pub actions: ActionWrapper,
     pub configuration: OrderedSet<StateId>,
     pub statesToInvoke: OrderedSet<StateId>,
     pub historyValue: HashTable<StateId, OrderedSet<StateId>>,
@@ -1020,6 +1025,7 @@ impl GlobalData {
     pub fn new() -> GlobalData {
         GlobalData {
             executor: None,
+            actions: ActionWrapper::new(),
             configuration: OrderedSet::new(),
             historyValue: HashTable::new(),
             running: false,
@@ -1058,7 +1064,7 @@ pub struct ScxmlSession {
     pub session_thread: Option<JoinHandle<()>>,
     pub sender: Sender<Box<Event>>,
     /// global_data should be access after the FSM is finished to avoid deadlocks.
-    pub global_data: GlobalDataAccess,
+    pub global_data: GlobalDataArc,
     /// Doc-id of the Invoke element that triggered this session.
     /// InvokeIds are generated if not specified, to identify the invoke element, the doc-id
     /// is used.
@@ -1083,7 +1089,7 @@ impl ScxmlSession {
             session_id: id,
             session_thread: None,
             sender,
-            global_data: GlobalDataAccess::new(),
+            global_data: GlobalDataArc::new(),
             invoke_doc_id: 0,
             state_id: None,
         }
@@ -3104,7 +3110,7 @@ impl Fsm {
             // If "idlocation" is specified, we have to store the generated id to this location
             datamodel.set(
                 inv.external_id_location.as_str(),
-                Data::new(invokeId.as_str()),
+                Data::String(invokeId.clone()),
             );
         }
 
@@ -3115,12 +3121,14 @@ impl Fsm {
                     let mut global = get_global!(datamodel);
                     let session_id = global.session_id;
 
+                    let actions = global.actions.get_copy();
                     global
                         .executor
                         .as_mut()
                         .unwrap()
                         .execute_with_data_from_xml(
                             content.as_str(),
+                            actions,
                             &name_values,
                             Some(session_id),
                             &invokeId,
@@ -3133,9 +3141,10 @@ impl Fsm {
         } else {
             let mut global = get_global!(datamodel);
             let session_id = global.session_id;
-
+            let actions = global.actions.get_copy();
             global.executor.as_mut().unwrap().execute_with_data(
                 src.as_str(),
+                actions,
                 &name_values,
                 Some(session_id),
                 &invokeId,
@@ -3565,7 +3574,7 @@ impl Transition {
 
 pub fn create_datamodel(
     name: &str,
-    global_data: GlobalDataAccess,
+    global_data: GlobalDataArc,
     options: &HashMap<String, String>,
 ) -> Box<dyn Datamodel> {
     match name.to_lowercase().as_str() {

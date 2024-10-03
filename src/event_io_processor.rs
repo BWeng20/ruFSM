@@ -8,7 +8,7 @@ use std::sync::mpsc::Sender;
 #[cfg(feature = "Debug")]
 use log::debug;
 
-use crate::datamodel::{Datamodel, GlobalDataAccess, ToAny};
+use crate::datamodel::{Datamodel, GlobalDataArc, ToAny};
 use crate::fsm::SessionId;
 use crate::fsm::{Event, Fsm, EVENT_CANCEL_SESSION};
 use crate::get_global;
@@ -60,7 +60,7 @@ pub trait EventIOProcessor: ToAny + Debug + Send {
 
     fn get_copy(&self) -> Box<dyn EventIOProcessor>;
 
-    fn send(&mut self, global: &GlobalDataAccess, target: &str, event: Event) -> bool;
+    fn send(&mut self, global: &GlobalDataArc, target: &str, event: Event) -> bool;
 
     fn shutdown(&mut self);
 }

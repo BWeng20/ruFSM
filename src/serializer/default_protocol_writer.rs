@@ -10,6 +10,7 @@ use log::debug;
 
 use log::error;
 use std::io::Write;
+use crate::datamodel::Data;
 
 pub struct DefaultProtocolWriter<W> {
     pub writer: W,
@@ -77,6 +78,30 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
         } else if self.ok {
             let r = self.writer.write_u8(FSM_PROTOCOL_TYPE_OPT_STRING_NONE);
             self.eval_result(r);
+        }
+    }
+
+    fn write_data_value(&mut self, value: &Data) {
+        match value {
+            Data::Integer(val) => {
+                self.write_u8(1);
+                self.write_str(val.to_string().as_str());
+            }
+            Data::Double(val) => {
+                self.write_u8(2);
+                self.write_str(val.to_string().as_str());
+            }
+            Data::String(val) => {
+                self.write_u8(3);
+                self.write_str(val.as_str());
+            }
+            Data::Boolean(val) => {
+                self.write_u8(4);
+                self.write_boolean(*val);
+            }
+            Data::Null() => {
+                self.write_u8(0);
+            }
         }
     }
 

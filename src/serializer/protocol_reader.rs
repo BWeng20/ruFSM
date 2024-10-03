@@ -1,6 +1,7 @@
 //! Protocol to read a persistent binary version of a Fsm.
 
 use std::io::Read;
+use crate::datamodel::Data;
 
 /// Trait for reading binary data in some platform independent way.\
 /// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).
@@ -17,6 +18,9 @@ pub trait ProtocolReader<R: Read> {
 
     /// Reads an optional string
     fn read_option_string(&mut self) -> Option<String>;
+
+    /// Reads a Data (enum) value
+    fn read_data_value(&mut self) -> Data;
 
     /// Reads a string
     fn read_string(&mut self) -> String;

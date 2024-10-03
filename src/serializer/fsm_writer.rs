@@ -102,7 +102,7 @@ where
         self.writer.write_usize(value.values.len());
         for (key, data) in &value.values {
             self.writer.write_str(key.as_str());
-            self.writer.write_option_string(&data.value);
+            self.writer.write_data_value(data);
         }
     }
 

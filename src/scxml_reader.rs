@@ -816,7 +816,7 @@ impl ReaderState {
                     debug!("src='{}':\n{}", src.unwrap(), source);
                     self.get_current_state()
                         .data
-                        .set(id, Data::new_moved(source));
+                        .set(id, Data::String(source));
                 }
                 Err(e) => {
                     panic!("Can't read data source '{}'. {}", src.unwrap(), e);
@@ -831,13 +831,13 @@ impl ReaderState {
             }
             self.get_current_state()
                 .data
-                .set(id, Data::new(expr.unwrap()));
+                .set(id, Data::String(expr.unwrap().clone()));
         } else if !content.is_empty() {
             self.get_current_state()
                 .data
-                .set(id, Data::new_moved(content));
+                .set(id, Data::String(content));
         } else {
-            self.get_current_state().data.set(id, Data::new_null());
+            self.get_current_state().data.set(id, Data::Null());
         }
     }
 

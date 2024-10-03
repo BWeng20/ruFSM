@@ -8,6 +8,7 @@ use rfsm::ecma_script_datamodel::ECMA_STRICT_ARGUMENT;
 use std::io::{stdout, Write};
 use std::{io, process, thread, time};
 
+use rfsm::actions::ActionWrapper;
 use rfsm::fsm::{Event, EventType};
 use rfsm::fsm_executor::FsmExecutor;
 #[cfg(feature = "Trace")]
@@ -48,6 +49,7 @@ async fn main() {
 
     match executor.execute(
         final_args[0].as_str(),
+        ActionWrapper::new(),
         #[cfg(feature = "Trace")]
         trace,
     ) {
@@ -64,6 +66,7 @@ async fn main() {
         let _ = executor
             .execute(
                 fi.as_str(),
+                ActionWrapper::new(),
                 #[cfg(feature = "Trace")]
                 trace,
             )

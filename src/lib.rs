@@ -41,13 +41,13 @@ pub mod scxml_event_io_processor;
 #[cfg(feature = "serializer")]
 pub mod serializer;
 
-mod datamodel;
-mod event_io_processor;
+pub mod datamodel;
+pub mod event_io_processor;
 
 #[cfg(feature = "Trace")]
 pub mod tracer;
 
-mod actions;
+pub mod actions;
 pub mod test;
 
 #[cfg(feature = "Trace")]
