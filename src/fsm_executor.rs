@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "Debug")]
 use log::debug;
 
+use crate::actions::ActionWrapper;
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::basic_http_event_io_processor::BasicHTTPEventIOProcessor;
 use crate::datamodel::DATAMODEL_OPTION_PREFIX;
@@ -29,7 +30,6 @@ use crate::serializer::fsm_reader::FsmReader;
 use crate::tracer::TraceMode;
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use std::net::{IpAddr, Ipv4Addr};
-use crate::actions::{ActionWrapper};
 
 #[derive(Default)]
 pub struct ExecuteState {
@@ -195,7 +195,7 @@ impl FsmExecutor {
                 fsm.tracer.enable_trace(trace);
                 fsm.caller_invoke_id = Some(invoke_id.clone());
                 fsm.parent_session_id = parent;
-                let session = fsm::start_fsm_with_data(fsm,actions, Box::new(self.clone()), data);
+                let session = fsm::start_fsm_with_data(fsm, actions, Box::new(self.clone()), data);
                 Ok(session)
             }
             Err(message) => Err(message),
@@ -235,7 +235,7 @@ impl FsmExecutor {
                     actions.get_copy(),
                     Box::new(self.clone()),
                     data,
-                    finish_mode
+                    finish_mode,
                 );
                 Ok(session)
             }

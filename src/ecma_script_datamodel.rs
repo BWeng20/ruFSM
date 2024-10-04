@@ -22,7 +22,6 @@ use boa_gc::{empty_trace, Finalize, Trace};
 
 #[cfg(not(test))]
 use log::{debug, error, info, warn};
-use crate::actions::ActionWrapper;
 
 use crate::datamodel::{
     Data, DataStore, Datamodel, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
@@ -263,32 +262,20 @@ impl ECMAScriptDatamodel {
         r
     }
 
-    pub fn js_to_data_value( value : &JsValue, ctx: &mut Context) -> Option<Data> {
+    pub fn js_to_data_value(value: &JsValue, ctx: &mut Context) -> Option<Data> {
         match value.get_type() {
-            Type::Undefined => { None }
-            Type::Null => {
-                Some( Data::Null() )
-            }
-            Type::Boolean => {
-                Some( Data::Boolean(value.as_boolean().unwrap()) )
-            }
-            Type::Number => {
-                Some( Data::Double(value.as_number().unwrap()) )
-            }
-            Type::Symbol | Type::String => {
-                Some( Data::String(js_to_string(value, ctx)))
-            }
-            Type::BigInt => {
-                match value.to_big_int64(ctx) {
-                    Ok(val) => {
-                        Some( Data::Integer(val) )
-                    }
-                    Err(err) => {
-                        error!("Can't converted '{:?}' to Data::Integer: {}", value, err);
-                        Some( Data::Null() )
-                    }
+            Type::Undefined => None,
+            Type::Null => Some(Data::Null()),
+            Type::Boolean => Some(Data::Boolean(value.as_boolean().unwrap())),
+            Type::Number => Some(Data::Double(value.as_number().unwrap())),
+            Type::Symbol | Type::String => Some(Data::String(js_to_string(value, ctx))),
+            Type::BigInt => match value.to_big_int64(ctx) {
+                Ok(val) => Some(Data::Integer(val)),
+                Err(err) => {
+                    error!("Can't converted '{:?}' to Data::Integer: {}", value, err);
+                    Some(Data::Null())
                 }
-            }
+            },
             Type::Object => {
                 error!("Object type can't be converted to Data");
                 None
@@ -296,16 +283,12 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    fn call_action(
-        _this: &JsValue,
-        args: &[JsValue],
-        ctx: &mut Context,
-    ) -> JsResult<JsValue> {
-
+    fn call_action(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
         let mut arg_list = Vec::<Data>::new();
         let action_name = js_to_string(args.get_or_undefined(0), ctx);
         {
             let arguments = args.get_or_undefined(1);
+
             if let Some(obj) = arguments.as_object() {
                 if obj.is_array() {
                     let ar = JsArray::from_object(obj.clone()).unwrap();
@@ -316,31 +299,31 @@ impl ECMAScriptDatamodel {
                         }
                     }
                 } else {
-                    error!("Objects can't be converted to Action arguments.");
+                    error!("Arguments must be specified as Array: {:?}", obj);
                 }
-            } else if let Some(av) = Self::js_to_data_value(arguments, ctx) {
-                arg_list.push(av);
+            } else {
+                error!("Arguments must be specified as Array: {:?}", arguments);
             }
         }
         if let Some(fsm) = ctx.get_data::<FsmJSWrapper>() {
             let data = fsm.global_data.lock();
-            if let Some(action) = data.actions.actions.lock().unwrap().get_mut(action_name.as_str()) {
+            if let Some(action) = data
+                .actions
+                .actions
+                .lock()
+                .unwrap()
+                .get_mut(action_name.as_str())
+            {
                 // TODO: do it
                 let r = action.execute(&arg_list, &fsm.global_data);
-                return
-                match r {
-                    Ok(v) => {
-                        Ok(JsValue::String(js_string!(v)))
-                    }
-                    Err(v) => {
-                        Err(JsError::from_opaque(JsValue::from(js_string!(v))))
-                    }
-                }
+                return match r {
+                    Ok(v) => Ok(JsValue::String(js_string!(v))),
+                    Err(v) => Err(JsError::from_opaque(JsValue::from(js_string!(v)))),
+                };
             };
         }
         Err(JsError::from_opaque(JsValue::from(js_string!("Failed"))))
     }
-
 
     fn in_configuration(
         _this: &JsValue,
@@ -388,21 +371,20 @@ impl Datamodel for ECMAScriptDatamodel {
         ECMA_SCRIPT
     }
 
-    fn integrate_actions(&mut self, actions: &ActionWrapper) {
+    fn add_functions(&mut self, fsm: &mut Fsm) {
+        let session_id = self.global_s().lock().session_id;
 
         let mut functions = String::new();
-        for name in actions.lock().keys() {
-            functions.push_str( format!("function {}(){{ return __action('{}', arguments); }}\n", name, name).as_str());
+        for name in self.global_s().lock().actions.lock().keys() {
+            functions.push_str(
+                format!(
+                    "function {}(){{ return __action('{}', Array.from(arguments)); }}\n",
+                    name, name
+                )
+                .as_str(),
+            );
         }
-        debug!("integrate_actions -> {}", functions );
-        let r = self.context.eval(Source::from_bytes( functions.as_str() ));
-        if let Err(err) = r {
-            error!("Failed to add actions: {}", err);
-        }
-    }
 
-    fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
-        let session_id = self.global_s().lock().session_id;
         let ctx = &mut self.context;
 
         // Implement "action" function.
@@ -411,6 +393,12 @@ impl Datamodel for ECMAScriptDatamodel {
             2,
             NativeFunction::from_copy_closure(Self::call_action),
         );
+
+        debug!("integrate_actions -> {}", functions);
+        let r = ctx.eval(Source::from_bytes(functions.as_str()));
+        if let Err(err) = r {
+            error!("Failed to add actions: {}", err);
+        }
 
         // Implement "In" function.
         let _ = ctx.register_global_callable(

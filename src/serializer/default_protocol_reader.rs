@@ -8,9 +8,9 @@ use byteorder::ReadBytesExt;
 #[cfg(feature = "Debug_Serializer")]
 use log::debug;
 
+use crate::datamodel::Data;
 use log::error;
 use std::io::Read;
-use crate::datamodel::Data;
 
 pub struct DefaultProtocolReader<R>
 where
@@ -274,48 +274,45 @@ impl<R: Read> ProtocolReader<R> for DefaultProtocolReader<R> {
     fn read_data_value(&mut self) -> Data {
         let what = self.read_u8();
         match what {
-            0 => {
-                Data::Null()
-            }
+            0 => Data::Null(),
             1 => {
-                let rv =self.read_string();
-                match rv.parse::<i64>()  {
-                    Ok(val) => {
-                        Data::Integer(val)
-                    }
+                let rv = self.read_string();
+                match rv.parse::<i64>() {
+                    Ok(val) => Data::Integer(val),
                     Err(err) => {
-                        self.error(format!("Protocol error in Integer data value: {} -> {}", rv, err).as_str());
+                        self.error(
+                            format!("Protocol error in Integer data value: {} -> {}", rv, err)
+                                .as_str(),
+                        );
                         self.ok = false;
                         Data::Null()
                     }
                 }
             }
             2 => {
-                let rv =self.read_string();
+                let rv = self.read_string();
                 match rv.parse::<f64>() {
-                    Ok(val) => {
-                        Data::Double(val)
-                    }
+                    Ok(val) => Data::Double(val),
                     Err(err) => {
-                        self.error(format!("Protocol error in Double data value: {} -> {}", rv, err).as_str());
+                        self.error(
+                            format!("Protocol error in Double data value: {} -> {}", rv, err)
+                                .as_str(),
+                        );
                         self.ok = false;
                         Data::Null()
                     }
                 }
             }
-            3 => {
-                Data::String(self.read_string())
-            }
-            4 => {
-                Data::Boolean(self.read_boolean())
-            }
+            3 => Data::String(self.read_string()),
+            4 => Data::Boolean(self.read_boolean()),
             _ => {
-                self.error(format!("Protocol error in data value: unknown variant {}", what).as_str());
+                self.error(
+                    format!("Protocol error in data value: unknown variant {}", what).as_str(),
+                );
                 self.ok = false;
                 Data::Null()
             }
         }
-
     }
 
     fn read_string(&mut self) -> String {

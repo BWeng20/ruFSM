@@ -118,7 +118,7 @@ async fn main() {
                         sendid: None,
                         origin: None,
                         origin_type: None,
-                        invoke_id: Some(1.to_string()),
+                        invoke_id: None,
                         param_values: None,
                         content: None,
                     });

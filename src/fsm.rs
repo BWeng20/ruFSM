@@ -27,8 +27,8 @@ use log::error;
 #[cfg(feature = "Debug")]
 use log::debug;
 
+use crate::actions::{Action, ActionWrapper};
 use timer::Guard;
-use crate::actions::ActionWrapper;
 
 use crate::datamodel::{
     Data, DataStore, Datamodel, GlobalDataArc, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
@@ -76,7 +76,7 @@ pub fn start_fsm_with_data_and_finish_mode(
     actions: ActionWrapper,
     executor: Box<FsmExecutor>,
     data: &[ParamPair],
-    finish_mode: FinishMode
+    finish_mode: FinishMode,
 ) -> ScxmlSession {
     #![allow(non_snake_case)]
     let externalQueue: BlockingQueue<Box<Event>> = BlockingQueue::new();
@@ -149,7 +149,7 @@ pub fn start_fsm_with_data_and_finish_mode(
                         let root_state = sm.get_state_by_id_mut(sm.pseudo_root);
                         for val in data_copy {
                             if root_state.data.get_mut(&val.name).is_some() {
-                                root_state.data.set( &val.name, val.value.clone() );
+                                root_state.data.set(&val.name, val.value.clone());
                             }
                         }
                     }
@@ -1366,7 +1366,7 @@ impl Fsm {
                 gd.running = true;
             }
 
-            datamodel.implement_mandatory_functionality(self);
+            datamodel.add_functions(self);
 
             self.initialize_data_models_recursive(
                 datamodel,
@@ -3679,6 +3679,30 @@ pub(crate) fn opt_vec_to_string<T: Display>(v: &Option<Vec<T>>) -> String {
             s += "]";
             s
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct DebugAction {}
+
+impl DebugAction {
+    pub fn new() -> DebugAction {
+        DebugAction {}
+    }
+}
+
+impl Action for DebugAction {
+    fn execute(&self, arguments: &[Data], _global: &GlobalDataArc) -> Result<String, String> {
+        let mut i = 0;
+        for data in arguments {
+            i = i + 1;
+            println!(" {}: {}", i, data)
+        }
+        Ok("debug".to_string())
+    }
+
+    fn get_copy(&self) -> Box<dyn Action> {
+        Box::new(self.clone())
     }
 }
 

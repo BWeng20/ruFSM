@@ -8,11 +8,11 @@ use std::fmt::{Debug, Display, Formatter};
 use std::println as info;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use crate::actions::ActionMap;
 use log::error;
 #[cfg(not(test))]
 use log::info;
 use regex::Regex;
-use crate::actions::{ActionMap, ActionWrapper};
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
@@ -131,14 +131,11 @@ pub trait Datamodel {
     /// Get the name of the data model as defined by the \<scxml\> attribute "datamodel".
     fn get_name(&self) -> &str;
 
-    /// Adds the "In" function.\
+    /// Adds the "In" and other function.\
     /// If needed, adds also "log" function and sets '_ioprocessors'.
-    fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm);
+    fn add_functions(&mut self, fsm: &mut Fsm);
 
-    /// Integrate Action functions.\
-    fn integrate_actions(&mut self, actions: &ActionWrapper);
-
-        /// Initialize the data model for one data-store.
+    /// Initialize the data model for one data-store.
     /// This method is called for the global data and for the data of each state.
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, fsm: &mut Fsm, state: StateId, set_data: bool);
@@ -389,15 +386,12 @@ impl Datamodel for NullDatamodel {
         NULL_DATAMODEL
     }
 
-    fn implement_mandatory_functionality(&mut self, fsm: &mut Fsm) {
+    fn add_functions(&mut self, fsm: &mut Fsm) {
         // TODO: Add actions
         for state in fsm.states.as_slice() {
             self.state_name_to_id.insert(state.name.clone(), state.id);
         }
-    }
-
-    fn integrate_actions(&mut self, actions: &ActionWrapper) {
-        self.actions = actions.get_map_copy()
+        // self.actions =  actions.get_map_copy()
     }
 
     #[allow(non_snake_case)]
@@ -523,7 +517,7 @@ pub enum Data {
     Double(f64),
     String(String),
     Boolean(bool),
-    Null()
+    Null(),
 }
 
 impl Debug for Data {
@@ -532,24 +526,23 @@ impl Debug for Data {
     }
 }
 
-
 impl Display for Data {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
             Data::String(v) => {
-                write!( f, "{}", v)
+                write!(f, "{}", v)
             }
             Data::Integer(v) => {
-                write!( f, "{}", v)
+                write!(f, "{}", v)
             }
             Data::Double(v) => {
-                write!( f, "{}", v)
+                write!(f, "{}", v)
             }
             Data::Boolean(v) => {
-                write!( f, "{}", v)
+                write!(f, "{}", v)
             }
             Data::Null() => {
-                write!( f, "Null" )
+                write!(f, "Null")
             }
         }
     }

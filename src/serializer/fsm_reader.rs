@@ -6,7 +6,7 @@ use log::debug;
 
 use std::io::Read;
 
-use crate::datamodel::{DataStore};
+use crate::datamodel::DataStore;
 use crate::executable_content;
 use crate::executable_content::{ExecutableContent, Log};
 use crate::fsm::{

@@ -1,7 +1,7 @@
 //! Protocol to write a persistent binary version of a Fsm.
 
-use std::io::Write;
 use crate::datamodel::Data;
+use std::io::Write;
 
 /// Trait for writing binary data in some platform independent way.\
 /// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).

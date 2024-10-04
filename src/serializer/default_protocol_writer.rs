@@ -8,9 +8,9 @@ use byteorder::WriteBytesExt;
 #[cfg(feature = "Debug_Serializer")]
 use log::debug;
 
+use crate::datamodel::Data;
 use log::error;
 use std::io::Write;
-use crate::datamodel::Data;
 
 pub struct DefaultProtocolWriter<W> {
     pub writer: W,

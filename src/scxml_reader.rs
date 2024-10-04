@@ -814,9 +814,7 @@ impl ReaderState {
                     #[cfg(feature = "Debug_Reader")]
 
                     debug!("src='{}':\n{}", src.unwrap(), source);
-                    self.get_current_state()
-                        .data
-                        .set(id, Data::String(source));
+                    self.get_current_state().data.set(id, Data::String(source));
                 }
                 Err(e) => {
                     panic!("Can't read data source '{}'. {}", src.unwrap(), e);
@@ -833,9 +831,7 @@ impl ReaderState {
                 .data
                 .set(id, Data::String(expr.unwrap().clone()));
         } else if !content.is_empty() {
-            self.get_current_state()
-                .data
-                .set(id, Data::String(content));
+            self.get_current_state().data.set(id, Data::String(content));
         } else {
             self.get_current_state().data.set(id, Data::Null());
         }
