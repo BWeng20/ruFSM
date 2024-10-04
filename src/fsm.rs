@@ -3691,11 +3691,17 @@ impl DebugAction {
     }
 }
 
+impl Default for DebugAction {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Action for DebugAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalDataArc) -> Result<String, String> {
         let mut i = 0;
         for data in arguments {
-            i = i + 1;
+            i += 1;
             println!(" {}: {}", i, data)
         }
         Ok("debug".to_string())
