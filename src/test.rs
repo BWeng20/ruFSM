@@ -9,6 +9,7 @@ use std::time::Duration;
 use std::{println as error, println as info};
 use std::{process, thread};
 
+use crate::actions::ActionWrapper;
 use log::warn;
 #[cfg(not(test))]
 use log::{error, info};
@@ -16,7 +17,6 @@ use log::{error, info};
 use serde::Deserialize;
 #[cfg(feature = "yaml-config")]
 use yaml_rust::YamlLoader;
-use crate::actions::ActionWrapper;
 
 use crate::fsm;
 use crate::fsm::{Event, FinishMode, Fsm};

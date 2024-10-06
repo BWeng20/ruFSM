@@ -10,6 +10,7 @@ use log::error;
 use std::fmt::Debug;
 
 #[cfg(test)]
+#[cfg(feature = "Debug")]
 use std::println as debug;
 
 use crate::datamodel::{GlobalDataArc, GlobalDataLock, SCXML_EVENT_PROCESSOR};

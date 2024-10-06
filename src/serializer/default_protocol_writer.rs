@@ -99,6 +99,21 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
                 self.write_u8(4);
                 self.write_boolean(*val);
             }
+            Data::Array(val) => {
+                self.write_u8(5);
+                self.write_usize(val.len());
+                for v in val {
+                    self.write_data_value(v);
+                }
+            }
+            Data::Map(val) => {
+                self.write_u8(6);
+                self.write_usize(val.len());
+                for (key, v) in val {
+                    self.write_str(key.as_str());
+                    self.write_data_value(v);
+                }
+            }
             Data::Null() => {
                 self.write_u8(0);
             }

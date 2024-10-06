@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 /// Trait to inject custom actions into the datamodel.
 pub trait Action: Send {
     /// Executes the action.
-    fn execute(&self, arguments: &[Data], global: &GlobalDataArc) -> Result<String, String>;
+    fn execute(&self, arguments: &[Data], global: &GlobalDataArc) -> Result<Data, String>;
 
     /// Replacement for a generic "clone".
     fn get_copy(&self) -> Box<dyn Action>;

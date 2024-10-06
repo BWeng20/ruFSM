@@ -19,7 +19,7 @@ name = "rfsm"
 path = "src/lib.rs"
 
 [features]
-default = [ "ECMAScript", "EnvLog", "yaml-config", "json-config", "xml", "serializer", "Debug" ]
+default = [ "EnvLog", "ECMAScript", "yaml-config", "json-config", "xml", "serializer" ]
 ECMAScript = ["boa_engine", "boa_gc"]
 BasicHttpEventIOProcessor = ["hyper", "http-body-util", "hyper-util", "form_urlencoded"]
 yaml-config = ["yaml-rust"]
@@ -60,5 +60,7 @@ yaml-rust = { version = "0.4.5", optional = true }
 serde = { version = "1.0", optional = true }
 byteorder = "1.5.0"
 
-[profile.dev.package."*"]
-opt-level = "z"
+[[example]]
+required-features = [ "EnvLog", "ECMAScript", "xml", "serializer" ]
+name = "CustomActions"
+path = "examples/CustomActions.rs"

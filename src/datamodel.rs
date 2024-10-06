@@ -10,14 +10,12 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::actions::ActionMap;
 use log::error;
-#[cfg(not(test))]
-use log::info;
 use regex::Regex;
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
-    CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter,
-    StateId,
+    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair,
+    Parameter, StateId,
 };
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
@@ -441,7 +439,7 @@ impl Datamodel for NullDatamodel {
     fn clear(self: &mut NullDatamodel) {}
 
     fn log(self: &mut NullDatamodel, msg: &str) {
-        info!("Log: {}", msg);
+        println!("{}", msg);
     }
 
     fn execute(&mut self, _script: &str) -> Result<String, String> {
@@ -511,12 +509,16 @@ impl<T: Debug + 'static> ToAny for T {
     }
 }
 
+/// Data Variant used to handle data type-safe but
+/// Datamodel-agnostic way.
 #[derive(Clone)]
 pub enum Data {
     Integer(i64),
     Double(f64),
     String(String),
     Boolean(bool),
+    Array(Vec<Data>),
+    Map(HashMap<String, Data>),
     Null(),
 }
 
@@ -540,6 +542,12 @@ impl Display for Data {
             }
             Data::Boolean(v) => {
                 write!(f, "{}", v)
+            }
+            Data::Array(v) => {
+                write!(f, "{}", vec_to_string(v))
+            }
+            Data::Map(v) => {
+                write!(f, "{:?}", v)
             }
             Data::Null() => {
                 write!(f, "Null")

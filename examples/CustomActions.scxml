@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A Simple FSM that demonstrate use of custom actions.  -->
+<scxml xmlns="http://www.w3.org/2005/07/scxml" initial="s0" version="1.0" datamodel="ecmascript">
+<script>
+    log("Hello");
+</script>
+    <state id="s0">
+        <onentry>
+            <send delay="1s" event="leave"/>
+            <log expr="'Custom action myEnterAction will now be called.'"/>
+            <script>
+                let person = {name:"Bernd", age:50, hair_color:"braun"};
+                let array_data = [1,2,3,4,5];
+                // action marshaller supports JavaScript types number, string, boolean,
+                // array and object (converted to a map).
+                // Arrays and Objects are converted recursively.
+                myEnterAction("first", "second", array_data, 99, person);
+            </script>
+        </onentry>
+        <onexit>
+            <script>
+                log("Custom action myLeaveAction will now be called again.");
+                myLeaveAction( 1.5, true, "some text");
+            </script>
+        </onexit>
+        <!-- Can also be used in conditions.
+             In this example the action returns always true, the transition will be triggered. -->
+        <transition event="leave" cond="myEnterAction(_event)" target="end"/>
+    </state>
+
+    <final id="end">
+        <onentry>
+            <log expr="'FSM Finished'"/>
+        </onentry>
+    </final>
+</scxml>

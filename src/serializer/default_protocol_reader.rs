@@ -4,6 +4,7 @@
 use crate::serializer::default_protocol_definitions::*;
 use crate::serializer::protocol_reader::ProtocolReader;
 use byteorder::ReadBytesExt;
+use std::collections::HashMap;
 
 #[cfg(feature = "Debug_Serializer")]
 use log::debug;
@@ -305,6 +306,23 @@ impl<R: Read> ProtocolReader<R> for DefaultProtocolReader<R> {
             }
             3 => Data::String(self.read_string()),
             4 => Data::Boolean(self.read_boolean()),
+            5 => {
+                let len = self.read_usize();
+                let mut val = Vec::with_capacity(len);
+                for _i in 0..len {
+                    val.push(self.read_data_value());
+                }
+                Data::Array(val)
+            }
+            6 => {
+                let len = self.read_usize();
+                let mut val = HashMap::with_capacity(len);
+                for _i in 0..len {
+                    let k = self.read_string();
+                    val.insert(k, self.read_data_value());
+                }
+                Data::Map(val)
+            }
             _ => {
                 self.error(
                     format!("Protocol error in data value: unknown variant {}", what).as_str(),
