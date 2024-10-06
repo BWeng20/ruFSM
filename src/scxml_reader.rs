@@ -24,16 +24,15 @@ use quick_xml::Reader;
 
 use crate::datamodel::Data;
 use crate::executable_content::{
-    get_opt_executable_content_as, get_safe_executable_content_as, parse_duration_to_milliseconds,
-    Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, SendParameters,
+    get_opt_executable_content_as, get_safe_executable_content_as, parse_duration_to_milliseconds, Assign, Cancel,
+    ExecutableContent, Expression, ForEach, If, Log, Raise, SendParameters,
 };
 use crate::fsm::push_param;
 #[cfg(feature = "Debug_Reader")]
 use crate::fsm::vec_to_string;
 use crate::fsm::{
-    map_history_type, map_transition_type, BindingType, DoneData, ExecutableContentId, Fsm,
-    HistoryType, Invoke, Parameter, State, StateId, Transition, TransitionId, TransitionType,
-    ID_COUNTER,
+    map_history_type, map_transition_type, BindingType, DoneData, ExecutableContentId, Fsm, HistoryType, Invoke,
+    Parameter, State, StateId, Transition, TransitionId, TransitionType, ID_COUNTER,
 };
 
 use crate::fsm::CommonContent;
@@ -49,9 +48,7 @@ pub static INCLUDE_PATH_ARGUMENT_OPTION: ArgOption = ArgOption {
     required: false,
 };
 
-pub fn include_path_from_arguments(
-    named_arguments: &HashMap<&'static str, String>,
-) -> Vec<PathBuf> {
+pub fn include_path_from_arguments(named_arguments: &HashMap<&'static str, String>) -> Vec<PathBuf> {
     let mut include_paths = Vec::new();
     match named_arguments.get(INCLUDE_PATH_ARGUMENT_OPTION.name) {
         None => {}
@@ -429,11 +426,7 @@ impl ReaderState {
     ///             continued after the matching [get_executable_content](Self::get_executable_content).
     ///             If false, the current stack is discarded.
     /// * `tag`   - Tag for which this region was started. USed to mark the region for later clean-up.
-    fn start_executable_content_region(
-        &mut self,
-        stack: bool,
-        tag: &'static str,
-    ) -> ExecutableContentId {
+    fn start_executable_content_region(&mut self, stack: bool, tag: &'static str) -> ExecutableContentId {
         if stack {
             #[cfg(feature = "Debug_Reader")]
 
@@ -586,12 +579,7 @@ impl ReaderState {
         }
     }
 
-    fn get_or_create_state_with_attributes(
-        &mut self,
-        attr: &AttributeMap,
-        parallel: bool,
-        parent: StateId,
-    ) -> StateId {
+    fn get_or_create_state_with_attributes(&mut self, attr: &AttributeMap, parallel: bool, parent: StateId) -> StateId {
         let sname = match attr.get(ATTR_ID) {
             None => self.generate_name(),
             Some(id) => id.clone(),
@@ -719,8 +707,7 @@ impl ReaderState {
     /// A new "parallel" element started
     fn start_parallel(&mut self, attr: &AttributeMap) -> StateId {
         self.verify_parent_tag(TAG_PARALLEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
-        let state_id =
-            self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
+        let state_id = self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
         self.current.current_state = state_id;
         state_id
     }
@@ -728,8 +715,7 @@ impl ReaderState {
     /// A new "final" element started
     fn start_final(&mut self, attr: &AttributeMap) -> StateId {
         self.verify_parent_tag(TAG_FINAL, &[TAG_SCXML, TAG_STATE]);
-        let state_id =
-            self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
+        let state_id = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
 
         self.fsm.get_state_by_id_mut(state_id).is_final = true;
         self.current.current_state = state_id;
@@ -1361,10 +1347,7 @@ impl ReaderState {
             }
             send_params.delay_expr.clone_from(delay_expr_attr_value);
         } else if delay_attr.is_some() {
-            if (!delay_attr.unwrap().is_empty())
-                && type_attr.is_some()
-                && type_attr.unwrap().eq(TARGET_INTERNAL)
-            {
+            if (!delay_attr.unwrap().is_empty()) && type_attr.is_some() && type_attr.unwrap().eq(TARGET_INTERNAL) {
                 panic!(
                     "{}: {} with {} {} is not possible",
                     TAG_SEND,
@@ -1976,10 +1959,7 @@ pub fn parse_from_xml(xml: String) -> Result<Box<Fsm>, String> {
 }
 
 /// Reads the FSM from a XML String
-pub fn parse_from_xml_with_includes(
-    xml: String,
-    include_paths: &[PathBuf],
-) -> Result<Box<Fsm>, String> {
+pub fn parse_from_xml_with_includes(xml: String, include_paths: &[PathBuf]) -> Result<Box<Fsm>, String> {
     let mut rs = ReaderState::new();
     rs.include_paths = Vec::from(include_paths);
     rs.content = xml;
@@ -2056,8 +2036,7 @@ mod tests {
     #[should_panic]
     fn wrong_parse_in_xinclude_should_panic() {
         let _r = crate::scxml_reader::parse_from_xml(
-            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='xml'/></state></scxml>"
-                .to_string(),
+            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='xml'/></state></scxml>".to_string(),
         );
     }
 
@@ -2073,13 +2052,16 @@ mod tests {
     #[should_panic]
     fn xpointer_in_xinclude_should_panic() {
         let _r = crate::scxml_reader::parse_from_xml(
-            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text' xpointer='#123'/></state></scxml>".to_string());
+            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text' xpointer='#123'/></state></scxml>"
+                .to_string(),
+        );
     }
 
     #[test]
     fn xinclude_should_read() {
         let _r = crate::scxml_reader::parse_from_xml(
-            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text'/></state></scxml>".to_string());
+            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text'/></state></scxml>".to_string(),
+        );
     }
 
     #[test]
@@ -2108,12 +2090,15 @@ mod tests {
     #[should_panic]
     fn assign_with_expr_and_content_shall_panic() {
         let _r = crate::scxml_reader::parse_from_xml(
-            "<scxml><state><transition><assign location='x' expr='123'>123</assign></transition></state></scxml>".to_string());
+            "<scxml><state><transition><assign location='x' expr='123'>123</assign></transition></state></scxml>"
+                .to_string(),
+        );
     }
 
     #[test]
     fn assign_without_expr_and_content() {
         let _r = crate::scxml_reader::parse_from_xml(
-            "<scxml><state><transition><assign location='x'>123</assign></transition></state></scxml>".to_string());
+            "<scxml><state><transition><assign location='x'>123</assign></transition></state></scxml>".to_string(),
+        );
     }
 }

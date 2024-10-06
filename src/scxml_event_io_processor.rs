@@ -57,12 +57,7 @@ impl ScxmlEventIOProcessor {
         }
     }
 
-    fn send_to_session(
-        &mut self,
-        global_data_lock: &mut GlobalDataLock,
-        session_id: SessionId,
-        event: Event,
-    ) -> bool {
+    fn send_to_session(&mut self, global_data_lock: &mut GlobalDataLock, session_id: SessionId, event: Event) -> bool {
         match &global_data_lock.executor {
             None => {
                 panic!("Executor not available");
@@ -157,9 +152,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                             false
                         }
                         Some(session_id_s) => match session_id_s.parse::<SessionId>() {
-                            Ok(session_id) => {
-                                self.send_to_session(&mut global_lock, session_id, event)
-                            }
+                            Ok(session_id) => self.send_to_session(&mut global_lock, session_id, event),
                             Err(_err) => {
                                 error!("Send target '{}' has wrong format.", target);
                                 global_lock.enqueue_internal(Event::error_communication(&event));
@@ -181,8 +174,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                                         "InvokeId of target {} '{}' is not available.",
                                         invokeid, target
                                     );
-                                    global_lock
-                                        .enqueue_internal(Event::error_communication(&event));
+                                    global_lock.enqueue_internal(Event::error_communication(&event));
                                     return false;
                                 }
                                 Some(session) => session.session_id,
@@ -194,8 +186,7 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
                     // W3C says:
                     // If the value ... is not supported or invalid, the Processor MUST place the
                     // error error.execution on the internal event queue.
-                    global_lock
-                        .enqueue_internal(Event::error_execution(&event.sendid, &event.invoke_id));
+                    global_lock.enqueue_internal(Event::error_execution(&event.sendid, &event.invoke_id));
                     false
                 }
             }

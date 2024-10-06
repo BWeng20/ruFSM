@@ -19,8 +19,8 @@ use regex::Regex;
 
 use crate::datamodel::{Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
 use crate::fsm::{
-    opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair,
-    Parameter, PLATFORM_ID_COUNTER,
+    opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair, Parameter,
+    PLATFORM_ID_COUNTER,
 };
 use crate::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
 use crate::{get_global, Event, EventType};
@@ -69,9 +69,7 @@ pub fn get_executable_content_as<T: 'static>(ec: &mut dyn ExecutableContent) -> 
     }
 }
 
-pub fn get_opt_executable_content_as<T: 'static>(
-    ec_opt: Option<&mut dyn ExecutableContent>,
-) -> Option<&mut T> {
+pub fn get_opt_executable_content_as<T: 'static>(ec_opt: Option<&mut dyn ExecutableContent>) -> Option<&mut T> {
     match ec_opt {
         Some(ec) => get_executable_content_as::<T>(ec),
         None => None,
@@ -245,8 +243,7 @@ impl ExecutableContent for Assign {
     }
 
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
-        tracer
-            .print_name_and_attributes(self, &[("location", &self.location), ("expr", &self.expr)]);
+        tracer.print_name_and_attributes(self, &[("location", &self.location), ("expr", &self.expr)]);
     }
 }
 
@@ -484,8 +481,8 @@ impl ExecutableContent for Cancel {
     /// the specified id. Note, however, that it can not be guaranteed to succeed, for example if
     /// the event has already been delivered by the time the \<cancel> tag executes.
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
-        if let Ok(send_id) = datamodel
-            .get_expression_alternative_value(self.send_id.as_str(), self.send_id_expr.as_str())
+        if let Ok(send_id) =
+            datamodel.get_expression_alternative_value(self.send_id.as_str(), self.send_id_expr.as_str())
         {
             get_global!(datamodel).delayed_send.remove(&send_id);
         };
@@ -512,9 +509,7 @@ impl ExecutableContent for SendParameters {
     /// If unable to dispatch, place "error.communication" in internal queue
     /// If target is not supported, place "error.execution" in internal queue
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool {
-        let target = match datamodel
-            .get_expression_alternative_value(self.target.as_str(), self.target_expr.as_str())
-        {
+        let target = match datamodel.get_expression_alternative_value(self.target.as_str(), self.target_expr.as_str()) {
             Ok(value) => value,
             Err(_) => {
                 // Error -> abort
@@ -522,8 +517,7 @@ impl ExecutableContent for SendParameters {
             }
         };
 
-        let event_name = match datamodel
-            .get_expression_alternative_value(self.event.as_str(), self.event_expr.as_str())
+        let event_name = match datamodel.get_expression_alternative_value(self.event.as_str(), self.event_expr.as_str())
         {
             Ok(value) => value,
             Err(_) => {
@@ -608,8 +602,7 @@ impl ExecutableContent for SendParameters {
             datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
             return false;
         }
-        let type_result = datamodel
-            .get_expression_alternative_value(self.type_value.as_str(), self.type_expr.as_str());
+        let type_result = datamodel.get_expression_alternative_value(self.type_value.as_str(), self.type_expr.as_str());
 
         let type_val = match type_result {
             Ok(val) => val,
@@ -738,8 +731,7 @@ mod tests {
 /// RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
 pub fn parse_duration_to_milliseconds(d: &str) -> i64 {
     lazy_static! {
-        static ref DURATION_RE: Regex =
-            Regex::new(r"^(\d*(\.\d+)?)(MS|S|M|H|D|ms|s|m|h|d)$").unwrap();
+        static ref DURATION_RE: Regex = Regex::new(r"^(\d*(\.\d+)?)(MS|S|M|H|D|ms|s|m|h|d)$").unwrap();
     }
     if d.is_empty() {
         0

@@ -29,18 +29,19 @@ See [SW Design](SW_Design.md)
 
 ## Crate Features
 
-| Name                      | Description                                                | Related crates                                            |
-|---------------------------|------------------------------------------------------------|-----------------------------------------------------------|
-| ECMAScript                | Adds an EMCAScript datamodel implementation.               | boa_engine                                                |
-| EnvLog                    | The crate "env_log" is used as "log" implementation.       | env_log                                                   |
-| BasicHttpEventIOProcessor | Adds an implementation of BasicHttpEventIOProcessor        | hyper, http-body-util, hyper-util, tokio, form_urlencoded |
-| json-config               | The test tool can read configurations in JSON.             | serde_json                                                |
-| yaml-config               | The test tool can read configurations in YAML.             | yaml-rust                                                 |
-| Trace_Method              | Enables tracing of methods calls in the FSM.               |                                                           |
-| Trace_State               | Enables tracing of state changes in the FSM.               |                                                           |
-| Trace_Event               | Enables tracing of events in the FSM.                      |                                                           |
-| Xml                       | Enables reading SCXML (xml) files. Currently no other way. | quick-xml, reqwest                                        |
-| Debug_Reader              | Enables debug output in the SCXML reader (a lot).          |                                                           |
+| Name                      | Description                                          | Related crates                                            |
+|---------------------------|------------------------------------------------------|-----------------------------------------------------------|
+| ECMAScript                | Adds an EMCAScript datamodel implementation.         | boa_engine                                                |
+| EnvLog                    | The crate "env_log" is used as "log" implementation. | env_log                                                   |
+| BasicHttpEventIOProcessor | Adds an implementation of BasicHttpEventIOProcessor  | hyper, http-body-util, hyper-util, tokio, form_urlencoded |
+| json-config               | The test tool can read configurations in JSON.       | serde_json                                                |
+| yaml-config               | The test tool can read configurations in YAML.       | yaml-rust                                                 |
+| Trace_Method              | Enables tracing of methods calls in the FSM.         |                                                           |
+| Trace_State               | Enables tracing of state changes in the FSM.         |                                                           |
+| Trace_Event               | Enables tracing of events in the FSM.                |                                                           |
+| xml                       | Enables reading SCXML (xml) files.                   | quick-xml, reqwest                                        |
+| Debug_Reader              | Enables debug output in the SCXML reader (a lot).    |                                                           |
+| Debug                     | Enables additional debug (to fnd errors).            |                                                           |
 
 The trace options <i>Trace_xxx</i> still needed to be activated during runtime by settings the trace-mode.
 If none of the <i>Trace_xxx</i> features are used, "Tracer" module is completely removed.
@@ -60,6 +61,32 @@ To add such operations different approaches exits. In hard-codes FSMs methods-ca
 linked to the transition or states during compile-time.<br/>
 
 This implementation loads FSMs during runtime, so the binding needs to be dynamically.<br/> 
-The API for this binding currently doesn't exist (a todo).
 
-The only practical use (currently) is to test SCXML documents (see [Manual Testing](SW_Design.md#manual-tests)) 
+Form some huge project, you can re-implement to Datamodel-trait and implement an optimized way to trigger you 
+functionality.<br/>
+Must simpler is to use the module "Action". You find examples how to use this.
+
+### Datamodel
+
+For details about the Datamodel-concept in SCXML see the W3C documentation.<br/>
+This lib provides an implementation of the EMCAScript-Datamodel, but you are free to implement
+other models as well.
+
+The Datamodel in SCXML is responsible to execute code and expressions. Custom business logic
+can be implemented this way. For a simpler approach (without implement a full Datamodel), see 
+"Custom Actions" below.
+
+The Datamodel is selected in the SCXML, so you can provide multiple model-implementation in
+one binary.
+
+To add new data-models, use function `rfsm::fsm::register_datamodel`.
+
+
+### Custom Actions
+
+You can use the trait "Action" to add custom functions to the FSM. See the Examples for a How-To.
+
+If using ECMAScript, these actions can be called like normal methods. Arguments and return values will be converted 
+from and to JavaScript values. See enum "Data" for supported data-types.
+
+Actions have full access to the data and states of the FSM.

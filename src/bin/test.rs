@@ -105,9 +105,7 @@ async fn main() {
                             debug!("Loaded {}", test_spec_file);
                             Some(fsm)
                         }
-                        Err(_err) => abort_test(
-                            format!("Failed to load fsm '{}'", test_spec_file).to_string(),
-                        ),
+                        Err(_err) => abort_test(format!("Failed to load fsm '{}'", test_spec_file).to_string()),
                     }
                 } else {
                     fsm

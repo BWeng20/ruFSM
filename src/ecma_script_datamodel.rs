@@ -20,9 +20,7 @@ use boa_engine::object::builtins::{JsArray, JsMap};
 use boa_engine::object::ObjectInitializer;
 use boa_engine::property::{Attribute, PropertyDescriptor, PropertyKey};
 use boa_engine::value::Type;
-use boa_engine::{
-    js_string, native_function::NativeFunction, Context, JsBigInt, JsError, JsValue, Source,
-};
+use boa_engine::{js_string, native_function::NativeFunction, Context, JsBigInt, JsError, JsValue, Source};
 use boa_engine::{JsArgs, JsData, JsResult};
 use boa_gc::{empty_trace, Finalize, Trace};
 
@@ -33,10 +31,9 @@ use log::{error, warn};
 use log::debug;
 
 use crate::datamodel::{
-    Data, DataStore, Datamodel, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
+    Data, DataStore, Datamodel, DatamodelFactory, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
     EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
-    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE,
-    EVENT_VARIABLE_NAME,
+    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::{EventIOProcessor, SYS_IO_PROCESSORS};
 
@@ -66,6 +63,18 @@ pub struct ECMAScriptDatamodel {
     pub context: Context,
     pub tracer: Option<Box<dyn ExecutableContentTracer>>,
     pub strict_mode: bool,
+}
+
+pub struct ECMAScriptDatamodelFactory {}
+
+impl DatamodelFactory for ECMAScriptDatamodelFactory {
+    fn create(&mut self, global_data: GlobalDataArc, options: &HashMap<String, String>) -> Box<dyn Datamodel> {
+        let mut ecma = Box::new(ECMAScriptDatamodel::new(global_data));
+        for (key, value) in options {
+            ecma.set_option(key.as_str(), value.as_str());
+        }
+        ecma
+    }
 }
 
 fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
@@ -327,9 +336,7 @@ impl ECMAScriptDatamodel {
                         for key in &keys {
                             let name = match key {
                                 PropertyKey::String(ref name) => name.to_std_string().unwrap(),
-                                PropertyKey::Symbol(ref name) => {
-                                    name.fn_name().to_std_string().unwrap()
-                                }
+                                PropertyKey::Symbol(ref name) => name.fn_name().to_std_string().unwrap(),
                                 PropertyKey::Index(idx) => idx.get().to_string(),
                             };
                             #[cfg(feature = "Debug")]
@@ -402,11 +409,7 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    fn in_configuration(
-        _this: &JsValue,
-        args: &[JsValue],
-        context: &mut Context,
-    ) -> JsResult<JsValue> {
+    fn in_configuration(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
         let state = args.get_or_undefined(0);
 
         if let Ok(name) = state.to_string(context) {
@@ -512,11 +515,7 @@ impl Datamodel for ECMAScriptDatamodel {
                 let processor_js = JsMap::new(ctx);
                 let location = js_string!(processor.lock().unwrap().get_location(session_id));
                 _ = processor_js.create_data_property(js_string!("location"), location, ctx);
-                _ = io_processors_js.create_data_property(
-                    js_string!(name.as_str()),
-                    processor_js,
-                    ctx,
-                );
+                _ = io_processors_js.create_data_property(js_string!(name.as_str()), processor_js, ctx);
             }
             let r = self.context.global_object().define_property_or_throw(
                 js_string!(SYS_IO_PROCESSORS),
@@ -716,9 +715,7 @@ impl Datamodel for ECMAScriptDatamodel {
                         if self.assign_internal(item_name, "null", true) {
                             for item_prop in p.index_property_values() {
                                 // Skip the last "length" element
-                                if item_prop.enumerable().is_some()
-                                    && item_prop.enumerable().unwrap()
-                                {
+                                if item_prop.enumerable().is_some() && item_prop.enumerable().unwrap() {
                                     match item_prop.value() {
                                         Some(item) => {
                                             #[cfg(feature = "Debug")]

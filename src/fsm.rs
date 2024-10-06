@@ -5,6 +5,7 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::doc_lazy_continuation)]
 
+use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -34,20 +35,19 @@ use crate::actions::{Action, ActionWrapper};
 use timer::Guard;
 
 use crate::datamodel::{
-    Data, DataStore, Datamodel, GlobalDataArc, NullDatamodel, NULL_DATAMODEL, NULL_DATAMODEL_LC,
-    SCXML_INVOKE_TYPE, SCXML_INVOKE_TYPE_SHORT, SESSION_ID_VARIABLE_NAME,
+    Data, DataStore, Datamodel, DatamodelFactory, GlobalDataArc, NullDatamodelFactory, NULL_DATAMODEL,
+    NULL_DATAMODEL_LC, SCXML_INVOKE_TYPE, SCXML_INVOKE_TYPE_SHORT, SESSION_ID_VARIABLE_NAME,
     SESSION_NAME_VARIABLE_NAME,
 };
+use crate::ecma_script_datamodel::ECMAScriptDatamodelFactory;
 #[cfg(feature = "ECMAScript")]
-use crate::ecma_script_datamodel::{ECMAScriptDatamodel, ECMA_SCRIPT_LC};
+use crate::ecma_script_datamodel::ECMA_SCRIPT_LC;
 use crate::event_io_processor::EventIOProcessor;
 use crate::executable_content::ExecutableContent;
 use crate::fsm::BindingType::{Early, Late};
 use crate::fsm_executor::FsmExecutor;
 use crate::get_global;
-use crate::scxml_event_io_processor::{
-    SCXML_EVENT_PROCESSOR_SHORT_TYPE, SCXML_TARGET_SESSION_ID_PREFIX,
-};
+use crate::scxml_event_io_processor::{SCXML_EVENT_PROCESSOR_SHORT_TYPE, SCXML_TARGET_SESSION_ID_PREFIX};
 #[cfg(feature = "Trace")]
 use crate::tracer::{DefaultTracer, TraceMode, Tracer};
 
@@ -138,8 +138,7 @@ pub fn start_fsm_with_data_and_finish_mode(
                     let mut global = get_global!(datamodel);
                     global.externalQueue = externalQueue;
                     global.session_id = session_id;
-                    global.caller_invoke_id =
-                        Option::map(sm.caller_invoke_id.as_ref(), |x| x.clone());
+                    global.caller_invoke_id = Option::map(sm.caller_invoke_id.as_ref(), |x| x.clone());
                     global.parent_session_id = sm.parent_session_id;
                     global.executor = Some(executor);
 
@@ -1298,12 +1297,7 @@ impl Fsm {
     }
 
     /// Implements variant "initializeDataModel(datamodel, doc)" from W3C.
-    fn initialize_data_models_recursive(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        state_id: StateId,
-        set_data: bool,
-    ) {
+    fn initialize_data_models_recursive(&mut self, datamodel: &mut dyn Datamodel, state_id: StateId, set_data: bool) {
         datamodel.initializeDataModel(self, state_id, set_data);
 
         for child_state in self.getChildStates(state_id).iterator() {
@@ -1358,8 +1352,7 @@ impl Fsm {
             // Initialize session variables "_name" and "_sessionid"
 
             let session_id = datamodel.global_s().lock().session_id;
-            datamodel
-                .initialize_read_only(SESSION_ID_VARIABLE_NAME, session_id.to_string().as_str());
+            datamodel.initialize_read_only(SESSION_ID_VARIABLE_NAME, session_id.to_string().as_str());
             datamodel.initialize_read_only(SESSION_NAME_VARIABLE_NAME, self.name.as_str());
 
             {
@@ -1837,10 +1830,7 @@ impl Fsm {
     ///     return enabledTransitions;
     /// ```
     #[allow(non_snake_case)]
-    fn selectEventlessTransitions(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-    ) -> OrderedSet<TransitionId> {
+    fn selectEventlessTransitions(&mut self, datamodel: &mut dyn Datamodel) -> OrderedSet<TransitionId> {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("selectEventlessTransitions");
 
@@ -1861,9 +1851,7 @@ impl Fsm {
                 let state = self.get_state_by_id(*s);
                 for t in self
                     .to_transition_list(&state.transitions)
-                    .sort(&|t1: &&Transition, t2: &&Transition| {
-                        self.transition_document_order(t1, t2)
-                    })
+                    .sort(&|t1: &&Transition, t2: &&Transition| self.transition_document_order(t1, t2))
                     .iterator()
                 {
                     if t.events.is_empty() {
@@ -1906,11 +1894,7 @@ impl Fsm {
     ///     return enabledTransitions;
     /// ```
     #[allow(non_snake_case)]
-    fn selectTransitions(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        event: &Event,
-    ) -> OrderedSet<TransitionId> {
+    fn selectTransitions(&mut self, datamodel: &mut dyn Datamodel, event: &Event) -> OrderedSet<TransitionId> {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("selectTransitions");
 
@@ -1932,9 +1916,7 @@ impl Fsm {
                     transition.push(self.get_transition_by_id(*tid));
                 }
 
-                transition.sort_by(&|t1: &&Transition, t2: &&Transition| {
-                    self.transition_document_order(t1, t2)
-                });
+                transition.sort_by(&|t1: &&Transition, t2: &&Transition| self.transition_document_order(t1, t2));
                 for t in transition {
                     if (!t.events.is_empty()) && t.nameMatch(event.name.as_str()) {
                         condT.push(t.id);
@@ -2059,11 +2041,7 @@ impl Fsm {
     ///     enterStates(enabledTransitions)
     /// ```
     #[allow(non_snake_case)]
-    fn microstep(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        enabledTransitions: &List<TransitionId>,
-    ) {
+    fn microstep(&mut self, datamodel: &mut dyn Datamodel, enabledTransitions: &List<TransitionId>) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("microstep");
         #[cfg(feature = "Debug")]
@@ -2126,11 +2104,7 @@ impl Fsm {
     ///         configuration.delete(s)
     /// ```
     #[allow(non_snake_case)]
-    fn exitStates(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        enabledTransitions: &List<TransitionId>,
-    ) {
+    fn exitStates(&mut self, datamodel: &mut dyn Datamodel, enabledTransitions: &List<TransitionId>) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("exitStates");
 
@@ -2153,10 +2127,10 @@ impl Fsm {
             for hid in s.history.iterator() {
                 let h = self.get_state_by_id(*hid);
                 if h.history_type == HistoryType::Deep {
-                    let stateIdList =
-                        self.state_list_to_id_set(&configStateList.filter_by(&|s0| -> bool {
-                            self.isAtomicState(s0) && self.isDescendant(s0.id, s.id)
-                        }));
+                    let stateIdList = self.state_list_to_id_set(
+                        &configStateList
+                            .filter_by(&|s0| -> bool { self.isAtomicState(s0) && self.isDescendant(s0.id, s.id) }),
+                    );
                     ahistory.put_move(h.id, stateIdList);
                 } else {
                     let fl = &get_global!(datamodel)
@@ -2378,11 +2352,7 @@ impl Fsm {
     }
 
     #[allow(non_snake_case)]
-    pub fn executeContent(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        contentId: ExecutableContentId,
-    ) {
+    pub fn executeContent(&mut self, datamodel: &mut dyn Datamodel, contentId: ExecutableContentId) {
         #[cfg(feature = "Trace_Method")]
         {
             self.tracer.enter_method("executeContent");
@@ -2454,11 +2424,7 @@ impl Fsm {
     ///     return statesToExit;
     /// ```
     #[allow(non_snake_case)]
-    fn computeExitSet(
-        &self,
-        datamodel: &mut dyn Datamodel,
-        transitions: &List<TransitionId>,
-    ) -> OrderedSet<StateId> {
+    fn computeExitSet(&self, datamodel: &mut dyn Datamodel, transitions: &List<TransitionId>) -> OrderedSet<StateId> {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("computeExitSet");
         #[cfg(feature = "Trace_Method")]
@@ -2491,11 +2457,7 @@ impl Fsm {
     ///         executeContent(t)
     /// ```
     #[allow(non_snake_case)]
-    fn executeTransitionContent(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        enabledTransitions: &List<TransitionId>,
-    ) {
+    fn executeTransitionContent(&mut self, datamodel: &mut dyn Datamodel, enabledTransitions: &List<TransitionId>) {
         for tid in enabledTransitions.iterator() {
             let t = self.get_transition_by_id(*tid);
             if t.content > 0 {
@@ -2890,11 +2852,7 @@ impl Fsm {
     ///     return targets;
     /// ```
     #[allow(non_snake_case)]
-    fn getEffectiveTargetStates(
-        &self,
-        datamodel: &mut dyn Datamodel,
-        transition: &Transition,
-    ) -> OrderedSet<StateId> {
+    fn getEffectiveTargetStates(&self, datamodel: &mut dyn Datamodel, transition: &Transition) -> OrderedSet<StateId> {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("getEffectiveTargetStates");
         #[cfg(feature = "Trace_Method")]
@@ -2907,10 +2865,9 @@ impl Fsm {
                 } else {
                     let s = self.get_state_by_id(*sid);
                     // History states have exactly one "transition"
-                    targets.union(&self.getEffectiveTargetStates(
-                        datamodel,
-                        self.get_transition_by_id(*s.transitions.head()),
-                    ));
+                    targets.union(
+                        &self.getEffectiveTargetStates(datamodel, self.get_transition_by_id(*s.transitions.head())),
+                    );
                 }
             } else {
                 targets.add(*sid);
@@ -3037,22 +2994,20 @@ impl Fsm {
         // W3C: if the evaluation of its arguments produces an error, the SCXML Processor must
         // terminate the processing of the element without further action.
 
-        let mut type_name =
-            match datamodel.get_expression_alternative_value(&inv.type_name, &inv.type_expr) {
-                Ok(value) => value,
-                Err(_) => {
-                    // Error -> abort
-                    return;
-                }
-            };
+        let mut type_name = match datamodel.get_expression_alternative_value(&inv.type_name, &inv.type_expr) {
+            Ok(value) => value,
+            Err(_) => {
+                // Error -> abort
+                return;
+            }
+        };
 
         if type_name.eq(SCXML_INVOKE_TYPE_SHORT) {
             type_name = SCXML_INVOKE_TYPE.to_string();
         }
 
         if !(type_name.is_empty()
-            || (type_name.starts_with(SCXML_INVOKE_TYPE)
-                && type_name.len() <= (SCXML_INVOKE_TYPE.len() + 1)))
+            || (type_name.starts_with(SCXML_INVOKE_TYPE) && type_name.len() <= (SCXML_INVOKE_TYPE.len() + 1)))
         {
             error!("Unsupported <invoke> type {}", type_name);
             return;
@@ -3079,9 +3034,7 @@ impl Fsm {
             inv.invoke_id.clone()
         };
 
-        let src = match datamodel
-            .get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str())
-        {
+        let src = match datamodel.get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str()) {
             Err(_) => {
                 // Error -> Abort
                 return;
@@ -3172,12 +3125,7 @@ impl Fsm {
     }
 
     #[allow(non_snake_case)]
-    fn cancelInvoke(
-        &mut self,
-        datamodel: &mut dyn Datamodel,
-        invoke_id: &InvokeId,
-        session_id: SessionId,
-    ) {
+    fn cancelInvoke(&mut self, datamodel: &mut dyn Datamodel, invoke_id: &InvokeId, session_id: SessionId) {
         #[cfg(feature = "Trace_Method")]
         self.tracer.enter_method("cancelInvoke");
         get_global!(datamodel).child_sessions.remove(invoke_id);
@@ -3575,23 +3523,39 @@ impl Transition {
     }
 }
 
+lazy_static! {
+    static ref datamodel_factories: Arc<Mutex<HashMap<String, Box<dyn DatamodelFactory>>>> = {
+        let mut hs: HashMap<String, Box<dyn DatamodelFactory>> = HashMap::new();
+
+        #[cfg(feature = "ECMAScript")]
+        hs.insert(ECMA_SCRIPT_LC.to_string(), Box::new(ECMAScriptDatamodelFactory{}));
+        hs.insert(NULL_DATAMODEL_LC.to_string(), Box::new(NullDatamodelFactory{}));
+
+        Arc::new(Mutex::new(hs))
+    };
+}
+
+/// Register a new Datamodel.\
+/// The name is case-insensitive.
+pub fn register_datamodel(name: &str, factory: Box<dyn DatamodelFactory>) {
+    datamodel_factories
+        .lock()
+        .unwrap()
+        .insert(name.to_lowercase(), factory);
+}
+
 pub fn create_datamodel(
     name: &str,
     global_data: GlobalDataArc,
     options: &HashMap<String, String>,
 ) -> Box<dyn Datamodel> {
-    match name.to_lowercase().as_str() {
-        // TODO: use some registration api to handle data models
-        #[cfg(feature = "ECMAScript")]
-        ECMA_SCRIPT_LC => {
-            let mut ecma = Box::new(ECMAScriptDatamodel::new(global_data));
-            for (key, value) in options {
-                ecma.set_option(key.as_str(), value.as_str());
-            }
-            ecma
-        }
-        NULL_DATAMODEL_LC => Box::new(NullDatamodel::new(global_data)),
-        _ => panic!("Unsupported Data Model '{}'", name),
+    match datamodel_factories
+        .lock()
+        .unwrap()
+        .get_mut(&name.to_lowercase())
+    {
+        Some(factory) => factory.create(global_data, options),
+        None => panic!("Unsupported Data Model '{}'", name),
     }
 }
 

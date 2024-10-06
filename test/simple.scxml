@@ -17,6 +17,9 @@
     <final id="end">
         <onentry>
             <log expr="'Finished!!!'"/>
+            <script>
+                debug("hallo", 2, "some");
+            </script>
         </onentry>
     </final>
 

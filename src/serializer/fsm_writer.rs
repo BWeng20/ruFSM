@@ -11,21 +11,19 @@ use crate::executable_content::{
     Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters,
 };
 use crate::fsm::{
-    CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, Invoke, Parameter, State,
-    StateId, Transition, TransitionId,
+    CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, Invoke, Parameter, State, StateId, Transition,
+    TransitionId,
 };
 use crate::serializer::default_protocol_definitions::{
-    FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY,
-    FSM_PROTOCOL_FLAG_INVOKE, FSM_PROTOCOL_FLAG_IS_FINAL, FSM_PROTOCOL_FLAG_IS_PARALLEL,
-    FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT, FSM_PROTOCOL_FLAG_STATES,
+    FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY, FSM_PROTOCOL_FLAG_INVOKE,
+    FSM_PROTOCOL_FLAG_IS_FINAL, FSM_PROTOCOL_FLAG_IS_PARALLEL, FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT,
+    FSM_PROTOCOL_FLAG_STATES,
 };
 use crate::serializer::protocol_writer::ProtocolWriter;
 
 pub const FSM_PROTOCOL_WRITER_VERSION: &str = "fsmW1.0";
 
-fn get_executable_content_as<T: 'static>(
-    ec: &dyn crate::executable_content::ExecutableContent,
-) -> &T {
+fn get_executable_content_as<T: 'static>(ec: &dyn crate::executable_content::ExecutableContent) -> &T {
     let va = ec.as_any();
     va.downcast_ref::<T>()
         .unwrap_or_else(|| panic!("Failed to cast executable content"))
@@ -280,31 +278,33 @@ where
         self.writer.write_u8(ec_type);
 
         match ec_type {
-            executable_content::TYPE_IF => self
-                .write_executable_content_if(get_executable_content_as::<If>(executable_content)),
-            executable_content::TYPE_EXPRESSION => self.write_executable_content_expression(
-                get_executable_content_as::<Expression>(executable_content),
-            ),
-            executable_content::TYPE_SCRIPT => self.write_executable_content_script(
-                get_executable_content_as::<Script>(executable_content),
-            ),
-            executable_content::TYPE_LOG => self
-                .write_executable_content_log(get_executable_content_as::<Log>(executable_content)),
-            executable_content::TYPE_FOREACH => self.write_executable_content_for_each(
-                get_executable_content_as::<ForEach>(executable_content),
-            ),
-            executable_content::TYPE_SEND => self.write_executable_content_send(
-                get_executable_content_as::<SendParameters>(executable_content),
-            ),
-            executable_content::TYPE_RAISE => self.write_executable_content_raise(
-                get_executable_content_as::<Raise>(executable_content),
-            ),
-            executable_content::TYPE_CANCEL => self.write_executable_content_cancel(
-                get_executable_content_as::<Cancel>(executable_content),
-            ),
-            executable_content::TYPE_ASSIGN => self.write_executable_content_assign(
-                get_executable_content_as::<Assign>(executable_content),
-            ),
+            executable_content::TYPE_IF => {
+                self.write_executable_content_if(get_executable_content_as::<If>(executable_content))
+            }
+            executable_content::TYPE_EXPRESSION => {
+                self.write_executable_content_expression(get_executable_content_as::<Expression>(executable_content))
+            }
+            executable_content::TYPE_SCRIPT => {
+                self.write_executable_content_script(get_executable_content_as::<Script>(executable_content))
+            }
+            executable_content::TYPE_LOG => {
+                self.write_executable_content_log(get_executable_content_as::<Log>(executable_content))
+            }
+            executable_content::TYPE_FOREACH => {
+                self.write_executable_content_for_each(get_executable_content_as::<ForEach>(executable_content))
+            }
+            executable_content::TYPE_SEND => self.write_executable_content_send(get_executable_content_as::<
+                SendParameters,
+            >(executable_content)),
+            executable_content::TYPE_RAISE => {
+                self.write_executable_content_raise(get_executable_content_as::<Raise>(executable_content))
+            }
+            executable_content::TYPE_CANCEL => {
+                self.write_executable_content_cancel(get_executable_content_as::<Cancel>(executable_content))
+            }
+            executable_content::TYPE_ASSIGN => {
+                self.write_executable_content_assign(get_executable_content_as::<Assign>(executable_content))
+            }
             ut => {
                 panic!("Unknown Executable Content: {}", ut)
             }
@@ -316,10 +316,7 @@ where
         self.write_executable_content_id(executable_content_if.content);
         self.write_executable_content_id(executable_content_if.else_content);
     }
-    pub fn write_executable_content_expression(
-        &mut self,
-        executable_content_expression: &Expression,
-    ) {
+    pub fn write_executable_content_expression(&mut self, executable_content_expression: &Expression) {
         self.writer
             .write_str(&executable_content_expression.content);
     }

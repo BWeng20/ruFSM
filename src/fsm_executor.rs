@@ -82,12 +82,7 @@ impl FsmExecutor {
         #[cfg(feature = "BasicHttpEventIOProcessor")]
         {
             let w = Box::new(
-                BasicHTTPEventIOProcessor::new(
-                    IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                    "localhost",
-                    5555,
-                )
-                .await,
+                BasicHTTPEventIOProcessor::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), "localhost", 5555).await,
             );
             e.add_processor(w);
         }
@@ -96,10 +91,7 @@ impl FsmExecutor {
     }
 
     #[cfg(feature = "xml")]
-    pub fn set_include_paths_from_arguments(
-        &mut self,
-        named_arguments: &HashMap<&'static str, String>,
-    ) {
+    pub fn set_include_paths_from_arguments(&mut self, named_arguments: &HashMap<&'static str, String>) {
         self.set_include_paths(&include_path_from_arguments(named_arguments));
     }
 
@@ -262,11 +254,7 @@ impl FsmExecutor {
     }
 
     /// Sends some event to a session.
-    pub fn send_to_session(
-        &self,
-        session_id: SessionId,
-        event: Event,
-    ) -> Result<(), SendError<Box<Event>>> {
+    pub fn send_to_session(&self, session_id: SessionId, event: Event) -> Result<(), SendError<Box<Event>>> {
         match self.get_session_sender(session_id) {
             None => {
                 todo!("Handling of unknown session")

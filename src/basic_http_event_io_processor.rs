@@ -66,9 +66,7 @@ enum BasicHTTPEvent {
 
 impl BasicHTTPEvent {
     /// Parse a Http request and created  the resulting message to the message thread.
-    pub async fn from_request(
-        request: Request<hyper::body::Incoming>,
-    ) -> Result<BasicHTTPEvent, hyper::StatusCode> {
+    pub async fn from_request(request: Request<hyper::body::Incoming>) -> Result<BasicHTTPEvent, hyper::StatusCode> {
         let (parts, body) = request.into_parts();
         debug!("Method {:?}", parts.method);
         debug!("Header {:?}", parts.headers);

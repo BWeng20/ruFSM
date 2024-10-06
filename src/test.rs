@@ -277,10 +277,7 @@ pub fn run_test_manual_with_send(
                     false
                 }
                 Some(final_configuration) => {
-                    match verify_final_configuration(
-                        expected_final_configuration,
-                        final_configuration,
-                    ) {
+                    match verify_final_configuration(expected_final_configuration, final_configuration) {
                         Ok(states) => {
                             info!(
                                 "[{}] ==> Final configuration '{}' reached",
@@ -290,11 +287,11 @@ pub fn run_test_manual_with_send(
                         }
                         Err(states) => {
                             error!(
-                                    "[{}] ==> Expected final state '{}' not reached. Final configuration: {}",
-                                    test_name,
-                                    states,
-                                    final_configuration.join(",")
-                                );
+                                "[{}] ==> Expected final state '{}' not reached. Final configuration: {}",
+                                test_name,
+                                states,
+                                final_configuration.join(",")
+                            );
                             false
                         }
                     }
@@ -341,10 +338,7 @@ pub fn disable_watchdog(watchdog_sender: &Sender<String>) {
 ///
 /// + expected_states - List of expected states, the FSM configuration must contain all of them.
 /// + fsm_config - The final FSM configuration to verify. May contain more than the required states.
-pub fn verify_final_configuration(
-    expected_states: &Vec<String>,
-    fsm_config: &[String],
-) -> Result<String, String> {
+pub fn verify_final_configuration(expected_states: &Vec<String>, fsm_config: &[String]) -> Result<String, String> {
     for fc_name in expected_states {
         if !fsm_config.contains(fc_name) {
             return Err(fc_name.clone());

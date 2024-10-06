@@ -12,8 +12,7 @@ use regex::Regex;
 
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm::{
-    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair,
-    Parameter, StateId,
+    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter, StateId,
 };
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
@@ -69,6 +68,12 @@ pub const EVENT_VARIABLE_FIELD_INVOKE_ID: &str = "invokeid";
 
 /// Name of field "data" of system variable "_event"
 pub const EVENT_VARIABLE_FIELD_DATA: &str = "data";
+
+/// Factory trait to handle creation of data-models dynamically.
+pub trait DatamodelFactory: Send {
+    /// Create a NEW datamodel.
+    fn create(&mut self, global_data: GlobalDataArc, options: &HashMap<String, String>) -> Box<dyn Datamodel>;
+}
 
 /// Gets the global data store from datamodel.
 #[macro_export]
@@ -159,11 +164,7 @@ pub trait Datamodel {
     /// If value_expression is empty, Ok(value) is returned (if empty or not). If the expression
     /// results in error Err(message) and "error.execute" is put in internal queue.
     /// See [internal_error_execution](Datamodel::internal_error_execution).
-    fn get_expression_alternative_value(
-        &mut self,
-        value: &str,
-        value_expression: &str,
-    ) -> Result<String, String> {
+    fn get_expression_alternative_value(&mut self, value: &str, value_expression: &str) -> Result<String, String> {
         if value_expression.is_empty() {
             Ok(value.to_string())
         } else {
@@ -232,11 +233,7 @@ pub trait Datamodel {
     /// *W3C says*:\
     /// Indicates that an error internal to the execution of the document has occurred, such as one
     /// arising from expression evaluation.
-    fn internal_error_execution_for_event(
-        &mut self,
-        send_id: &Option<String>,
-        invoke_id: &Option<InvokeId>,
-    ) {
+    fn internal_error_execution_for_event(&mut self, send_id: &Option<String>, invoke_id: &Option<InvokeId>) {
         get_global!(self).enqueue_internal(Event::error_execution(send_id, invoke_id));
     }
 
@@ -357,6 +354,15 @@ pub struct NullDatamodel {
     pub global: GlobalDataArc,
     pub state_name_to_id: HashMap<String, StateId>,
     pub actions: ActionMap,
+}
+
+pub struct NullDatamodelFactory {}
+
+
+impl DatamodelFactory for NullDatamodelFactory {
+    fn create(&mut self, global_data: GlobalDataArc, _options: &HashMap<String, String>) -> Box<dyn Datamodel> {
+        Box::new(NullDatamodel::new(global_data))
+    }
 }
 
 impl NullDatamodel {

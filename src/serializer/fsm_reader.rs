@@ -10,14 +10,13 @@ use crate::datamodel::DataStore;
 use crate::executable_content;
 use crate::executable_content::{ExecutableContent, Log};
 use crate::fsm::{
-    BindingType, CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, HistoryType,
-    Invoke, Parameter, State, StateId, Transition, TransitionId, TransitionType,
+    BindingType, CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, HistoryType, Invoke, Parameter, State,
+    StateId, Transition, TransitionId, TransitionType,
 };
 use crate::serializer::default_protocol_definitions::{
     FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY,
     FSM_PROTOCOL_FLAG_HISTORY_TYPE_MASK, FSM_PROTOCOL_FLAG_INVOKE, FSM_PROTOCOL_FLAG_IS_FINAL,
-    FSM_PROTOCOL_FLAG_IS_PARALLEL, FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT,
-    FSM_PROTOCOL_FLAG_STATES,
+    FSM_PROTOCOL_FLAG_IS_PARALLEL, FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT, FSM_PROTOCOL_FLAG_STATES,
 };
 use crate::serializer::fsm_writer::FSM_PROTOCOL_WRITER_VERSION;
 use crate::serializer::protocol_reader::ProtocolReader;
@@ -234,8 +233,7 @@ where
 
         let flags = self.reader.read_u16();
 
-        state.history_type =
-            HistoryType::from_ordinal((flags & FSM_PROTOCOL_FLAG_HISTORY_TYPE_MASK) as u8);
+        state.history_type = HistoryType::from_ordinal((flags & FSM_PROTOCOL_FLAG_HISTORY_TYPE_MASK) as u8);
         state.is_parallel = (flags & FSM_PROTOCOL_FLAG_IS_PARALLEL) != 0;
         state.is_final = (flags & FSM_PROTOCOL_FLAG_IS_FINAL) != 0;
 
@@ -386,8 +384,7 @@ mod tests {
 
     fn setup() -> TestEnvironment {
         let fsm = scxml_reader::parse_from_xml(FSM_SRC.to_string()).unwrap();
-        let mut writer: FsmWriter<Vec<u8>> =
-            FsmWriter::new(Box::new(DefaultProtocolWriter::new(Vec::new())));
+        let mut writer: FsmWriter<Vec<u8>> = FsmWriter::new(Box::new(DefaultProtocolWriter::new(Vec::new())));
         writer.write(&fsm);
         writer.close();
 

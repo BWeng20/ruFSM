@@ -113,9 +113,7 @@ pub trait Tracer: Send + Debug {
     /// Called by FSM if an internal event is send
     fn event_internal_send(&self, what: &Event) {
         if self.is_trace(TraceMode::EVENTS) {
-            self.trace(
-                format!("Send Internal Event: {} #{:?}", what.name, what.invoke_id).as_str(),
-            );
+            self.trace(format!("Send Internal Event: {} #{:?}", what.name, what.invoke_id).as_str());
         }
     }
 
@@ -135,9 +133,7 @@ pub trait Tracer: Send + Debug {
     /// Called by FSM if an external event is send
     fn event_external_send(&self, what: &Event) {
         if self.is_trace(TraceMode::EVENTS) {
-            self.trace(
-                format!("Send External Event: {} #{:?}", what.name, what.invoke_id).as_str(),
-            );
+            self.trace(format!("Send External Event: {} #{:?}", what.name, what.invoke_id).as_str());
         }
     }
 
@@ -147,19 +143,24 @@ pub trait Tracer: Send + Debug {
             let p = what.name.as_str().split('.').collect::<Vec<&str>>();
             if p.len() == 3 {
                 match TraceMode::from_str(p.get(1).unwrap()) {
-                    Ok(t) => {
-                        match *p.get(2).unwrap() {
-                            "on" | "ON" | "On" => {
-                                self.enable_trace(t);
-                            }
-                            "off" | "OFF" | "Off" => {
-                                self.disable_trace(t);
-                            }
-                            _ => {
-                                self.trace(format!("Trace event '{}' with illegal flag '{}'. Use 'On' or 'Off'.", what.name, *p.get(2).unwrap()).as_str());
-                            }
+                    Ok(t) => match *p.get(2).unwrap() {
+                        "on" | "ON" | "On" => {
+                            self.enable_trace(t);
                         }
-                    }
+                        "off" | "OFF" | "Off" => {
+                            self.disable_trace(t);
+                        }
+                        _ => {
+                            self.trace(
+                                format!(
+                                    "Trace event '{}' with illegal flag '{}'. Use 'On' or 'Off'.",
+                                    what.name,
+                                    *p.get(2).unwrap()
+                                )
+                                .as_str(),
+                            );
+                        }
+                    },
                     Err(_e) => {
                         self.trace(
                             format!(
