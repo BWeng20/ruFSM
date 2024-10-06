@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::string::ToString;
 use std::sync::{Arc, Mutex};
 #[cfg(test)]
-use std::{println as info, println as warn, println as error};
+use std::{println as warn, println as error};
 
 #[cfg(test)]
 #[cfg(feature = "Debug")]

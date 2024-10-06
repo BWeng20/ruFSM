@@ -4,8 +4,6 @@ use lazy_static::lazy_static;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
-#[cfg(test)]
-use std::println as info;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::actions::ActionMap;
