@@ -45,6 +45,7 @@ async fn main() {
     executor.set_include_paths_from_arguments(&named_opt);
     executor.set_global_options_from_arguments(&named_opt);
 
+    #[allow(unused_mut)]
     let mut session;
 
     match executor.execute(

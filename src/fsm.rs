@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::ops::DerefMut;
+#[cfg(test)]
+use std::println as error;
 use std::slice::Iter;
 use std::str::FromStr;
 use std::string::ToString;
@@ -18,6 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::{fmt, thread};
 #[cfg(test)]
+#[cfg(feature = "Debug")]
 use std::{println as debug, println as error};
 
 #[cfg(not(test))]
@@ -3698,13 +3701,13 @@ impl Default for DebugAction {
 }
 
 impl Action for DebugAction {
-    fn execute(&self, arguments: &[Data], _global: &GlobalDataArc) -> Result<String, String> {
+    fn execute(&self, arguments: &[Data], _global: &GlobalDataArc) -> Result<Data, String> {
         let mut i = 0;
         for data in arguments {
             i += 1;
             println!(" {}: {}", i, data)
         }
-        Ok("debug".to_string())
+        Ok(Data::Boolean(true))
     }
 
     fn get_copy(&self) -> Box<dyn Action> {
@@ -3720,6 +3723,7 @@ mod tests {
     use crate::fsm::List;
     use crate::fsm::OrderedSet;
     use crate::test::run_test_manual_with_send;
+    #[cfg(feature = "Trace")]
     use crate::tracer::TraceMode;
     use crate::{scxml_reader, Event, EventType};
 
@@ -4053,6 +4057,7 @@ mod tests {
                 &HashMap::new(),
                 fsm,
                 &Vec::new(),
+                #[cfg(feature = "Trace")]
                 TraceMode::ALL,
                 2000,
                 &expected_config,

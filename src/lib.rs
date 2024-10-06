@@ -6,9 +6,11 @@
 
 extern crate core;
 
+#[cfg(feature = "EnvLog")]
 use chrono::Local;
 use std::collections::HashMap;
 use std::env;
+#[cfg(feature = "EnvLog")]
 use std::io::Write;
 #[cfg(feature = "Trace")]
 use std::str::FromStr;
