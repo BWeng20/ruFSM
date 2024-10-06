@@ -27,6 +27,7 @@ impl Action for MyAction {
     }
 }
 
+/// The FSM needs tokio.
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     init_logging();
@@ -38,7 +39,10 @@ These actions can be called at any element that containt expressions or executab
 "#
     );
 
-    let mut executor = FsmExecutor::new_with_io_processor().await;
+    // In this example we don't need any io-processor.
+    // Otherwise:
+    // let mut executor = FsmExecutor::new_with_io_processor().await;
+    let mut executor = FsmExecutor::new_without_io_processor();
     let mut actions = ActionWrapper::new();
 
     // We register the same function with different names.
