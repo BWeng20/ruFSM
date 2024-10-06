@@ -69,7 +69,7 @@ Must simpler is to use the module "Action". You find examples how to use this.
 ### Datamodel
 
 For details about the Datamodel-concept in SCXML see the W3C documentation.<br/>
-This lib provides an implementation of the EMCAScript-Datamodel, but you are free to implement
+This lib provides an implementation of the EMCAScript-Datamodel, but you can implement
 other models as well.
 
 The Datamodel in SCXML is responsible to execute code and expressions. Custom business logic
@@ -85,6 +85,7 @@ To add new data-models, use function `rfsm::fsm::register_datamodel`.
 ### Custom Actions
 
 You can use the trait "Action" to add custom functions to the FSM. See the Examples for a How-To.
+Each FSM instance can have a different set of Actions. Action are inherited by child-session.
 
 If using ECMAScript, these actions can be called like normal methods. Arguments and return values will be converted 
 from and to JavaScript values. See enum "Data" for supported data-types.
