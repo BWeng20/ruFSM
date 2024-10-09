@@ -576,11 +576,14 @@ impl Datamodel for ECMAScriptDatamodel {
                 let mut data = Vec::with_capacity(pv.len());
 
                 for pair in pv.iter() {
-                    data.push((js_string!(pair.name.clone()), Self::data_value_to_js(&pair.value, ctx)));
+                    data.push((
+                        js_string!(pair.name.clone()),
+                        Self::data_value_to_js(&pair.value, ctx),
+                    ));
                 }
                 let mut data_object_initializer = ObjectInitializer::new(ctx);
-                for (dn,dv) in data {
-                    data_object_initializer.property( dn, dv, Attribute::all() );
+                for (dn, dv) in data {
+                    data_object_initializer.property(dn, dv, Attribute::all());
                 }
                 JsValue::Object(data_object_initializer.build())
             }

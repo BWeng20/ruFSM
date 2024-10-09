@@ -3528,8 +3528,14 @@ lazy_static! {
         let mut hs: HashMap<String, Box<dyn DatamodelFactory>> = HashMap::new();
 
         #[cfg(feature = "ECMAScript")]
-        hs.insert(ECMA_SCRIPT_LC.to_string(), Box::new(ECMAScriptDatamodelFactory{}));
-        hs.insert(NULL_DATAMODEL_LC.to_string(), Box::new(NullDatamodelFactory{}));
+        hs.insert(
+            ECMA_SCRIPT_LC.to_string(),
+            Box::new(ECMAScriptDatamodelFactory {}),
+        );
+        hs.insert(
+            NULL_DATAMODEL_LC.to_string(),
+            Box::new(NullDatamodelFactory {}),
+        );
 
         Arc::new(Mutex::new(hs))
     };

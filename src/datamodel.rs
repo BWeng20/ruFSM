@@ -358,7 +358,6 @@ pub struct NullDatamodel {
 
 pub struct NullDatamodelFactory {}
 
-
 impl DatamodelFactory for NullDatamodelFactory {
     fn create(&mut self, global_data: GlobalDataArc, _options: &HashMap<String, String>) -> Box<dyn Datamodel> {
         Box::new(NullDatamodel::new(global_data))
