@@ -78,7 +78,7 @@ async fn main() {
                     ));
                 }
             }
-            "scxml" | "xml" => match load_fsm(arg.as_str(), &include_paths) {
+            "rfsm" | "scxml" | "xml" => match load_fsm(arg.as_str(), &include_paths) {
                 Ok(fsm_loaded) => {
                     fsm = Some(fsm_loaded);
                 }

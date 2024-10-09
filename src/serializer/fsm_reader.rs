@@ -8,7 +8,7 @@ use std::io::Read;
 
 use crate::datamodel::DataStore;
 use crate::executable_content;
-use crate::executable_content::{ExecutableContent, Log};
+use crate::executable_content::{Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters};
 use crate::fsm::{
     BindingType, CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, HistoryType, Invoke, Parameter, State,
     StateId, Transition, TransitionId, TransitionType,
@@ -317,35 +317,94 @@ where
     }
 
     pub fn read_executable_content_if(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let condition = self.reader.read_string();
+        let mut ec = If::new(condition.as_str());
+
+        ec.content = self.read_executable_content_id();
+        ec.else_content = self.read_executable_content_id();
+        Box::new(ec)
     }
 
     pub fn read_executable_content_expression(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = Expression::new();
+        ec.content = self.reader.read_string();
+        Box::new(ec)
     }
 
     pub fn read_executable_content_script(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = Script::new();
+
+        let len = self.reader.read_usize();
+        for _ in 0..len {
+            ec.content.push(self.read_executable_content_id());
+        }
+        Box::new(ec)
     }
+
     pub fn read_executable_content_log(&mut self) -> Box<dyn ExecutableContent> {
         let label = self.reader.read_string();
         let expression = self.reader.read_string();
         Box::new(Log::new(&Some(&label), &expression))
     }
+
     pub fn read_executable_content_for_each(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = ForEach::new();
+
+        ec.content = self.read_executable_content_id();
+        ec.index = self.reader.read_string();
+        ec.array = self.reader.read_string();
+        ec.item = self.reader.read_string();
+
+        Box::new(ec)
     }
+
     pub fn read_executable_content_send(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = SendParameters::new();
+
+        ec.name = self.reader.read_string();
+        ec.target = self.reader.read_string();
+        ec.target_expr = self.reader.read_string();
+
+        let content_flag = self.reader.read_boolean();
+        if content_flag {
+            let mut c = CommonContent::new();
+            self.read_common_content(&mut c);
+            let _ = ec.content.insert(c);
+        }
+        ec.name_list = self.read_string_list();
+        ec.name_location = self.reader.read_string();
+        self.read_parameters(&mut ec.params);
+
+        ec.event = self.reader.read_string();
+        ec.event_expr = self.reader.read_string();
+
+        ec.type_value = self.reader.read_string();
+        ec.type_expr = self.reader.read_string();
+
+        ec.delay_ms = self.reader.read_uint();
+        ec.delay_expr = self.reader.read_string();
+
+        Box::new(ec)
     }
+
     pub fn read_executable_content_raise(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = Raise::new();
+        ec.event = self.reader.read_string();
+        Box::new(ec)
     }
+
     pub fn read_executable_content_cancel(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = Cancel::new();
+        ec.send_id = self.reader.read_string();
+        ec.send_id_expr = self.reader.read_string();
+        Box::new(ec)
     }
+
     pub fn read_executable_content_assign(&mut self) -> Box<dyn ExecutableContent> {
-        todo!()
+        let mut ec = Assign::new();
+        ec.expr = self.reader.read_string();
+        ec.location = self.reader.read_string();
+        Box::new(ec)
     }
 }
 
