@@ -82,7 +82,7 @@ async fn main() {
                 Ok(fsm_loaded) => {
                     fsm = Some(fsm_loaded);
                 }
-                Err(_) => abort_test(format!("Failed to load fsm '{}'", arg).to_string()),
+                Err(err) => abort_test(format!("Failed to load fsm '{}'. {}", arg, err).to_string()),
             },
             &_ => abort_test(format!("File '{}' has unsupported extension.", arg).to_string()),
         }

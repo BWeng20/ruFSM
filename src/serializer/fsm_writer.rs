@@ -21,7 +21,7 @@ use crate::serializer::default_protocol_definitions::{
 };
 use crate::serializer::protocol_writer::ProtocolWriter;
 
-pub const FSM_PROTOCOL_WRITER_VERSION: &str = "fsmW1.0";
+pub const FSM_PROTOCOL_WRITER_VERSION: &str = "fsmW1.1";
 
 fn get_executable_content_as<T: 'static>(ec: &dyn crate::executable_content::ExecutableContent) -> &T {
     let va = ec.as_any();
@@ -144,6 +144,9 @@ where
 
     pub fn write_invoke(&mut self, invoke: &Invoke) {
         self.writer.write_str(&invoke.invoke_id);
+        if invoke.invoke_id.is_empty() {
+            self.writer.write_str(&invoke.parent_state_name);
+        }
         self.write_doc_id(invoke.doc_id);
         self.writer.write_str(&invoke.src_expr);
         self.writer.write_str(&invoke.src);

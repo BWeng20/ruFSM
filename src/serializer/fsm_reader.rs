@@ -8,7 +8,9 @@ use std::io::Read;
 
 use crate::datamodel::DataStore;
 use crate::executable_content;
-use crate::executable_content::{Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters};
+use crate::executable_content::{
+    Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters,
+};
 use crate::fsm::{
     BindingType, CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, HistoryType, Invoke, Parameter, State,
     StateId, Transition, TransitionId, TransitionType,
@@ -18,11 +20,10 @@ use crate::serializer::default_protocol_definitions::{
     FSM_PROTOCOL_FLAG_HISTORY_TYPE_MASK, FSM_PROTOCOL_FLAG_INVOKE, FSM_PROTOCOL_FLAG_IS_FINAL,
     FSM_PROTOCOL_FLAG_IS_PARALLEL, FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT, FSM_PROTOCOL_FLAG_STATES,
 };
-use crate::serializer::fsm_writer::FSM_PROTOCOL_WRITER_VERSION;
 use crate::serializer::protocol_reader::ProtocolReader;
 
 /// The reader version, must natch the corresponding writer version
-pub const FSM_READER_VERSION: &str = "fsmW1.0";
+pub const FSM_READER_VERSION: &str = "fsmW1.1";
 
 pub struct FsmReader<'a, R>
 where
@@ -42,7 +43,7 @@ where
     pub fn read(&mut self) -> Result<Box<Fsm>, String> {
         let mut fsm = Fsm::new();
         let version = self.reader.read_string();
-        if version.as_str() == FSM_PROTOCOL_WRITER_VERSION {
+        if version.as_str() == FSM_READER_VERSION {
             fsm.name = self.reader.read_string();
             fsm.datamodel = self.reader.read_string();
             fsm.binding = BindingType::from_ordinal(self.reader.read_u8());
@@ -79,7 +80,7 @@ where
         } else {
             Err(format!(
                 "Version mismatch: '{}' is not '{}' as expected",
-                version, FSM_PROTOCOL_WRITER_VERSION
+                version, FSM_READER_VERSION
             ))
         }
     }
@@ -161,6 +162,9 @@ where
 
     pub fn read_invoke(&mut self, invoke: &mut Invoke) {
         invoke.invoke_id = self.reader.read_string();
+        if invoke.invoke_id.is_empty() {
+            invoke.parent_state_name = self.reader.read_string();
+        }
         invoke.doc_id = self.read_doc_id();
         invoke.src_expr = self.reader.read_string();
         invoke.src = self.reader.read_string();
