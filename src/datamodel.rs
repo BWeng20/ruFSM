@@ -536,7 +536,7 @@ impl Display for Data {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
             Data::String(v) => {
-                write!(f, "{}", v)
+                write!(f, "'{}'", v)
             }
             Data::Integer(v) => {
                 write!(f, "{}", v)
