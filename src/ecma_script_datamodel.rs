@@ -572,13 +572,15 @@ impl Datamodel for ECMAScriptDatamodel {
                 Some(c) => JsValue::String(js_string!(c.clone())),
             },
             Some(pv) => {
-                let mut data_object_initializer = ObjectInitializer::new(&mut self.context);
+                let ctx = &mut self.context;
+                let mut data = Vec::with_capacity(pv.len());
+
                 for pair in pv.iter() {
-                    data_object_initializer.property(
-                        js_string!(pair.name.clone()),
-                        js_string!(pair.value.to_string()),
-                        Attribute::all(),
-                    );
+                    data.push((js_string!(pair.name.clone()), Self::data_value_to_js(&pair.value, ctx)));
+                }
+                let mut data_object_initializer = ObjectInitializer::new(ctx);
+                for (dn,dv) in data {
+                    data_object_initializer.property( dn, dv, Attribute::all() );
                 }
                 JsValue::Object(data_object_initializer.build())
             }
