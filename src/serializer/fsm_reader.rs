@@ -5,6 +5,8 @@
 use log::debug;
 
 use std::io::Read;
+use std::time::{SystemTime, UNIX_EPOCH};
+use log::info;
 
 use crate::datamodel::DataStore;
 use crate::executable_content;
@@ -41,6 +43,7 @@ where
     }
 
     pub fn read(&mut self) -> Result<Box<Fsm>, String> {
+        let start = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let mut fsm = Fsm::new();
         let version = self.reader.read_string();
         if version.as_str() == FSM_READER_VERSION {
@@ -73,6 +76,9 @@ where
                 }
                 fsm.executableContent.insert(content_id, content);
             }
+
+            let end = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+            info!("'{}' (RFSM) loaded in {}ms", fsm.name, end.as_millis()-start.as_millis() );
 
             Ok(Box::new(fsm))
         } else if self.reader.has_error() {

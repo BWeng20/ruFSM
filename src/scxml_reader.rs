@@ -13,11 +13,13 @@ use std::println as debug;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::{env, mem, str, string::String};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::ArgOption;
 #[cfg(feature = "Debug_Reader")]
 #[cfg(not(test))]
 use log::debug;
+use log::info;
 use quick_xml::events::attributes::Attributes;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
@@ -1932,6 +1934,7 @@ pub fn parse_from_xml_file(file: &Path, include_paths: &[PathBuf]) -> Result<Box
 
 /// Read and parse the FSM from an URI
 pub fn parse_from_uri(uri: String, include_paths: &[PathBuf]) -> Result<Box<Fsm>, String> {
+    let start = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     let mut rs = ReaderState::new();
     rs.include_paths = Vec::from(include_paths);
     match rs.read_from_uri(&uri) {
@@ -1939,7 +1942,11 @@ pub fn parse_from_uri(uri: String, include_paths: &[PathBuf]) -> Result<Box<Fsm>
             rs.content = source;
             let r = rs.process();
             match r {
-                Ok(_m) => Ok(rs.fsm),
+                Ok(_m) => {
+                    let end = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+                    info!("'{}' (XML) loaded in {}ms", rs.fsm.name, end.as_millis()-start.as_millis() );
+                    Ok(rs.fsm)
+                },
                 Err(e) => Err(e),
             }
         }
