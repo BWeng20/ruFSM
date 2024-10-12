@@ -23,6 +23,11 @@ use rfsm::remote_tracer::run_trace_server;
 #[cfg(feature = "TraceServer")]
 use rfsm::remote_tracer::TRACE_SERVER_ARGUMENT_OPTION;
 
+#[cfg(feature = "TraceServer")]
+use rfsm::remote_tracer::run_trace_server;
+#[cfg(feature = "TraceServer")]
+use rfsm::remote_tracer::TRACE_SERVER_ARGUMENT_OPTION;
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     init_logging();
