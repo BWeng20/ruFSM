@@ -4,23 +4,30 @@ version = "0.1.0"
 edition = "2021"
 default-run = "fsm"
 
+[profile.release]
+strip = true  # Automatically strip symbols from the binary.
+
 [[bin]]
 name = "fsm"
+required-features = ["RfsmExpressionModel", "ECMAScript", "xml"]
 
 [[bin]]
 name = "test"
+path = "src/bin/test.rs"
+required-features = ["ECMAScript", "RfsmExpressionModel", "xml", "Debug", "EnvLog" ]
 
 [[bin]]
 name = "scxml_to_fsm"
-required-features = ["xml", "serializer"]
+required-features = ["xml", "serializer" ]
 
 [lib]
 name = "rfsm"
 path = "src/lib.rs"
 
 [features]
-default = [ "EnvLog", "ECMAScript", "yaml-config", "json-config", "xml", "serializer" ]
+default = [ "json-config", "ECMAScript", "RfsmExpressionModel", "Debug", "xml", "EnvLog"  ]
 ECMAScript = ["boa_engine", "boa_gc"]
+RfsmExpressionModel = []
 BasicHttpEventIOProcessor = ["hyper", "http-body-util", "hyper-util", "form_urlencoded"]
 yaml-config = ["yaml-rust"]
 json-config = ["serde", "serde_json", "serde/serde_derive"]
@@ -29,6 +36,9 @@ xml = ["quick-xml", "reqwest"]
 
 # "Trace" enables the trace module, uses by the other trace features
 Trace = []
+
+# "TraceServer" enables the remote trace-server
+TraceServer = ["Trace"]
 
 # Enables debug output from scxml-reader
 Debug_Reader = []
@@ -43,7 +53,6 @@ Debug = [ "Trace_Event", "Trace_State", "Trace_Method" ]
 log = "0.4"
 timer = "0.2"
 chrono = "0.4"
-regex = "1.10"
 lazy_static = "1.4"
 quick-xml = { version = "0.36", features = ["serialize"],  optional = true }
 boa_engine = { version = "0.19", optional = true }

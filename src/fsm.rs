@@ -12,6 +12,9 @@ use std::hash::Hash;
 use std::ops::DerefMut;
 #[cfg(test)]
 use std::println as error;
+#[cfg(test)]
+#[cfg(feature = "Debug")]
+use std::println as debug;
 use std::slice::Iter;
 use std::str::FromStr;
 use std::string::ToString;
@@ -20,36 +23,37 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::{fmt, thread};
-#[cfg(test)]
-#[cfg(feature = "Debug")]
-use std::{println as debug, println as error};
 
 #[cfg(not(test))]
 use log::error;
 
+use crate::actions::{Action, ActionWrapper};
 #[cfg(not(test))]
 #[cfg(feature = "Debug")]
 use log::debug;
-
-use crate::actions::{Action, ActionWrapper};
 use timer::Guard;
 
-use crate::datamodel::{
-    Data, DataStore, Datamodel, DatamodelFactory, GlobalDataArc, NullDatamodelFactory, NULL_DATAMODEL,
-    NULL_DATAMODEL_LC, SCXML_INVOKE_TYPE, SCXML_INVOKE_TYPE_SHORT, SESSION_ID_VARIABLE_NAME,
-    SESSION_NAME_VARIABLE_NAME,
-};
+use crate::datamodel::{Data, DataArc, DataStore, Datamodel, DatamodelFactory, GlobalDataArc, NullDatamodelFactory, NULL_DATAMODEL, NULL_DATAMODEL_LC, SCXML_INVOKE_TYPE, SCXML_INVOKE_TYPE_SHORT, SESSION_ID_VARIABLE_NAME, SESSION_NAME_VARIABLE_NAME, create_data_arc};
+#[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::ECMAScriptDatamodelFactory;
 #[cfg(feature = "ECMAScript")]
 use crate::ecma_script_datamodel::ECMA_SCRIPT_LC;
+
 use crate::event_io_processor::EventIOProcessor;
 use crate::executable_content::ExecutableContent;
+
+#[cfg(feature = "RfsmExpressionModel")]
+use crate::expression_engine::datamodel::{RFsmExpressionDatamodelFactory, RFSM_EXPRESSION_DATAMODEL_LC};
+
 use crate::fsm::BindingType::{Early, Late};
 use crate::fsm_executor::FsmExecutor;
 use crate::get_global;
 use crate::scxml_event_io_processor::{SCXML_EVENT_PROCESSOR_SHORT_TYPE, SCXML_TARGET_SESSION_ID_PREFIX};
+
 #[cfg(feature = "Trace")]
-use crate::tracer::{DefaultTracer, TraceMode, Tracer};
+use crate::tracer::create_tracer;
+#[cfg(feature = "Trace")]
+use crate::tracer::{TraceMode, Tracer};
 
 /// Platform specific event to cancel the current session.
 pub const EVENT_CANCEL_SESSION: &str = "error.platform.cancel";
@@ -96,6 +100,7 @@ pub fn start_fsm_with_data_and_finish_mode(
             let _ = session
                 .global_data
                 .lock()
+                .unwrap()
                 .final_configuration
                 .insert(Vec::new());
         }
@@ -112,7 +117,7 @@ pub fn start_fsm_with_data_and_finish_mode(
 
     let global_data = session.global_data.clone();
     {
-        let mut gc = global_data.lock();
+        let mut gc = global_data.lock().unwrap();
         gc.actions = actions;
         let executor_state_lock = executor.state.lock();
         let guard = executor_state_lock.unwrap();
@@ -151,7 +156,7 @@ pub fn start_fsm_with_data_and_finish_mode(
                         let root_state = sm.get_state_by_id_mut(sm.pseudo_root);
                         for val in data_copy {
                             if root_state.data.get_mut(&val.name).is_some() {
-                                root_state.data.set(&val.name, val.value.clone());
+                                root_state.data.insert(val.name, create_data_arc(val.value.clone()));
                             }
                         }
                     }
@@ -162,7 +167,7 @@ pub fn start_fsm_with_data_and_finish_mode(
             debug!("SM finished");
         });
 
-    let _ = session.session_thread.insert(thread.unwrap());
+    let _ = session.thread.insert(thread.unwrap());
     session
 }
 
@@ -719,7 +724,7 @@ pub struct Event {
     pub param_values: Option<Vec<ParamPair>>,
 
     /// Content from \<content\> element.
-    pub content: Option<String>,
+    pub content: Option<DataArc>,
 }
 
 impl Display for Event {
@@ -746,7 +751,7 @@ impl Event {
         prefix: &str,
         id: &str,
         data_params: Option<Vec<ParamPair>>,
-        data_content: Option<String>,
+        data_content: Option<DataArc>,
         event_type: EventType,
     ) -> Event {
         Event {
@@ -892,14 +897,14 @@ pub struct Invoke {
     /// *W3C says*:
     /// Attribute 'type':\
     /// A URI specifying the type of the external service.
-    pub type_name: String,
+    pub type_name: Data,
 
     /// *W3C says*:
     /// Attribute 'typeexpr':\
     /// A dynamic alternative to 'type'. If this attribute is present, the SCXML Processor must evaluate it
     /// when the parent \<invoke\> element is evaluated and treat the result as if it had been entered as
     /// the value of 'type'.
-    pub type_expr: String,
+    pub type_expr: Data,
 
     /// *W3C says*:
     /// List of valid location expressions
@@ -908,13 +913,13 @@ pub struct Invoke {
     /// *W3C says*:
     /// A URI to be passed to the external service.\
     /// Must not occur with the 'srcexpr' attribute or the \<content\> element.
-    pub src: String,
+    pub src: Data,
 
     /// *W3C says*:
     /// A dynamic alternative to 'src'. If this attribute is present,
     /// the SCXML Processor must evaluate it when the parent \<invoke\> element is evaluated and treat the result
     /// as if it had been entered as the value of 'src'.
-    pub src_expr: String,
+    pub src_expr: Data,
 
     /// *W3C says*:
     /// Boolean.\
@@ -944,11 +949,11 @@ impl Invoke {
             invoke_id: "".to_string(),
             parent_state_name: "".to_string(),
             external_id_location: "".to_string(),
-            type_name: "".to_string(),
-            type_expr: "".to_string(),
+            type_name: Data::None(),
+            type_expr: Data::None(),
             name_list: vec![],
-            src: "".to_string(),
-            src_expr: "".to_string(),
+            src: Data::None(),
+            src_expr: Data::None(),
             autoforward: false,
             params: None,
             content: None,
@@ -1016,11 +1021,13 @@ pub struct GlobalData {
 
     /// Will contain after execution the final configuration, if set before.
     pub final_configuration: Option<Vec<String>>,
-    pub environment: DataStore,
+    pub environment: HashMap<String, DataArc>,
 
     /// Stores any delayed send (with a "sendid"), Key: sendid
     pub delayed_send: HashMap<String, Guard>,
     pub io_processors: HashMap<String, Arc<Mutex<Box<dyn EventIOProcessor>>>>,
+
+    pub data: DataStore,
 }
 
 impl GlobalData {
@@ -1039,9 +1046,10 @@ impl GlobalData {
             parent_session_id: None,
             session_id: 0,
             final_configuration: None,
-            environment: DataStore::new(),
+            environment: HashMap::new(),
             delayed_send: HashMap::new(),
             io_processors: HashMap::new(),
+            data: DataStore::new(),
         }
     }
 
@@ -1063,7 +1071,7 @@ pub enum FinishMode {
 /// Holds thread-id and channel-sender to the external queue of the session.
 pub struct ScxmlSession {
     pub session_id: SessionId,
-    pub session_thread: Option<JoinHandle<()>>,
+    pub thread: Option<JoinHandle<()>>,
     pub sender: Sender<Box<Event>>,
     /// global_data should be access after the FSM is finished to avoid deadlocks.
     pub global_data: GlobalDataArc,
@@ -1089,9 +1097,9 @@ impl ScxmlSession {
     pub fn new_without_join_handle(id: SessionId, sender: Sender<Box<Event>>) -> ScxmlSession {
         ScxmlSession {
             session_id: id,
-            session_thread: None,
+            thread: None,
             sender,
-            global_data: GlobalDataArc::new(),
+            global_data: GlobalDataArc::new(Mutex::new(GlobalData::new())),
             invoke_doc_id: 0,
             state_id: None,
         }
@@ -1102,7 +1110,7 @@ impl Clone for ScxmlSession {
     fn clone(&self) -> Self {
         ScxmlSession {
             session_id: self.session_id,
-            session_thread: None,
+            thread: None,
             sender: self.sender.clone(),
             global_data: self.global_data.clone(),
             state_id: self.state_id,
@@ -1112,7 +1120,7 @@ impl Clone for ScxmlSession {
 
     fn clone_from(&mut self, source: &Self) {
         self.session_id = source.session_id;
-        self.session_thread = None;
+        self.thread = None;
         self.sender = source.sender.clone();
         self.state_id = source.state_id;
         self.invoke_doc_id = source.invoke_doc_id;
@@ -1216,7 +1224,7 @@ impl Fsm {
             transitions: HashMap::new(),
             pseudo_root: 0,
             #[cfg(feature = "Trace")]
-            tracer: Box::new(DefaultTracer::new()),
+            tracer: create_tracer(),
             caller_invoke_id: None,
             parent_session_id: None,
             name: "FSM".to_string(),
@@ -1351,9 +1359,10 @@ impl Fsm {
 
             // Initialize session variables "_name" and "_sessionid"
 
-            let session_id = datamodel.global_s().lock().session_id;
-            datamodel.initialize_read_only(SESSION_ID_VARIABLE_NAME, session_id.to_string().as_str());
-            datamodel.initialize_read_only(SESSION_NAME_VARIABLE_NAME, self.name.as_str());
+            let session_id = datamodel.global_s().lock().unwrap().session_id;
+            datamodel.initialize_read_only(SESSION_ID_VARIABLE_NAME, Data::Integer(session_id as i64));
+            // TODO :Escape name
+            datamodel.initialize_read_only(SESSION_NAME_VARIABLE_NAME, Data::String(self.name.clone()));
 
             {
                 let mut gd = get_global!(datamodel);
@@ -1363,6 +1372,7 @@ impl Fsm {
             }
 
             datamodel.add_functions(self);
+            datamodel.set_ioprocessors();
 
             self.initialize_data_models_recursive(
                 datamodel,
@@ -1566,9 +1576,10 @@ impl Fsm {
                     global_lock.externalQueue.receiver.clone()
                 };
 
-                // A blocking wait for an external event.  Alternatively, if we have been invoked
-                // our parent session also might cancel us.  The mechanism for this is platform specific,
-                // but here we assume it’s a special event we receive
+                // W3C says:
+                //   A blocking wait for an external event.  Alternatively, if we have been invoked
+                //   our parent session also might cancel us.  The mechanism for this is platform specific,
+                //   but here we assume it’s a special event we receive
                 #[cfg(feature = "Trace_Method")]
                 self.tracer.enter_method("externalQueue.dequeue");
                 loop {
@@ -1734,7 +1745,7 @@ impl Fsm {
                 for session_id in session_id_list {
                     datamodel.send(
                         SCXML_EVENT_PROCESSOR_SHORT_TYPE,
-                        format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
+                        &Data::String(format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id)),
                         Event::new_simple(EVENT_CANCEL_SESSION),
                     );
                 }
@@ -1794,7 +1805,7 @@ impl Fsm {
                         event.invoke_id = Some(invoke_id);
                         datamodel.send(
                             SCXML_EVENT_PROCESSOR_SHORT_TYPE,
-                            format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
+                            &Data::String(format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id)),
                             event,
                         );
                     }
@@ -2298,7 +2309,7 @@ impl Fsm {
                         None => {}
                         Some(done_data) => {
                             datamodel.evaluate_params(&done_data.params, &mut name_values);
-                            content = datamodel.evaluate_content(&done_data.content)
+                            content = datamodel.evaluate_content(&done_data.content);
                         }
                     }
                     let param_values = if name_values.is_empty() {
@@ -2306,6 +2317,7 @@ impl Fsm {
                     } else {
                         Some(name_values)
                     };
+
                     self.enqueue_internal(
                         datamodel,
                         // TODO: EventType::external ?
@@ -2744,7 +2756,13 @@ impl Fsm {
     fn isInFinalState(&self, datamodel: &dyn Datamodel, s: StateId) -> bool {
         if self.isCompoundState(s) {
             self.getChildStates(s).some(&|cs: &StateId| -> bool {
-                self.isFinalStateId(*cs) && datamodel.global_s().lock().configuration.isMember(cs)
+                self.isFinalStateId(*cs)
+                    && datamodel
+                        .global_s()
+                        .lock()
+                        .unwrap()
+                        .configuration
+                        .isMember(cs)
             })
         } else if self.isParallelState(s) {
             self.getChildStates(s)
@@ -2994,7 +3012,7 @@ impl Fsm {
         // W3C: if the evaluation of its arguments produces an error, the SCXML Processor must
         // terminate the processing of the element without further action.
 
-        let mut type_name = match datamodel.get_expression_alternative_value(&inv.type_name, &inv.type_expr) {
+        let type_name_data = match datamodel.get_expression_alternative_value(&inv.type_name, &inv.type_expr) {
             Ok(value) => value,
             Err(_) => {
                 // Error -> abort
@@ -3002,6 +3020,7 @@ impl Fsm {
             }
         };
 
+        let mut type_name = type_name_data.lock().unwrap().to_string();
         if type_name.eq(SCXML_INVOKE_TYPE_SHORT) {
             type_name = SCXML_INVOKE_TYPE.to_string();
         }
@@ -3034,12 +3053,12 @@ impl Fsm {
             inv.invoke_id.clone()
         };
 
-        let src = match datamodel.get_expression_alternative_value(inv.src.as_str(), inv.src_expr.as_str()) {
+        let src = match datamodel.get_expression_alternative_value(&inv.src, &inv.src_expr) {
             Err(_) => {
                 // Error -> Abort
                 return;
             }
-            Ok(value) => value,
+            Ok(value) => value.lock().unwrap().clone(),
         };
         let mut name_values: Vec<ParamPair> = Vec::new();
         for name in inv.name_list.as_slice() {
@@ -3049,7 +3068,7 @@ impl Fsm {
                     return;
                 }
                 Ok(value) => {
-                    name_values.push(ParamPair::new(name.as_str(), &value));
+                    name_values.push(ParamPair::new(name.as_str(), &value.lock().unwrap().clone()));
                 }
             }
         }
@@ -3066,7 +3085,7 @@ impl Fsm {
             // If "idlocation" is specified, we have to store the generated id to this location
             datamodel.set(
                 inv.external_id_location.as_str(),
-                Data::String(invokeId.clone()),
+                Data::String(invokeId.clone()), true
             );
         }
 
@@ -3083,7 +3102,7 @@ impl Fsm {
                         .as_mut()
                         .unwrap()
                         .execute_with_data_from_xml(
-                            content.as_str(),
+                            content.lock().unwrap().to_string().as_str(),
                             actions,
                             &name_values,
                             Some(session_id),
@@ -3099,7 +3118,7 @@ impl Fsm {
             let session_id = global.session_id;
             let actions = global.actions.get_copy();
             global.executor.as_mut().unwrap().execute_with_data(
-                src.as_str(),
+                src.to_string().as_str(),
                 actions,
                 &name_values,
                 Some(session_id),
@@ -3131,7 +3150,7 @@ impl Fsm {
         get_global!(datamodel).child_sessions.remove(invoke_id);
         datamodel.send(
             SCXML_EVENT_PROCESSOR_SHORT_TYPE,
-            format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id).as_str(),
+            &Data::String(format!("{}{}", SCXML_TARGET_SESSION_ID_PREFIX, session_id)),
             Event::new_simple(EVENT_CANCEL_SESSION),
         );
         #[cfg(feature = "Trace_Method")]
@@ -3153,15 +3172,16 @@ impl Fsm {
             let t = self.get_transition_by_id_mut(tid);
             cond = t.cond.clone();
         }
-        match cond {
-            Some(c) => match datamodel.execute_condition(c.as_str()) {
+        if cond.is_empty() {
+            true
+        } else {
+            match datamodel.execute_condition(&cond) {
                 Ok(v) => v,
                 Err(_e) => {
                     datamodel.internal_error_execution();
                     false
                 }
-            },
-            None => true,
+            }
         }
     }
 
@@ -3326,8 +3346,8 @@ pub struct State {
     pub invoke: List<Invoke>,
     pub history: List<StateId>,
 
-    /// The local datamodel
-    pub data: DataStore,
+    /// The initial data values on this state.
+    pub data: HashMap<String, DataArc>,
 
     /// True if the state was never entered before.
     pub isFirstEntry: bool,
@@ -3350,7 +3370,7 @@ impl State {
             is_parallel: false,
             is_final: false,
             history_type: HistoryType::None,
-            data: DataStore::new(),
+            data: HashMap::new(),
             isFirstEntry: true,
             parent: 0,
             donedata: None,
@@ -3457,7 +3477,7 @@ pub struct Transition {
     // TODO: Possibly we need some type to express event ids
     pub events: Vec<String>,
     pub wildcard: bool,
-    pub cond: Option<String>,
+    pub cond: Data,
     pub source: StateId,
     pub target: Vec<StateId>,
     pub transition_type: TransitionType,
@@ -3478,7 +3498,7 @@ impl Transition {
             doc_id: 0,
             events: vec![],
             wildcard: false,
-            cond: None,
+            cond: Data::Null(),
             source: 0,
             target: vec![],
             transition_type: TransitionType::External,
@@ -3535,6 +3555,11 @@ lazy_static! {
         hs.insert(
             NULL_DATAMODEL_LC.to_string(),
             Box::new(NullDatamodelFactory {}),
+        );
+        #[cfg(feature = "RfsmExpressionModel")]
+        hs.insert(
+            RFSM_EXPRESSION_DATAMODEL_LC.to_string(),
+            Box::new(RFsmExpressionDatamodelFactory {}),
         );
 
         Arc::new(Mutex::new(hs))
@@ -3671,7 +3696,7 @@ impl Default for DebugAction {
 }
 
 impl Action for DebugAction {
-    fn execute(&self, arguments: &[Data], _global: &GlobalDataArc) -> Result<Data, String> {
+    fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         let mut i = 0;
         for data in arguments {
             i += 1;
@@ -3687,16 +3712,27 @@ impl Action for DebugAction {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::sync::mpsc::Sender;
-
-    use crate::fsm::List;
     use crate::fsm::OrderedSet;
-    use crate::test::run_test_manual_with_send;
+    use crate::fsm::{EventType, List};
     #[cfg(feature = "Trace")]
     use crate::tracer::TraceMode;
-    use crate::{scxml_reader, Event, EventType};
+    use std::collections::HashMap;
 
+    #[cfg(feature = "ECMAScript")]
+    #[cfg(feature = "xml")]
+    use crate::scxml_reader;
+
+    #[cfg(feature = "ECMAScript")]
+    #[cfg(feature = "xml")]
+    use std::sync::mpsc::Sender;
+
+    use crate::test::run_test_manual_with_send;
+    #[cfg(feature = "ECMAScript")]
+    #[cfg(feature = "xml")]
+    use crate::Event;
+
+    #[cfg(feature = "ECMAScript")]
+    #[cfg(feature = "xml")]
     fn test_send(sender: &Sender<Box<Event>>, e: Event) {
         let _r = sender.send(Box::new(e));
     }
@@ -3984,6 +4020,8 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "ECMAScript")]
+    #[cfg(feature = "xml")]
     fn fsm_shall_exit() {
         // init_logging();
         println!("Creating The SM:");

@@ -4,14 +4,15 @@
 #![allow(clippy::doc_lazy_continuation)]
 #![allow(dead_code)]
 
-use crate::datamodel::{Data, GlobalDataArc};
+use crate::datamodel::Data;
+use crate::fsm::GlobalData;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
 /// Trait to inject custom actions into the datamodel.
 pub trait Action: Send {
     /// Executes the action.
-    fn execute(&self, arguments: &[Data], global: &GlobalDataArc) -> Result<Data, String>;
+    fn execute(&self, arguments: &[Data], global: &GlobalData) -> Result<Data, String>;
 
     /// Replacement for a generic "clone".
     fn get_copy(&self) -> Box<dyn Action>;
@@ -56,5 +57,18 @@ impl ActionWrapper {
 
     pub fn lock(&self) -> ActionLock {
         self.actions.lock().unwrap()
+    }
+
+    pub fn execute(&self, action_name: &str, arguments: &[Data], global: &GlobalData) -> Result<Data, String>
+    {
+        let rt = if let Some(action) = self
+            .actions.lock().unwrap()
+            .get_mut(action_name)
+        {
+            action.execute(arguments, global)
+        } else {
+            Err(format!("Action '{}' not found", action_name))
+        };
+        rt
     }
 }

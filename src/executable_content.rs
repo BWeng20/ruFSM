@@ -7,7 +7,6 @@ use std::sync::atomic::Ordering;
 #[cfg(test)]
 use std::{println as info, println as warn};
 
-use lazy_static::lazy_static;
 use log::error;
 
 #[cfg(feature = "Debug")]
@@ -15,9 +14,9 @@ use log::debug;
 
 #[cfg(not(test))]
 use log::{info, warn};
-use regex::Regex;
 
 use crate::datamodel::{Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
+use crate::expression_engine::parser::ExpressionLexer;
 use crate::fsm::{
     opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair, Parameter,
     PLATFORM_ID_COUNTER,
@@ -84,7 +83,7 @@ pub trait ExecutableContentTracer {
 #[derive(Default)]
 pub struct Cancel {
     pub send_id: String,
-    pub send_id_expr: String,
+    pub send_id_expr: Data,
 }
 
 /// Holds all parameters of a \<send\> call.
@@ -97,21 +96,21 @@ pub struct SendParameters {
     /// In case the id is generated, the parent state of the send.
     pub parent_state_name: String,
     /// SCXML \<send\> attribute 'event'.
-    pub event: String,
+    pub event: Data,
     /// SCXML \<send\> attribute 'eventexpr'.
-    pub event_expr: String,
+    pub event_expr: Data,
     /// SCXML \<send\> attribute 'target'.
-    pub target: String,
+    pub target: Data,
     /// SCXML \<send\> attribute 'targetexpr'.
-    pub target_expr: String,
+    pub target_expr: Data,
     /// SCXML \<send\> attribute 'type'.
-    pub type_value: String,
+    pub type_value: Data,
     /// SCXML \<send\> attribute 'typeexpr'.
-    pub type_expr: String,
+    pub type_expr: Data,
     /// SCXML \<send\> attribute 'delay' in milliseconds.
     pub delay_ms: u64,
     /// SCXML \<send\> attribute 'delayexpr'.
-    pub delay_expr: String,
+    pub delay_expr: Data,
     /// SCXML \<send\> attribute 'namelist'. Must not be specified in conjunction with 'content'.
     pub name_list: Vec<String>,
     /// \<param\> children
@@ -125,14 +124,14 @@ impl SendParameters {
             name_location: "".to_string(),
             name: "".to_string(),
             parent_state_name: "".to_string(),
-            event: "".to_string(),
-            event_expr: "".to_string(),
-            target: "".to_string(),
-            target_expr: "".to_string(),
-            type_value: "".to_string(),
-            type_expr: "".to_string(),
+            event: Data::None(),
+            event_expr: Data::None(),
+            target: Data::None(),
+            target_expr: Data::None(),
+            type_value: Data::None(),
+            type_expr: Data::None(),
             delay_ms: 0,
-            delay_expr: "".to_string(),
+            delay_expr: Data::None(),
             name_list: Vec::new(),
             params: None,
             content: None,
@@ -150,7 +149,7 @@ impl Cancel {
     pub fn new() -> Cancel {
         Cancel {
             send_id: String::new(),
-            send_id_expr: String::new(),
+            send_id_expr: Data::None(),
         }
     }
 }
@@ -171,18 +170,18 @@ pub struct Script {
 
 #[derive(Debug, Default)]
 pub struct Expression {
-    pub content: String,
+    pub content: Data,
 }
 
 #[derive(Debug, Default)]
 pub struct Log {
     pub label: String,
-    pub expression: String,
+    pub expression: Data,
 }
 
 #[derive(Debug, Default)]
 pub struct If {
-    pub condition: String,
+    pub condition: Data,
     pub content: ExecutableContentId,
     pub else_content: ExecutableContentId,
 }
@@ -308,7 +307,7 @@ impl ExecutableContent for Script {
 impl Expression {
     pub fn new() -> Expression {
         Expression {
-            content: String::new(),
+            content: Data::Source(String::new()),
         }
     }
 }
@@ -324,7 +323,7 @@ impl ExecutableContent for Expression {
     }
 
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
-        tracer.print_name_and_attributes(self, &[("content", &self.content)]);
+        tracer.print_name_and_attributes(self, &[("content", &self.content.to_string())]);
     }
 }
 
@@ -332,7 +331,7 @@ impl Log {
     pub fn new(label: &Option<&String>, expression: &str) -> Log {
         Log {
             label: label.unwrap_or(&"".to_string()).clone(),
-            expression: expression.to_string(),
+            expression: Data::Source(expression.to_string()),
         }
     }
 }
@@ -341,7 +340,7 @@ impl ExecutableContent for Log {
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         match &datamodel.execute(&self.expression) {
             Ok(msg) => {
-                datamodel.log(msg);
+                datamodel.log(msg.lock().unwrap().to_string().as_str());
                 true
             }
             Err(_msg) => false,
@@ -353,14 +352,14 @@ impl ExecutableContent for Log {
     }
 
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
-        tracer.print_name_and_attributes(self, &[("expression", &self.expression)]);
+        tracer.print_name_and_attributes(self, &[("expression", &self.expression.to_string())]);
     }
 }
 
 impl If {
     pub fn new(condition: &str) -> If {
         If {
-            condition: condition.to_string(),
+            condition: Data::Source(condition.to_string()),
             content: 0,
             else_content: 0,
         }
@@ -398,7 +397,7 @@ impl ExecutableContent for If {
     }
 
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, fsm: &Fsm) {
-        tracer.print_name_and_attributes(self, &[("condition", &self.condition)]);
+        tracer.print_name_and_attributes(self, &[("condition", &self.condition.to_string())]);
         tracer.print_sub_content("then", fsm, self.content);
         tracer.print_sub_content("else", fsm, self.else_content);
     }
@@ -424,6 +423,11 @@ impl ExecutableContent for ForEach {
         } else {
             self.index.clone()
         };
+        #[cfg(feature = "Debug")]
+        {
+            debug!("ForEach::execute:");
+            datamodel.global().lock().unwrap().data.dump();
+        }
         datamodel.execute_for_each(&self.array, &self.item, &idx, &mut |datamodel| -> bool {
             if self.content != 0 {
                 for e in fsm.executableContent.get(&self.content).unwrap() {
@@ -482,9 +486,11 @@ impl ExecutableContent for Cancel {
     /// the event has already been delivered by the time the \<cancel> tag executes.
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         if let Ok(send_id) =
-            datamodel.get_expression_alternative_value(self.send_id.as_str(), self.send_id_expr.as_str())
+            datamodel.get_expression_alternative_value(&Data::Source(self.send_id.clone()), &self.send_id_expr)
         {
-            get_global!(datamodel).delayed_send.remove(&send_id);
+            get_global!(datamodel)
+                .delayed_send
+                .remove(&send_id.lock().unwrap().to_string());
         };
         true
     }
@@ -498,7 +504,7 @@ impl ExecutableContent for Cancel {
             self,
             &[
                 ("sendid", &self.send_id),
-                ("sendidexpr", &self.send_id_expr),
+                ("sendidexpr", &self.send_id_expr.to_string()),
             ],
         );
     }
@@ -509,7 +515,7 @@ impl ExecutableContent for SendParameters {
     /// If unable to dispatch, place "error.communication" in internal queue
     /// If target is not supported, place "error.execution" in internal queue
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool {
-        let target = match datamodel.get_expression_alternative_value(self.target.as_str(), self.target_expr.as_str()) {
+        let target = match datamodel.get_expression_alternative_value(&self.target, &self.target_expr) {
             Ok(value) => value,
             Err(_) => {
                 // Error -> abort
@@ -517,8 +523,7 @@ impl ExecutableContent for SendParameters {
             }
         };
 
-        let event_name = match datamodel.get_expression_alternative_value(self.event.as_str(), self.event_expr.as_str())
-        {
+        let event_name = match datamodel.get_expression_alternative_value(&self.event, &self.event_expr) {
             Ok(value) => value,
             Err(_) => {
                 // Error -> abort
@@ -550,7 +555,7 @@ impl ExecutableContent for SendParameters {
 
             datamodel.set(
                 self.name_location.as_str(),
-                Data::String(generated_id.clone()),
+                Data::String(generated_id.clone()), true
             );
             Some(generated_id)
         };
@@ -571,7 +576,7 @@ impl ExecutableContent for SendParameters {
                         return false;
                     }
                     Ok(value) => {
-                        data_vec.push(ParamPair::new(name.as_str(), &value));
+                        data_vec.push(ParamPair::new(name.as_str(), &value.lock().unwrap()));
                     }
                 }
             }
@@ -583,7 +588,7 @@ impl ExecutableContent for SendParameters {
                     // Error -> Abort
                     return false;
                 }
-                Ok(delay) => parse_duration_to_milliseconds(&delay),
+                Ok(delay) => parse_duration_to_milliseconds(&delay.lock().unwrap().to_string()),
             }
         } else {
             self.delay_ms as i64
@@ -596,13 +601,14 @@ impl ExecutableContent for SendParameters {
             return false;
         }
 
-        if delay_ms > 0 && target.eq(SCXML_TARGET_INTERNAL) {
+        let target_guard = target.lock().unwrap();
+        if delay_ms > 0 && target_guard.to_string().eq(SCXML_TARGET_INTERNAL) {
             // Can't send via internal queue
-            error!("Send: illegal delay for target {}", target);
+            error!("Send: illegal delay for target {}", target_guard);
             datamodel.internal_error_execution_for_event(&send_id, &fsm.caller_invoke_id);
             return false;
         }
-        let type_result = datamodel.get_expression_alternative_value(self.type_value.as_str(), self.type_expr.as_str());
+        let type_result = datamodel.get_expression_alternative_value(&self.type_value, &self.type_expr);
 
         let type_val = match type_result {
             Ok(val) => val,
@@ -613,13 +619,15 @@ impl ExecutableContent for SendParameters {
             }
         };
 
-        let mut type_val_str = type_val.as_str();
-        if type_val_str.is_empty() {
-            type_val_str = SCXML_EVENT_PROCESSOR;
-        }
+        let type_val_string = if type_val.lock().unwrap().is_empty() {
+            SCXML_EVENT_PROCESSOR.to_string()
+        } else {
+            type_val.lock().unwrap().to_string()
+        };
+        let type_val_str = type_val_string.as_str();
 
         let event = Event {
-            name: event_name.clone(),
+            name: event_name.lock().unwrap().to_string(),
             etype: EventType::external,
             sendid: send_id.clone(),
             origin: None,
@@ -641,21 +649,21 @@ impl ExecutableContent for SendParameters {
                 debug!("schedule '{}' for {}", event, delay_ms);
                 let global_clone = datamodel.global_s().clone();
                 let send_id_clone = send_id.clone();
+                let target_str = target_guard.to_string();
                 let tg = fsm.schedule(delay_ms, move || {
-                    #[cfg(feature = "Debug")]
-                    debug!("send '{}' to '{}'", event, target);
                     if let Some(sid) = &send_id_clone {
-                        global_clone.lock().delayed_send.remove(sid);
+                        global_clone.lock().unwrap().delayed_send.remove(sid);
                     }
                     iopc.lock()
                         .unwrap()
-                        .send(&global_clone, target.as_str(), event.clone());
+                        .send(&global_clone, target_str.as_str(), event.clone());
                 });
                 if let Some(g) = tg {
                     if let Some(sid) = &send_id {
                         datamodel
                             .global()
                             .lock()
+                            .unwrap()
                             .delayed_send
                             .insert(sid.clone(), g);
                     } else {
@@ -669,8 +677,8 @@ impl ExecutableContent for SendParameters {
             }
         } else {
             #[cfg(feature = "Debug")]
-            debug!("send '{}' to '{}'", event, target);
-            datamodel.send(type_val_str, target.as_str(), event.clone())
+            debug!("send '{}' to '{}'", event, target_guard);
+            datamodel.send(type_val_str, &target_guard, event.clone())
         };
 
         if !result {
@@ -692,13 +700,13 @@ impl ExecutableContent for SendParameters {
                 ("name_location", &self.name_location),
                 ("name", &self.name),
                 ("name", &self.name),
-                ("event_expr", &self.event_expr),
-                ("target", &self.target),
-                ("target_expr", &self.target_expr),
-                ("type", &self.type_value),
-                ("type_expr", &self.type_expr),
+                ("event_expr", &self.event_expr.to_string()),
+                ("target", &self.target.to_string()),
+                ("target_expr", &self.target_expr.to_string()),
+                ("type", &self.type_value.to_string()),
+                ("type_expr", &self.type_expr.to_string()),
                 ("delay", &self.delay_ms.to_string()),
-                ("delay_expr", &self.delay_expr),
+                ("delay_expr", &self.delay_expr.to_string()),
                 ("name_list", &vec_to_string(&self.name_list)),
                 ("content", &format!("{:?}", self.content)),
                 ("params", &opt_vec_to_string(&self.params)),
@@ -730,45 +738,39 @@ mod tests {
 /// a duration.
 /// RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
 pub fn parse_duration_to_milliseconds(d: &str) -> i64 {
-    lazy_static! {
-        static ref DURATION_RE: Regex = Regex::new(r"^(\d*(\.\d+)?)(MS|S|M|H|D|ms|s|m|h|d)$").unwrap();
-    }
     if d.is_empty() {
         0
     } else {
-        let caps = DURATION_RE.captures(d);
-        if caps.is_none() {
-            -1
-        } else {
-            let cap = caps.unwrap();
-            let value = cap.get(1).map_or("", |m| m.as_str());
-            let unit = cap.get(3).map_or("", |m| m.as_str());
+        let mut exp = ExpressionLexer::new(d.to_string());
+        let value_result = exp.next_number();
+        println!(" r:{:?}", value_result);
+        if value_result.is_err() {
+            return -1;
+        }
+        let Ok(unit) = exp.next_name() else {
+            return 0;
+        };
 
-            if value.is_empty() {
-                0
-            } else {
-                let mut v: f64 = value.parse::<f64>().unwrap();
-                match unit {
-                    "D" | "d" => {
-                        v *= 24.0 * 60.0 * 60.0 * 1000.0;
-                    }
-                    "H" | "h" => {
-                        v *= 60.0 * 60.0 * 1000.0;
-                    }
-                    "M" | "m" => {
-                        v *= 60000.0;
-                    }
-                    "S" | "s" => {
-                        v *= 1000.0;
-                    }
-                    "MS" | "ms" => {}
-                    _ => {
-                        return -1;
-                    }
-                }
-                v.round() as i64
+        let mut v = value_result.unwrap().as_double();
+        match unit.as_str() {
+            "D" | "d" => {
+                v *= 24.0 * 60.0 * 60.0 * 1000.0;
+            }
+            "H" | "h" => {
+                v *= 60.0 * 60.0 * 1000.0;
+            }
+            "M" | "m" => {
+                v *= 60000.0;
+            }
+            "S" | "s" => {
+                v *= 1000.0;
+            }
+            "MS" | "ms" => {}
+            _ => {
+                return -1;
             }
         }
+        v.round() as i64
     }
 }
 

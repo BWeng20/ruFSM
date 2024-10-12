@@ -12,9 +12,10 @@ use std::println as debug;
 
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::{env, mem, str, string::String};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{env, mem, str, string::String};
 
+use crate::datamodel::{create_data_arc, Data};
 use crate::ArgOption;
 #[cfg(feature = "Debug_Reader")]
 #[cfg(not(test))]
@@ -24,7 +25,6 @@ use quick_xml::events::attributes::Attributes;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 
-use crate::datamodel::Data;
 use crate::executable_content::{
     get_opt_executable_content_as, get_safe_executable_content_as, parse_duration_to_milliseconds, Assign, Cancel,
     ExecutableContent, Expression, ForEach, If, Log, Raise, SendParameters,
@@ -783,7 +783,7 @@ impl ReaderState {
         // but must not have both. Furthermore, if either attribute is present, the element must not have any children.
         // Thus 'src', 'expr' and children are mutually exclusive in the <data> element.
 
-        if src.is_some() {
+        let data_value = if src.is_some() {
             if !(expr.is_none() && content.is_empty()) {
                 panic!(
                     "{} shall have only {}, {} or children, but not some combination of it.",
@@ -802,7 +802,7 @@ impl ReaderState {
                     #[cfg(feature = "Debug_Reader")]
 
                     debug!("src='{}':\n{}", src.unwrap(), source);
-                    self.get_current_state().data.set(id, Data::String(source));
+                    source
                 }
                 Err(e) => {
                     panic!("Can't read data source '{}'. {}", src.unwrap(), e);
@@ -815,14 +815,15 @@ impl ReaderState {
                     TAG_DATA, ATTR_SRC, ATTR_EXPR
                 );
             }
-            self.get_current_state()
-                .data
-                .set(id, Data::String(expr.unwrap().clone()));
+            expr.unwrap().clone()
         } else if !content.is_empty() {
-            self.get_current_state().data.set(id, Data::String(content));
+            content
         } else {
-            self.get_current_state().data.set(id, Data::Null());
-        }
+            "".to_string()
+        };
+        self.get_current_state()
+            .data
+            .insert(id.to_string(), create_data_arc(Data::Source(data_value)));
     }
 
     /// A "initial" element started (the element, not the attribute)
@@ -843,18 +844,18 @@ impl ReaderState {
         let mut invoke = Invoke::new();
 
         if let Some(type_opt) = attr.get(ATTR_TYPE) {
-            invoke.type_name.clone_from(type_opt);
+            invoke.type_name = Data::Source(type_opt.clone());
         }
         if let Some(typeexpr) = attr.get(ATTR_TYPEEXPR) {
-            invoke.type_expr.clone_from(typeexpr);
+            invoke.type_expr = Data::Source(typeexpr.clone());
         }
 
         // W3c: Must not occur with the 'srcexpr' attribute or the <content> element.
         if let Some(src) = attr.get(ATTR_SRC) {
-            invoke.src.clone_from(src);
+            invoke.src = Data::Source(src.clone());
         }
         if let Some(srcexpr) = attr.get(ATTR_SRCEXPR) {
-            invoke.src_expr.clone_from(srcexpr);
+            invoke.src_expr = Data::Source(srcexpr.to_string());
         }
 
         // TODO--
@@ -938,7 +939,7 @@ impl ReaderState {
 
         let cond = attr.get(ATTR_COND);
         if cond.is_some() {
-            t.cond = Some(cond.unwrap().clone());
+            t.cond = Data::Source(cond.unwrap().clone());
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -1013,7 +1014,7 @@ impl ReaderState {
                 Ok(source) => {
                     #[cfg(feature = "Debug_Reader")]
                     debug!("src='{}':\n{}", file_src, source);
-                    s.content = source;
+                    s.content = Data::Source(source);
                 }
                 Err(e) => {
                     panic!("Can't read script '{}'. {}", file_src, e);
@@ -1033,7 +1034,7 @@ impl ReaderState {
             if !s.content.is_empty() {
                 panic!("<script> with 'src' attribute shall not have content.")
             }
-            s.content = src.to_string();
+            s.content = Data::Source(src.to_string());
         }
 
         self.add_executable_content(Box::new(s));
@@ -1111,7 +1112,7 @@ impl ReaderState {
             }
             cancel.send_id.clone_from(sendid_value);
         } else if let Some(sendidexpr_value) = sendidexpr {
-            cancel.send_id_expr.clone_from(sendidexpr_value);
+            cancel.send_id_expr = Data::Source(sendidexpr_value.clone());
         } else {
             panic!(
                 "{}: attribute {} or {} must be given",
@@ -1290,9 +1291,9 @@ impl ReaderState {
                     TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR
                 );
             }
-            send_params.event.clone_from(event_value);
+            send_params.event = Data::Source(event_value.clone());
         } else if let Some(eventexpr_value) = eventexpr {
-            send_params.event_expr.clone_from(eventexpr_value);
+            send_params.event_expr = Data::Source(eventexpr_value.clone());
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -1304,9 +1305,9 @@ impl ReaderState {
                     TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR
                 );
             }
-            send_params.target.clone_from(target_val);
+            send_params.target = Data::Source(target_val.clone());
         } else if let Some(targetexpr_value) = targetexpr {
-            send_params.target_expr.clone_from(targetexpr_value);
+            send_params.target_expr = Data::Source(targetexpr_value.clone());
         }
 
         let type_attr = attr.get(ATTR_TYPE);
@@ -1318,9 +1319,9 @@ impl ReaderState {
                     TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR
                 );
             }
-            send_params.type_value.clone_from(type_attr_value);
+            send_params.type_value = Data::Source(type_attr_value.clone());
         } else if let Some(typeexpr_value) = typeexpr {
-            send_params.type_expr.clone_from(typeexpr_value);
+            send_params.type_expr = Data::Source(typeexpr_value.clone());
         }
 
         let id = attr.get(ATTR_ID);
@@ -1347,7 +1348,7 @@ impl ReaderState {
                     TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR
                 );
             }
-            send_params.delay_expr.clone_from(delay_expr_attr_value);
+            send_params.delay_expr = Data::Source(delay_expr_attr_value.clone());
         } else if delay_attr.is_some() {
             if (!delay_attr.unwrap().is_empty()) && type_attr.is_some() && type_attr.unwrap().eq(TARGET_INTERNAL) {
                 panic!(
@@ -1493,7 +1494,7 @@ impl ReaderState {
                     TAG_PARAM, ATTR_LOCATION, ATTR_EXPR
                 );
             }
-            param.location.clone_from(location_value);
+            param.location = location_value.to_string();
         }
 
         match parent_tag.as_str() {
@@ -1944,9 +1945,13 @@ pub fn parse_from_uri(uri: String, include_paths: &[PathBuf]) -> Result<Box<Fsm>
             match r {
                 Ok(_m) => {
                     let end = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-                    info!("'{}' (XML) loaded in {}ms", rs.fsm.name, end.as_millis()-start.as_millis() );
+                    info!(
+                        "'{}' (XML) loaded in {}ms",
+                        rs.fsm.name,
+                        end.as_millis() - start.as_millis()
+                    );
                     Ok(rs.fsm)
-                },
+                }
                 Err(e) => Err(e),
             }
         }

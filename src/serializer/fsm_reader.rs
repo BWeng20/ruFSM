@@ -3,12 +3,13 @@
 
 #[cfg(feature = "Debug_Serializer")]
 use log::debug;
+use std::collections::HashMap;
 
+use crate::datamodel::{Data, DataArc};
+use log::info;
 use std::io::Read;
 use std::time::{SystemTime, UNIX_EPOCH};
-use log::info;
 
-use crate::datamodel::DataStore;
 use crate::executable_content;
 use crate::executable_content::{
     Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters,
@@ -78,7 +79,11 @@ where
             }
 
             let end = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-            info!("'{}' (RFSM) loaded in {}ms", fsm.name, end.as_millis()-start.as_millis() );
+            info!(
+                "'{}' (RFSM) loaded in {}ms",
+                fsm.name,
+                end.as_millis() - start.as_millis()
+            );
 
             Ok(Box::new(fsm))
         } else if self.reader.has_error() {
@@ -111,12 +116,12 @@ where
         self.reader.read_uint() as ExecutableContentId
     }
 
-    pub fn read_data_store(&mut self, value: &mut DataStore) {
-        value.values.clear();
+    pub fn read_data_map(&mut self, value: &mut HashMap<String, DataArc>) {
+        value.clear();
         let len = self.reader.read_usize();
         for _i in 0..len {
             let key = self.reader.read_string();
-            value.values.insert(key, self.reader.read_data_value());
+            value.insert(key, self.reader.read_data_arc());
         }
     }
 
@@ -172,10 +177,10 @@ where
             invoke.parent_state_name = self.reader.read_string();
         }
         invoke.doc_id = self.read_doc_id();
-        invoke.src_expr = self.reader.read_string();
-        invoke.src = self.reader.read_string();
-        invoke.type_expr = self.reader.read_string();
-        invoke.type_name = self.reader.read_string();
+        invoke.src_expr = self.reader.read_data();
+        invoke.src = self.reader.read_data();
+        invoke.type_expr = self.reader.read_data();
+        invoke.type_name = self.reader.read_data();
         invoke.external_id_location = self.reader.read_string();
         invoke.autoforward = self.reader.read_boolean();
         invoke.finalize = self.read_executable_content_id();
@@ -217,9 +222,9 @@ where
         transition.wildcard = (flags & 2) != 0;
 
         transition.cond = if (flags & 4) != 0 {
-            Some(self.reader.read_string())
+            self.reader.read_data()
         } else {
-            None
+            Data::Null()
         };
         transition.content = if (flags & 8) != 0 {
             self.read_executable_content_id()
@@ -290,7 +295,7 @@ where
         }
 
         if (flags & FSM_PROTOCOL_FLAG_DATA) != 0 {
-            self.read_data_store(&mut state.data);
+            self.read_data_map(&mut state.data);
         }
 
         state.parent = self.read_state_id();
@@ -337,7 +342,7 @@ where
 
     pub fn read_executable_content_expression(&mut self) -> Box<dyn ExecutableContent> {
         let mut ec = Expression::new();
-        ec.content = self.reader.read_string();
+        ec.content = self.reader.read_data();
         Box::new(ec)
     }
 
@@ -372,8 +377,8 @@ where
         let mut ec = SendParameters::new();
 
         ec.name = self.reader.read_string();
-        ec.target = self.reader.read_string();
-        ec.target_expr = self.reader.read_string();
+        ec.target = self.reader.read_data();
+        ec.target_expr = self.reader.read_data();
 
         let content_flag = self.reader.read_boolean();
         if content_flag {
@@ -385,14 +390,14 @@ where
         ec.name_location = self.reader.read_string();
         self.read_parameters(&mut ec.params);
 
-        ec.event = self.reader.read_string();
-        ec.event_expr = self.reader.read_string();
+        ec.event = self.reader.read_data();
+        ec.event_expr = self.reader.read_data();
 
-        ec.type_value = self.reader.read_string();
-        ec.type_expr = self.reader.read_string();
+        ec.type_value = self.reader.read_data();
+        ec.type_expr = self.reader.read_data();
 
         ec.delay_ms = self.reader.read_uint();
-        ec.delay_expr = self.reader.read_string();
+        ec.delay_expr = self.reader.read_data();
 
         Box::new(ec)
     }
@@ -406,7 +411,7 @@ where
     pub fn read_executable_content_cancel(&mut self) -> Box<dyn ExecutableContent> {
         let mut ec = Cancel::new();
         ec.send_id = self.reader.read_string();
-        ec.send_id_expr = self.reader.read_string();
+        ec.send_id_expr = self.reader.read_data();
         Box::new(ec)
     }
 
