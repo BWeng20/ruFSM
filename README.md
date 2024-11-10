@@ -69,13 +69,13 @@ For some huge project, it may also be feasible to implement a specialized Datamo
 
 ### Datamodel
 
-The Datamodel in SCXML is responsible to execute code and expressions. The actual business logic of the modl is implemented this way. 
+The Datamodel in SCXML is responsible to execute code and expressions. The actual business logic of a FSM is implemented this way. 
 For details about the Datamodel-concept in SCXML see the W3C documentation.<br/>
 
 This lib provides an implementation of the EMCAScript-Datamodel, but you can implement other models as well.<br/>
-If your FSM only needs simple logic and communicates only with the build-in "send", there is not need to extend the available Datamodel.
+If your FSM only needs simple logic and communicates only with the build-in "send", there is not need to extend the Datamodel.
 
-But if you need special stuff, you can implement a new datamodel. You can have multiple datamodels in oneyou runtime and select one in the SCXML document of the FSM instance.<br/>
+But if you need special stuff, you can implement a new datamodel. You can have multiple datamodels in you runtime and select one in the SCXML document of the FSM instance.<br/>
 To add new data-models, use function `rfsm::fsm::register_datamodel`.
 
 This way you have full control about our datamodel-language and business-logic.
