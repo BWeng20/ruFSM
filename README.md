@@ -57,35 +57,37 @@ Currently, it simply prints the traced actions.
 
 FSMs normally are used embedded inside other software to control some state-full workflow.<br/> 
 The operations of this workflow are triggered from the transitions or the states-handlers.  
-To add such operations different approaches exits. In hard-codes FSMs methods-calls are directly
+To add such operations different approaches exits. In hard-coded FSMs, methods-calls are directly
 linked to the transition or states during compile-time.<br/>
 
-This implementation loads FSMs during runtime, so the binding needs to be dynamically.<br/> 
+This implementation loads FSMs during runtime, so the binding needs to be dynamic.<br/> 
 
-Form some huge project, you can re-implement to Datamodel-trait and implement an optimized way to trigger you 
-functionality.<br/>
-Must simpler is to use the module "Action". You find examples how to use this.
+To add custom logic, you can use the module "Action". See the next chapters for details.<br/>
+
+For some huge project, it may also be feasible to implement a specialized Datamodel and implement logic directly there.<br/>
+
 
 ### Datamodel
 
+The Datamodel in SCXML is responsible to execute code and expressions. The actual business logic of the modl is implemented this way. 
 For details about the Datamodel-concept in SCXML see the W3C documentation.<br/>
-This lib provides an implementation of the EMCAScript-Datamodel, but you can implement
-other models as well.
 
-The Datamodel in SCXML is responsible to execute code and expressions. Custom business logic
-can be implemented this way. For a simpler approach (without implement a full Datamodel), see 
-"Custom Actions" below.
+This lib provides an implementation of the EMCAScript-Datamodel, but you can implement other models as well.<br/>
+If your FSM only needs simple logic and communicates only with the build-in "send", there is not need to extend the available Datamodel.
 
-The Datamodel is selected in the SCXML, so you can provide multiple model-implementation in
-one binary.
-
+But if you need special stuff, you can implement a new datamodel. You can have multiple datamodels in oneyou runtime and select one in the SCXML document of the FSM instance.<br/>
 To add new data-models, use function `rfsm::fsm::register_datamodel`.
+
+This way you have full control about our datamodel-language and business-logic.
+
+If you are basically fine which the language and features of one of the available Datamodels, but you need special function to call, you can do this by adding "Custom Actions" as described below. 
+The actions can then be called from the existing Datamodel-language.
 
 
 ### Custom Actions
 
 You can use the trait "Action" to add custom functions to the FSM. See the Examples for a How-To.
-Each FSM instance can have a different set of Actions. Action are inherited by child-session.
+Each FSM instance can have some different set of Actions. Action are inherited by child-session.
 
 If using ECMAScript, these actions can be called like normal methods. Arguments and return values will be converted 
 from and to JavaScript values. See enum "Data" for supported data-types.
