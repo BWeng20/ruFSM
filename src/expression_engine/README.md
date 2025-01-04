@@ -57,7 +57,8 @@ The available operators and their meaning
 | `==`                 | Equal          | Results to `true` if the left side is equal to the right side.                                                       |
 | `!=`                 | Not Equal      | Results to `true` if the left side is _not_ equal to the right side.                                                 |
 | `>=`, `<=`, `>`, `<` | Comparison     | Results to `true` if left and right satisfies the condition.                                                         |
-| `/`, `:`             | Division       | Works only on numeric types. Returns a Data::Double if at least one operant is Double, otherwise Data::Integer.      |
+| `/`, `:`             | Division       | Works only on numeric types. Returns a Data::Double.                                                                 |
+| `*`                  | Multiplication | Works only on numeric types. Returns a Data::Double if at least one operant is Double, otherwise Data::Integer.      |
 | `+`                  | Aggregation    | Computes the sum for Data::Integer or Data::Double and the aggregation for Data::Map and Data::Array.                |
 | `-`                  | Minus          | Computes the difference of left and right. Works only on numeric types.                                              |
 | `%`                  | Modulus        | Computes the remainder of dividing left by right. Works only on numeric types.                                       |
