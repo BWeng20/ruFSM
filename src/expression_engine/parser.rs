@@ -1,15 +1,19 @@
 //! Implementation of a simple expression parser.
 
 use crate::datamodel::{Data, GlobalDataLock};
-use crate::expression_engine::expressions::{get_expression_as, Expression, ExpressionArray, ExpressionAssign, ExpressionAssignUndefined, ExpressionConstant, ExpressionMemberAccess, ExpressionMethod, ExpressionOperator, ExpressionResult, ExpressionVariable, Operator, ExpressionNot, ExpressionIndex};
+use crate::expression_engine::expressions::{
+    get_expression_as, Expression, ExpressionArray, ExpressionAssign, ExpressionAssignUndefined, ExpressionConstant,
+    ExpressionIndex, ExpressionMemberAccess, ExpressionMethod, ExpressionNot, ExpressionOperator, ExpressionResult,
+    ExpressionVariable, Operator,
+};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 #[cfg(feature = "Debug")]
-use log::debug;
-#[cfg(feature = "Debug")]
 use crate::fsm::vec_to_string;
+#[cfg(feature = "Debug")]
+use log::debug;
 
 /// Numeric types.
 #[derive(PartialEq, Debug)]
@@ -379,7 +383,7 @@ impl ExpressionLexer {
                             '\0' => {
                                 return Token::EOE;
                             }
-                            '?' |'+' | '-' | '*' | '<' | '>' | '=' | '%' | '/' | ':' | '!' => {
+                            '?' | '+' | '-' | '*' | '<' | '>' | '=' | '%' | '/' | ':' | '!' => {
                                 return self.read_operator(c);
                             }
                             '{' | '}' | '(' | ')' | '[' | ']' => {
@@ -468,8 +472,7 @@ impl ExpressionParser {
                     if r.is_empty() {
                         // Special case: empty argument list
                         break;
-                    }
-                    else {
+                    } else {
                         return Err("Error in argument list".to_string());
                     }
                 }
@@ -492,14 +495,9 @@ impl ExpressionParser {
         let mut lexer = ExpressionLexer::new(text);
         let (_, expression) = Self::parse_sub_expression(&mut lexer, &['\0'])?;
         match expression {
-            None => {
-                Err("Failed to parse".to_string())
-            }
-            Some(e) => {
-                Ok(e)
-            }
+            None => Err("Failed to parse".to_string()),
+            Some(e) => Ok(e),
         }
-
     }
 
     /// Parses and executes an expression.\
@@ -629,9 +627,14 @@ impl ExpressionParser {
                                     Token::Identifier(id) => {
                                         let mut v = Self::parse_argument_list(lexer, ']')?;
                                         if v.len() != 1 {
-                                            return Result::Err("index operator '[]' allows only one argument".to_string());
+                                            return Result::Err(
+                                                "index operator '[]' allows only one argument".to_string(),
+                                            );
                                         }
-                                        let x = Box::new(ExpressionIndex::new(Box::new(ExpressionVariable::new(id.as_str())), v.remove(0)));
+                                        let x = Box::new(ExpressionIndex::new(
+                                            Box::new(ExpressionVariable::new(id.as_str())),
+                                            v.remove(0),
+                                        ));
                                         stack.push(ExpressionParserItem::SExpression(x));
                                     }
                                     Token::Operator(_) => {
@@ -644,7 +647,6 @@ impl ExpressionParser {
                                     _ => {
                                         return Result::Err(format!("Internal Error at '{}'", br));
                                     }
-
                                 },
                                 ExpressionParserItem::SExpression(_) => {
                                     return Result::Err(format!("Unexpected '{}'", br));
@@ -709,7 +711,10 @@ impl ExpressionParser {
     /// Tries to create an expression from the current contents of the parser-stack.
     fn stack_to_expression(stack: &mut Vec<ExpressionParserItem>) -> Result<Option<Box<dyn Expression>>, String> {
         #[cfg(feature = "Debug")]
-        debug!("ExpressionParser.stack_to_expression: stack={:?}", vec_to_string(stack));
+        debug!(
+            "ExpressionParser.stack_to_expression: stack={:?}",
+            vec_to_string(stack)
+        );
         if stack.is_empty() {
             return Result::Ok(None);
         }
@@ -813,13 +818,14 @@ impl ExpressionParser {
                         }
                     }
                     Operator::Not => {
-                        if (best_idx+1) < stack.len() {
+                        if (best_idx + 1) < stack.len() {
                             stack.remove(best_idx);
                             let right = stack.remove(best_idx);
                             if let ExpressionParserItem::SExpression(re) = right {
-                                stack.insert(best_idx, ExpressionParserItem::SExpression(
-                                    Box::new(ExpressionNot::new(re))
-                                ));
+                                stack.insert(
+                                    best_idx,
+                                    ExpressionParserItem::SExpression(Box::new(ExpressionNot::new(re))),
+                                );
                                 return Self::stack_to_expression(stack);
                             }
                         }
@@ -834,14 +840,16 @@ impl ExpressionParser {
                         best_idx,
                         |le: Box<dyn Expression>, re: Box<dyn Expression>| -> Result<Box<dyn Expression>, String> {
                             if let Some(variable) = get_expression_as::<ExpressionVariable>(re.deref()) {
-                                return Ok(Box::new(ExpressionMemberAccess::new(le, variable.name.clone())));
+                                return Ok(Box::new(ExpressionMemberAccess::new(
+                                    le,
+                                    variable.name.clone(),
+                                )));
                             }
                             if let Some(method) = get_expression_as::<ExpressionMethod>(re.deref()) {
                                 let mut method_copy = method.get_copy();
                                 method_copy.arguments.insert(0, le);
                                 Ok(method_copy)
-                            }
-                            else {
+                            } else {
                                 Err("No Field/Method on right side of '.'".to_string())
                             }
                         },
@@ -849,7 +857,7 @@ impl ExpressionParser {
                 {
                     return Self::stack_to_expression(stack);
                 } else {
-                    return Err(format!("Failed to parse at '{}'", sep_char))
+                    return Err(format!("Failed to parse at '{}'", sep_char));
                 }
             }
         } else {
@@ -858,7 +866,7 @@ impl ExpressionParser {
                 // No operator? Return first one.
                 return Ok(Some(ex));
             } else {
-                return Err(format!("Failed to parse at '{}'", x))
+                return Err(format!("Failed to parse at '{}'", x));
             }
         }
         Err("Failed to parse".to_string())

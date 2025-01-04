@@ -176,21 +176,37 @@ pub fn init_logging() {
 pub fn get_features() -> Vec<&'static str> {
     // TODO: Any generic way to do this?
     vec![
-    #[cfg(feature = "ECMAScript")] "ECMAScript",
-    #[cfg(feature = "RfsmExpressionModel")] "RfsmExpressionModel",
-    #[cfg(feature = "BasicHttpEventIOProcessor")] "BasicHttpEventIOProcessor",
-    #[cfg(feature = "yaml-config")] "yaml-config",
-    #[cfg(feature = "json-config")] "json-config",
-    #[cfg(feature = "serializer")] "serializer",
-    #[cfg(feature = "xml")] "xml",
-    #[cfg(feature = "Trace")] "Trace",
-    #[cfg(feature = "TraceServer")] "TraceServer",
-    #[cfg(feature = "Debug_Reader")] "Debug_Reader",
-    #[cfg(feature = "Debug_Serializer")] "Debug_Serializer",
-    #[cfg(feature = "EnvLog")] "EnvLog",
-    #[cfg(feature = "Trace_Method")] "Trace_Method",
-    #[cfg(feature = "Trace_State")] "Trace_State",
-    #[cfg(feature = "Trace_Event")] "Trace_Event",
-    #[cfg(feature = "Debug")] "Debug",
+        #[cfg(feature = "ECMAScript")]
+        "ECMAScript",
+        #[cfg(feature = "RfsmExpressionModel")]
+        "RfsmExpressionModel",
+        #[cfg(feature = "BasicHttpEventIOProcessor")]
+        "BasicHttpEventIOProcessor",
+        #[cfg(feature = "yaml-config")]
+        "yaml-config",
+        #[cfg(feature = "json-config")]
+        "json-config",
+        #[cfg(feature = "serializer")]
+        "serializer",
+        #[cfg(feature = "xml")]
+        "xml",
+        #[cfg(feature = "Trace")]
+        "Trace",
+        #[cfg(feature = "TraceServer")]
+        "TraceServer",
+        #[cfg(feature = "Debug_Reader")]
+        "Debug_Reader",
+        #[cfg(feature = "Debug_Serializer")]
+        "Debug_Serializer",
+        #[cfg(feature = "EnvLog")]
+        "EnvLog",
+        #[cfg(feature = "Trace_Method")]
+        "Trace_Method",
+        #[cfg(feature = "Trace_State")]
+        "Trace_State",
+        #[cfg(feature = "Trace_Event")]
+        "Trace_Event",
+        #[cfg(feature = "Debug")]
+        "Debug",
     ]
 }

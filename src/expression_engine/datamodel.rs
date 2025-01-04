@@ -1,11 +1,15 @@
 //! Implements the SCXML Data model for rFSM Expressions.\
 
-use log::{debug, error};
-use std::collections::{HashMap};
-use std::ops::Deref;
 use crate::actions::Action;
+use log::{debug, error};
+use std::collections::HashMap;
+use std::ops::Deref;
 
-use crate::datamodel::{create_data_arc, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME};
+use crate::datamodel::{
+    create_data_arc, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
+    EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
+    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
+};
 use crate::event_io_processor::SYS_IO_PROCESSORS;
 use crate::expression_engine::parser::ExpressionParser;
 use crate::fsm::{Event, ExecutableContentId, Fsm, GlobalData, StateId};
@@ -44,13 +48,7 @@ impl RFsmExpressionDatamodel {
                 // if the value specified (by 'expr' or children) is not a legal value for the
                 // location specified, the SCXML Processor must place the error 'error.execution'
                 // in the internal event queue.
-                self.log(
-                    format!(
-                        "Can't assign {}={}: {}.",
-                        left_expr, right_expr, error
-                    )
-                    .as_str(),
-                );
+                self.log(format!("Can't assign {}={}: {}.", left_expr, right_expr, error).as_str());
                 self.internal_error_execution();
                 false
             }
@@ -98,15 +96,13 @@ impl RFsmExpressionDatamodel {
         actions.add_action("isDefined", Box::new(IsDefinedAction {}));
     }
 
-    fn resolve_source_data(&mut self, data: &Data) -> Result<DataArc, String>{
-
+    fn resolve_source_data(&mut self, data: &Data) -> Result<DataArc, String> {
         if let Data::Source(_) = &data {
             self.execute_internal(data, false)
         } else {
             Ok(create_data_arc(data.clone()))
         }
     }
-
 }
 
 pub struct RFsmExpressionDatamodelFactory {}
@@ -127,7 +123,7 @@ fn option_to_data_value(val: &Option<String>) -> Data {
 /// Action to implement the mandatory SCXML-Datamodel function "In".
 #[derive(Clone)]
 pub struct InAction {
-    pub state_name_to_id : HashMap<String, StateId>
+    pub state_name_to_id: HashMap<String, StateId>,
 }
 
 impl InAction {
@@ -137,33 +133,24 @@ impl InAction {
             state_name_to_id.insert(state.name.clone(), state.id);
         }
 
-        InAction {
-            state_name_to_id
-        }
+        InAction { state_name_to_id }
     }
 }
 
 impl Action for InAction {
-
     fn execute(&self, arguments: &[Data], global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
             match &arguments[0] {
                 Data::String(state_name) => {
                     let r = match self.state_name_to_id.get(state_name) {
-                        None => {
-                            false
-                        }
-                        Some(state_id) => {
-                            global.configuration.data.contains(state_id)
-                        }
+                        None => false,
+                        Some(state_id) => global.configuration.data.contains(state_id),
                     };
                     #[cfg(feature = "Debug")]
                     debug!("In('{}') -> {}", state_name, r);
                     Ok(Data::Boolean(r))
                 }
-                _ => {
-                    Err("Illegal argument type for 'In'".to_string())
-                }
+                _ => Err("Illegal argument type for 'In'".to_string()),
             }
         } else {
             Err("Wrong arguments for 'In'.".to_string())
@@ -181,24 +168,17 @@ pub struct IndexOfAction {}
 impl Action for IndexOfAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 2 {
-            match (&arguments[0],&arguments[1]) {
+            match (&arguments[0], &arguments[1]) {
                 (Data::String(s1), Data::String(s2)) => {
-                    let r =
-                    match s1.find(s2) {
-                        None => {
-                            -1
-                        }
-                        Some(idx) => {
-                            idx as i64
-                        }
+                    let r = match s1.find(s2) {
+                        None => -1,
+                        Some(idx) => idx as i64,
                     };
                     #[cfg(feature = "Debug")]
-                    debug!("indexOf({},{}) -> {}", s1,  s2, r);
+                    debug!("indexOf({},{}) -> {}", s1, s2, r);
                     Ok(Data::Integer(r))
                 }
-                (_, _) => {
-                    Err("Illegal argument types for 'indexOf'".to_string())
-                }
+                (_, _) => Err("Illegal argument types for 'indexOf'".to_string()),
             }
         } else {
             Err("Wrong arguments for 'indexOf'.".to_string())
@@ -215,20 +195,11 @@ pub struct LengthAction {}
 impl Action for LengthAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
-            let r =
-            match &arguments[0] {
-                Data::String(s) => {
-                    s.len()
-                }
-                Data::Array(a) => {
-                    a.len()
-                }
-                Data::Map(m) => {
-                    m.len()
-                }
-                Data::Source(s) => {
-                    s.len()
-                }
+            let r = match &arguments[0] {
+                Data::String(s) => s.len(),
+                Data::Array(a) => a.len(),
+                Data::Map(m) => m.len(),
+                Data::Source(s) => s.len(),
                 _ => {
                     return Err("Wrong argument type for 'length'.".to_string());
                 }
@@ -244,20 +215,14 @@ impl Action for LengthAction {
     }
 }
 
-
 #[derive(Clone)]
 pub struct IsDefinedAction {}
 impl Action for IsDefinedAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
             match &arguments[0] {
-                Data::Error(_) |
-                Data::None() => {
-                    Ok(Data::Boolean(false))
-                }
-                _ => {
-                    Ok(Data::Boolean(true))
-                }
+                Data::Error(_) | Data::None() => Ok(Data::Boolean(false)),
+                _ => Ok(Data::Boolean(true)),
             }
         } else {
             Err("Wrong number of arguments for 'isDefined'.".to_string())
@@ -268,7 +233,6 @@ impl Action for IsDefinedAction {
         Box::new(self.clone())
     }
 }
-
 
 impl Datamodel for RFsmExpressionDatamodel {
     fn global(&mut self) -> &mut GlobalDataArc {
@@ -287,18 +251,19 @@ impl Datamodel for RFsmExpressionDatamodel {
     }
 
     fn set_ioprocessors(&mut self) {
-
         let session_id = self.global_s().lock().unwrap().session_id;
         let mut io_processors_dings = HashMap::new();
         for (name, processor) in &self.global_data.lock().unwrap().io_processors {
             let mut processor_data = HashMap::new();
-            let location = create_data_arc(Data::String(processor.lock().unwrap().get_location(session_id)));
+            let location = create_data_arc(Data::String(
+                processor.lock().unwrap().get_location(session_id),
+            ));
             processor_data.insert("location".to_string(), location);
             io_processors_dings.insert(name.clone(), create_data_arc(Data::Map(processor_data)));
         }
         let mut data_arc = create_data_arc(Data::Map(io_processors_dings));
         data_arc.set_readonly(true);
-        self.set_arc(SYS_IO_PROCESSORS, data_arc, true );
+        self.set_arc(SYS_IO_PROCESSORS, data_arc, true);
     }
 
     fn set_from_state_data(&mut self, data: &HashMap<String, DataArc>, set_data: bool) {
@@ -369,28 +334,27 @@ impl Datamodel for RFsmExpressionDatamodel {
                 Some(c) => {
                     let cd_guard = c.lock().unwrap();
                     let cd = cd_guard.deref();
-                    match self.resolve_source_data(cd)
-                    {
-                        Ok(val) => {
-                            val
-                        }
+                    match self.resolve_source_data(cd) {
+                        Ok(val) => val,
                         Err(err) => {
                             error!("Can't eval event content '{}': {}", cd, err);
                             self.null_data.clone()
                         }
                     }
-                },
+                }
             },
             Some(pv) => {
                 let mut data = HashMap::with_capacity(pv.len());
                 for pair in pv.iter() {
-                    match self.resolve_source_data(&pair.value)
-                    {
+                    match self.resolve_source_data(&pair.value) {
                         Ok(val) => {
-                            data.insert(pair.name.clone(),val);
+                            data.insert(pair.name.clone(), val);
                         }
                         Err(err) => {
-                            error!("Can set event data '{} = {}': {}", pair.name, pair.value, err)
+                            error!(
+                                "Can set event data '{} = {}': {}",
+                                pair.name, pair.value, err
+                            )
                         }
                     }
                 }
@@ -488,7 +452,7 @@ impl Datamodel for RFsmExpressionDatamodel {
         match data {
             Ok(r) => {
                 let dc = r.lock().unwrap().clone();
-                match  dc {
+                match dc {
                     Data::Map(map) => {
                         let mut idx: i64 = 0;
                         if self.assign_internal(item_name, "null", true) {
@@ -585,13 +549,13 @@ impl Datamodel for RFsmExpressionDatamodel {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
     use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
     use crate::fsm::Fsm;
     use crate::init_logging;
+    use std::collections::HashMap;
 
     #[test]
     fn index_of_works() {
@@ -600,17 +564,26 @@ mod tests {
         ec.add_internal_functions(&mut fsm);
 
         // As normal function.
-        let rs = ExpressionParser::execute("indexOf('abc', 'bc')".to_string(),
-                                           &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute(
+            "indexOf('abc', 'bc')".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
 
-        assert_eq!(rs, ExpressionResult::Ok( create_data_arc(Data::Integer(1i64))));
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(1i64)))
+        );
 
         // As Member function.
-        let rs = ExpressionParser::execute("'abc'.indexOf('bc')".to_string(),
-                                           &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute(
+            "'abc'.indexOf('bc')".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
 
-        assert_eq!(rs, ExpressionResult::Ok( create_data_arc(Data::Integer(1i64))));
-
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(1i64)))
+        );
 
         println!("{:?}", rs);
     }
@@ -624,14 +597,24 @@ mod tests {
 
         // As normal function.
         // On text
-        let rs = ExpressionParser::execute("length('abc')".to_string(),
-                                           &mut ec.global_data.lock().unwrap());
-        assert_eq!(rs, ExpressionResult::Ok( create_data_arc(Data::Integer(3i64))));
+        let rs = ExpressionParser::execute(
+            "length('abc')".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(3i64)))
+        );
 
         // On an array
-        let rs = ExpressionParser::execute("length([1,2,3,4])".to_string(),
-                                           &mut ec.global_data.lock().unwrap());
-        assert_eq!(rs, ExpressionResult::Ok( create_data_arc(Data::Integer(4i64))));
+        let rs = ExpressionParser::execute(
+            "length([1,2,3,4])".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(4i64)))
+        );
         // On a map
         let mut m = HashMap::new();
         m.insert("a".to_string(), create_data_arc(Data::Integer(1i64)));
@@ -639,18 +622,31 @@ mod tests {
         m.insert("c".to_string(), create_data_arc(Data::Integer(4i64)));
         m.insert("d".to_string(), create_data_arc(Data::Integer(3i64)));
         m.insert("e".to_string(), create_data_arc(Data::Integer(2i64)));
-        ec.global_data.lock().unwrap().data.map.insert("v1".to_string(), create_data_arc(Data::Map(m)));
-        let rs = ExpressionParser::execute("v1.length()".to_string(),
-                                           &mut ec.global_data.lock().unwrap());
-        assert_eq!(rs, ExpressionResult::Ok( create_data_arc(Data::Integer(5i64))));
+        ec.global_data
+            .lock()
+            .unwrap()
+            .data
+            .map
+            .insert("v1".to_string(), create_data_arc(Data::Map(m)));
+        let rs = ExpressionParser::execute(
+            "v1.length()".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(5i64)))
+        );
 
         // As Member function.
-        let rs = ExpressionParser::execute("'abc'.length()".to_string(),
-                                           &mut ec.global_data.lock().unwrap());
-        assert_eq!(rs, ExpressionResult::Ok( create_data_arc(Data::Integer(3i64))));
-
+        let rs = ExpressionParser::execute(
+            "'abc'.length()".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(3i64)))
+        );
 
         println!("{:?}", rs);
     }
-
 }

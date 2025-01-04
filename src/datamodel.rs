@@ -128,7 +128,7 @@ pub trait Datamodel {
     /// sets '_ioprocessors'.
     fn set_ioprocessors(&mut self);
 
-        /// Initialize the data model for one data-store.
+    /// Initialize the data model for one data-store.
     /// This method is called for the global data and for the data of each state.
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, fsm: &mut Fsm, state: StateId, set_data: bool) {
@@ -287,23 +287,12 @@ pub trait Datamodel {
                     None => ct
                         .content
                         .as_ref()
-                        .map(|ct_content| {
-                            match ct_content.parse::<f64>() {
-                                Ok(value) => {
-                                    match numeric_to_integer(&Data::Double(value)) {
-                                        Some(i) => {
-                                            create_data_arc(Data::Integer(i))
-                                        }
-                                        None => {
-                                            create_data_arc(Data::Double(value))
-                                        }
-                                    }
-                                }
-                                ,
-                                Err(_) => {
-                                    create_data_arc(Data::String(ct_content.clone()))
-                                },
-                            }
+                        .map(|ct_content| match ct_content.parse::<f64>() {
+                            Ok(value) => match numeric_to_integer(&Data::Double(value)) {
+                                Some(i) => create_data_arc(Data::Integer(i)),
+                                None => create_data_arc(Data::Double(value)),
+                            },
+                            Err(_) => create_data_arc(Data::String(ct_content.clone())),
                         }),
                     Some(expr) => {
                         match self.execute(&Data::Source(expr.clone())) {
@@ -343,7 +332,10 @@ pub trait Datamodel {
                                 // get_by_location already added "error.execution"
                             }
                             Ok(value) => {
-                                values.push(ParamPair::new_moved(param.name.clone(), value.lock().unwrap().clone()));
+                                values.push(ParamPair::new_moved(
+                                    param.name.clone(),
+                                    value.lock().unwrap().clone(),
+                                ));
                             }
                         }
                     } else if !param.expr.is_empty() {
@@ -357,7 +349,10 @@ pub trait Datamodel {
                                 self.internal_error_execution();
                             }
                             Ok(value) => {
-                                values.push(ParamPair::new_moved(param.name.clone(), value.lock().unwrap().clone()));
+                                values.push(ParamPair::new_moved(
+                                    param.name.clone(),
+                                    value.lock().unwrap().clone(),
+                                ));
                             }
                         }
                     }
@@ -442,7 +437,6 @@ impl Datamodel for NullDatamodel {
     fn set_ioprocessors(&mut self) {
         // nothing to do
     }
-
 
     #[allow(non_snake_case)]
     fn initializeDataModel(&mut self, _fsm: &mut Fsm, _dataState: StateId, _set_data: bool) {
@@ -532,34 +526,18 @@ impl Datamodel for NullDatamodel {
     }
 }
 
-pub fn operation_plus(left : &Data, right: &Data ) -> Data {
+pub fn operation_plus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
-            (Data::Double(d1), Data::Double(d2)) => {
-                Data::Double(d1 + d2)
-            }
-            (Data::Integer(d1), Data::Double(d2)) => {
-                Data::Double((*d1 as f64)  + d2)
-            }
-            (Data::Double(d1), Data::Integer(d2)) =>
-                {
-                    Data::Double(d1  + (*d2 as f64))
-                }
-            (Data::Integer(i1), Data::Integer(i2)) => {
-                {
-                    Data::Integer(i1.saturating_add(*i2))
-                }
-            }
-            _ => {
-                Data::Error("Internal Error in '+' operation".to_string())
-            }
+            (Data::Double(d1), Data::Double(d2)) => Data::Double(d1 + d2),
+            (Data::Integer(d1), Data::Double(d2)) => Data::Double((*d1 as f64) + d2),
+            (Data::Double(d1), Data::Integer(d2)) => Data::Double(d1 + (*d2 as f64)),
+            (Data::Integer(i1), Data::Integer(i2)) => Data::Integer(i1.saturating_add(*i2)),
+            _ => Data::Error("Internal Error in '+' operation".to_string()),
         }
     } else {
         match (left, right) {
-            (_, Data::Error(err)) |
-            (Data::Error(err), _) => {
-                Data::Error(err.clone())
-            }
+            (_, Data::Error(err)) | (Data::Error(err), _) => Data::Error(err.clone()),
             (Data::String(s) | Data::Source(s), _) => {
                 let mut r = s.clone();
                 r.push_str(right.to_string().as_str());
@@ -572,86 +550,57 @@ pub fn operation_plus(left : &Data, right: &Data ) -> Data {
             }
             (Data::Array(a1), Data::Array(a2)) => {
                 let mut a1_copy = a1.clone();
-                a1_copy.append( &mut a2.clone() );
+                a1_copy.append(&mut a2.clone());
                 Data::Array(a1_copy)
             }
             (Data::Array(a1), _) => {
                 let mut a1_copy = a1.clone();
-                a1_copy.push( create_data_arc(right.clone()));
+                a1_copy.push(create_data_arc(right.clone()));
                 Data::Array(a1_copy)
             }
             (Data::Map(m1), Data::Map(m2)) => {
                 let mut m1_copy = m1.clone();
-                m1_copy.extend( m2.clone() );
+                m1_copy.extend(m2.clone());
                 Data::Map(m1_copy)
             }
-            _ => {
-                Data::Error("Wrong argument types for '+'".to_string())
-            }
+            _ => Data::Error("Wrong argument types for '+'".to_string()),
         }
     }
 }
 
-pub fn operation_minus(left : &Data, right: &Data ) -> Data {
+pub fn operation_minus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
-            (Data::Double(d1), Data::Double(d2)) => {
-                Data::Double(d1 - d2)
-            }
-            (Data::Integer(d1), Data::Double(d2)) =>                 {
-                Data::Double((*d1 as f64)  - d2)
-            }
-            (Data::Double(d1), Data::Integer(d2)) =>
-                {
-                    Data::Double(d1  - (*d2 as f64))
-                }
-            (Data::Integer(i1), Data::Integer(i2)) => {
-                {
-                    Data::Integer(i1.saturating_sub(*i2))
-                }
-            }
-            _ => {
-                Data::Error("Internal Error in '-' operation".to_string())
-            }
+            (Data::Double(d1), Data::Double(d2)) => Data::Double(d1 - d2),
+            (Data::Integer(d1), Data::Double(d2)) => Data::Double((*d1 as f64) - d2),
+            (Data::Double(d1), Data::Integer(d2)) => Data::Double(d1 - (*d2 as f64)),
+            (Data::Integer(i1), Data::Integer(i2)) => Data::Integer(i1.saturating_sub(*i2)),
+            _ => Data::Error("Internal Error in '-' operation".to_string()),
         }
     } else {
         Data::Error("Wrong argument types for '-'".to_string())
     }
 }
 
-pub fn operation_multiply(left : &Data, right: &Data ) -> Data {
+pub fn operation_multiply(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
-            (Data::Double(d1), Data::Double(d2)) => {
-                Data::Double( d1 * d2)
-            }
-            (Data::Integer(d1), Data::Double(d2)) =>                 {
-                Data::Double((*d1 as f64) * d2 )
-            }
-            (Data::Double(d1), Data::Integer(d2)) =>
-                {
-                    Data::Double( (*d1) * (*d2 as f64))
-                }
-            (Data::Integer(i1), Data::Integer(i2)) => {
-                {
-                    Data::Integer( i1.saturating_mul(*i2))
-                }
-            }
-            _ => {
-                Data::Error("Internal Error in '*' operation".to_string())
-            }
+            (Data::Double(d1), Data::Double(d2)) => Data::Double(d1 * d2),
+            (Data::Integer(d1), Data::Double(d2)) => Data::Double((*d1 as f64) * d2),
+            (Data::Double(d1), Data::Integer(d2)) => Data::Double((*d1) * (*d2 as f64)),
+            (Data::Integer(i1), Data::Integer(i2)) => Data::Integer(i1.saturating_mul(*i2)),
+            _ => Data::Error("Internal Error in '*' operation".to_string()),
         }
     } else {
         Data::Error("Wrong argument types for '*'".to_string())
     }
 }
 
-pub fn operation_divide(left : &Data, right: &Data ) -> Data {
+pub fn operation_divide(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         let right_value = right.as_number();
         let r = left.as_number() / right_value;
-        if  r.is_nan()
-        {
+        if r.is_nan() {
             // This covers also division by 0.
             Data::Error("Result of '/' is NaN".to_string())
         } else {
@@ -663,109 +612,83 @@ pub fn operation_divide(left : &Data, right: &Data ) -> Data {
 }
 
 /// modulus (remainder) function
-pub fn operation_modulus(left : &Data, right: &Data ) -> Data {
+pub fn operation_modulus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
-            (Data::Double(d1), Data::Double(d2)) => {
-                Data::Double(d1 % d2)
-            }
-            (Data::Integer(d1), Data::Double(d2)) => {
-                Data::Double((*d1 as f64) % d2)
-            }
-            (Data::Double(d1), Data::Integer(d2)) =>
-                {
-                    Data::Double((*d1) % (*d2 as f64))
-                }
-            (Data::Integer(i1), Data::Integer(i2)) => {
-                {
-                    Data::Integer(i1 % i2)
-                }
-            }
-            _ => {
-                Data::Error("Internal Error in '%' operation".to_string())
-            }
+            (Data::Double(d1), Data::Double(d2)) => Data::Double(d1 % d2),
+            (Data::Integer(d1), Data::Double(d2)) => Data::Double((*d1 as f64) % d2),
+            (Data::Double(d1), Data::Integer(d2)) => Data::Double((*d1) % (*d2 as f64)),
+            (Data::Integer(i1), Data::Integer(i2)) => Data::Integer(i1 % i2),
+            _ => Data::Error("Internal Error in '%' operation".to_string()),
         }
     } else {
         Data::Error("Wrong argument types for '%'".to_string())
     }
 }
 
-pub fn operation_less(left : &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
+pub fn operation_less(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() < right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => {
-                Data::Boolean(s1 < s2)
-            }
+            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 < s2),
             _ => {
                 #[cfg(feature = "Debug")]
-                warn!( "'<' supports only numeric or string types" );
+                warn!("'<' supports only numeric or string types");
                 Data::Boolean(false)
             }
         }
     }
 }
 
-
-pub fn operation_less_equal(left : &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
+pub fn operation_less_equal(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() <= right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => {
-                Data::Boolean(s1 <= s2)
-            }
+            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 <= s2),
             _ => {
                 #[cfg(feature = "Debug")]
-                warn!( "'<=' supports only numeric or string types" );
-                Data::Boolean( false )
+                warn!("'<=' supports only numeric or string types");
+                Data::Boolean(false)
             }
         }
     }
 }
 
-pub fn operation_greater(left : &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
+pub fn operation_greater(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() > right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => {
-                Data::Boolean(s1 > s2)
-            }
-            _ => {
-                Data::Error( "'>' supports only numeric or string types".to_string() )
-            }
+            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 > s2),
+            _ => Data::Error("'>' supports only numeric or string types".to_string()),
         }
     }
 }
 
-pub fn operation_greater_equal(left : &Data, right: &Data ) -> Data {
+pub fn operation_greater_equal(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
-        Data::Boolean( left.as_number() >= right.as_number())
+        Data::Boolean(left.as_number() >= right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => {
-                Data::Boolean( s1 >= s2 )
-            }
+            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 >= s2),
             _ => {
                 #[cfg(feature = "Debug")]
-                warn!( "'>=' supports only numeric or string types" );
-                Data::Boolean( false )
+                warn!("'>=' supports only numeric or string types");
+                Data::Boolean(false)
             }
         }
     }
 }
 
-pub fn operation_equal(left : &Data, right: &Data ) -> Data {
-    Data::Boolean( left.eq(right) )
+pub fn operation_equal(left: &Data, right: &Data) -> Data {
+    Data::Boolean(left.eq(right))
 }
 
-
-pub fn operation_not_equal(left : &Data, right: &Data ) -> Data {
-    Data::Boolean( !left.eq(right) )
+pub fn operation_not_equal(left: &Data, right: &Data) -> Data {
+    Data::Boolean(!left.eq(right))
 }
-
 
 pub trait ToAny: 'static {
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -802,37 +725,31 @@ pub enum Data {
 }
 
 /// Tries to convert the numeric data to an integer value.
-pub fn numeric_to_integer(data : &Data) -> Option<i64> {
+pub fn numeric_to_integer(data: &Data) -> Option<i64> {
     match data {
-        Data::Integer(value) => {
-            Some(*value)
-        }
+        Data::Integer(value) => Some(*value),
         Data::Double(value_ref) => {
             let value = *value_ref;
-            if value.fract().abs() < 0.001 &&
-                value >= i64::MIN as f64 &&
-                value <= i64::MAX as f64 {
+            if value.fract().abs() < 0.001 && value >= i64::MIN as f64 && value <= i64::MAX as f64 {
                 Some(value as i64)
             } else {
                 None
             }
         }
-        Data::String(_) |
-        Data::Boolean(_) |
-        Data::Array(_) |
-        Data::Map(_) |
-        Data::Null() |
-        Data::Error(_) |
-        Data::Source(_) |
-        Data::None() => {
-            None
-        }
+        Data::String(_)
+        | Data::Boolean(_)
+        | Data::Array(_)
+        | Data::Map(_)
+        | Data::Null()
+        | Data::Error(_)
+        | Data::Source(_)
+        | Data::None() => None,
     }
 }
 
 impl PartialEq for Data {
     fn eq(&self, other: &Self) -> bool {
-        if std::ptr::eq( &self, &other) {
+        if std::ptr::eq(&self, &other) {
             true
         } else {
             match (self, other) {
@@ -848,8 +765,7 @@ impl PartialEq for Data {
                     }
                     for index in 0..a.len() {
                         // Use deadlock-free eq function of DataArc.
-                        if ! a[index].eq(&b[index])
-                        {
+                        if !a[index].eq(&b[index]) {
                             return false;
                         }
                     }
@@ -914,7 +830,7 @@ impl Display for Data {
                     // TODO: Escape
                     b.push_str(key);
                     b.push_str("':");
-                    b.push_str( format!("{}", data).as_str())
+                    b.push_str(format!("{}", data).as_str())
                 }
                 b.push('}');
                 write!(f, "{}", b)
@@ -938,42 +854,18 @@ impl Display for Data {
 impl Data {
     pub fn operation(&self, op: Operator, right: &Data) -> Data {
         match op {
-            Operator::Multiply => {
-                operation_multiply(self, right)
-            }
-            Operator::Divide => {
-                operation_divide(self, right)
-            }
-            Operator::Plus => {
-                operation_plus( self, right )
-            }
-            Operator::Minus => {
-                operation_minus( self, right)
-            }
-            Operator::Less => {
-                operation_less( self, right )
-            }
-            Operator::LessEqual => {
-                operation_less_equal( self, right )
-            }
-            Operator::Greater => {
-                operation_greater( self, right )
-            }
-            Operator::GreaterEqual => {
-                operation_greater_equal( self, right )
-            }
-            Operator::Equal => {
-                operation_equal( self, right )
-            }
-            Operator::NotEqual => {
-                operation_not_equal( self, right )
-            }
-            Operator::Modulus => {
-                operation_modulus( self, right)
-            }
-            Operator::Assign |
-            Operator::AssignUndefined |
-            Operator::Not => {
+            Operator::Multiply => operation_multiply(self, right),
+            Operator::Divide => operation_divide(self, right),
+            Operator::Plus => operation_plus(self, right),
+            Operator::Minus => operation_minus(self, right),
+            Operator::Less => operation_less(self, right),
+            Operator::LessEqual => operation_less_equal(self, right),
+            Operator::Greater => operation_greater(self, right),
+            Operator::GreaterEqual => operation_greater_equal(self, right),
+            Operator::Equal => operation_equal(self, right),
+            Operator::NotEqual => operation_not_equal(self, right),
+            Operator::Modulus => operation_modulus(self, right),
+            Operator::Assign | Operator::AssignUndefined | Operator::Not => {
                 // These "operation" are handled by explicit Expression-implementations
                 // and this line should never be reached.
                 Data::Error("Internal Error".to_string())
@@ -1065,7 +957,6 @@ impl Default for Data {
 
 pub const DATA_FLAG_READONLY: u8 = 1u8;
 
-
 #[derive(Clone)]
 pub struct DataArc {
     pub arc: Arc<Mutex<Data>>,
@@ -1073,7 +964,6 @@ pub struct DataArc {
 }
 
 impl DataArc {
-
     fn print(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self.arc.try_lock() {
             Ok(val) => {
@@ -1084,7 +974,6 @@ impl DataArc {
             }
         }
     }
-
 
     pub fn lock(&self) -> LockResult<MutexGuard<'_, Data>> {
         self.arc.lock()
@@ -1154,7 +1043,7 @@ impl DataStore {
                 #[cfg(feature = "Debug")]
                 debug!("DataStore::Get: '{}' -> Not found", key);
                 None
-            },
+            }
             Some(v) => {
                 #[cfg(feature = "Debug")]
                 debug!("DataStore::Get: '{}' -> {}", key, v);
@@ -1172,7 +1061,7 @@ impl DataStore {
         if let std::collections::hash_map::Entry::Occupied(mut old) = self.map.entry(key) {
             if old.get().is_readonly() {
                 #[cfg(feature = "Debug")]
-                debug!( "Can't set read-only {}", old.key() );
+                debug!("Can't set read-only {}", old.key());
                 false
             } else {
                 old.insert(data);
@@ -1192,7 +1081,7 @@ impl DataStore {
             Entry::Occupied(mut old) => {
                 if old.get().is_readonly() {
                     #[cfg(feature = "Debug")]
-                    debug!( "Can't set read-only {}", old.key() );
+                    debug!("Can't set read-only {}", old.key());
                 } else {
                     old.insert(data);
                 }
@@ -1206,7 +1095,7 @@ impl DataStore {
     pub fn dump(&self) {
         debug!("--- Current Data Set");
         for (key, data) in &self.map {
-            debug!("\t{}: {}", key, data );
+            debug!("\t{}: {}", key, data);
         }
         debug!("--------------------")
     }

@@ -59,12 +59,8 @@ impl ActionWrapper {
         self.actions.lock().unwrap()
     }
 
-    pub fn execute(&self, action_name: &str, arguments: &[Data], global: &GlobalData) -> Result<Data, String>
-    {
-        let rt = if let Some(action) = self
-            .actions.lock().unwrap()
-            .get_mut(action_name)
-        {
+    pub fn execute(&self, action_name: &str, arguments: &[Data], global: &GlobalData) -> Result<Data, String> {
+        let rt = if let Some(action) = self.actions.lock().unwrap().get_mut(action_name) {
             action.execute(arguments, global)
         } else {
             Err(format!("Action '{}' not found", action_name))

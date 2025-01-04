@@ -356,7 +356,11 @@ impl ECMAScriptDatamodel {
             }
         }
         let r = if let Some(fsm) = ctx.get_data::<FsmJSWrapper>() {
-            fsm.global_data.lock().unwrap().actions.execute(action_name.as_str(), &arg_list, &fsm.global_data.lock().unwrap())
+            fsm.global_data.lock().unwrap().actions.execute(
+                action_name.as_str(),
+                &arg_list,
+                &fsm.global_data.lock().unwrap(),
+            )
         } else {
             Err("Failed".to_string())
         };
@@ -417,7 +421,6 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn add_functions(&mut self, fsm: &mut Fsm) {
-
         let mut functions = String::new();
         for name in self.global_s().lock().unwrap().actions.lock().keys() {
             functions.push_str(
@@ -530,7 +533,12 @@ impl Datamodel for ECMAScriptDatamodel {
                     };
                 } else {
                     let ds = self.data_value_to_js(data_guard.deref());
-                    println!("set_from_state_data {} / {:?} -> {:?}", name, data_guard.deref(), ds);
+                    println!(
+                        "set_from_state_data {} / {:?} -> {:?}",
+                        name,
+                        data_guard.deref(),
+                        ds
+                    );
 
                     self.set_js_property(name.as_str(), ds);
                 }

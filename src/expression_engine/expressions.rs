@@ -2,12 +2,12 @@
 
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Arc};
+use std::sync::Arc;
 
 #[cfg(feature = "Debug")]
 use log::debug;
 
-use crate::datamodel::{create_data_arc, Data, DataArc, GlobalDataLock, numeric_to_integer, ToAny};
+use crate::datamodel::{create_data_arc, numeric_to_integer, Data, DataArc, GlobalDataLock, ToAny};
 
 pub type ExpressionResult = Result<DataArc, String>;
 
@@ -56,9 +56,9 @@ impl Expression for ExpressionArray {
     fn get_copy(&self) -> Box<dyn Expression> {
         let mut ac = Vec::with_capacity(self.array.len());
         for e in &self.array {
-            ac.push( e.get_copy())
+            ac.push(e.get_copy())
         }
-        Box::new( ExpressionArray::new(ac))
+        Box::new(ExpressionArray::new(ac))
     }
 }
 
@@ -77,22 +77,20 @@ impl ExpressionMethod {
     }
 
     pub fn execute_with_arguments(&self, arguments: &[Data], context: &mut GlobalDataLock) -> ExpressionResult {
-        match context.actions.execute(self.method.as_str(), arguments, context) {
-            Ok(rdata) => {
-                Ok(create_data_arc(rdata))
-            }
-            Err(err) => {
-                Err(err)
-            }
+        match context
+            .actions
+            .execute(self.method.as_str(), arguments, context)
+        {
+            Ok(rdata) => Ok(create_data_arc(rdata)),
+            Err(err) => Err(err),
         }
     }
 
-    fn eval_arguments(&self, v : &mut Vec<Data>, context: &mut GlobalDataLock) -> Result<(),String> {
+    fn eval_arguments(&self, v: &mut Vec<Data>, context: &mut GlobalDataLock) -> Result<(), String> {
         for arg in &self.arguments {
-            v.push(
-            match arg.execute(context, false) {
-                Ok(data_arc) => {data_arc.lock().unwrap().clone()}
-                Err(err) => { Data::Error(err)}
+            v.push(match arg.execute(context, false) {
+                Ok(data_arc) => data_arc.lock().unwrap().clone(),
+                Err(err) => Data::Error(err),
             });
         }
         Ok(())
@@ -101,18 +99,17 @@ impl ExpressionMethod {
     pub fn get_copy(&self) -> Box<ExpressionMethod> {
         let mut av = Vec::with_capacity(self.arguments.len());
         for a in &self.arguments {
-            av.push( a.get_copy() );
+            av.push(a.get_copy());
         }
-        Box::new(ExpressionMethod::new(self.method.as_str(), av ))
+        Box::new(ExpressionMethod::new(self.method.as_str(), av))
     }
-
 }
 
 impl Expression for ExpressionMethod {
     fn execute(&self, context: &mut GlobalDataLock, _: bool) -> ExpressionResult {
         let mut v = Vec::with_capacity(self.arguments.len());
-        self.eval_arguments(&mut v,context)?;
-        self.execute_with_arguments( v.as_slice(), context)
+        self.eval_arguments(&mut v, context)?;
+        self.execute_with_arguments(v.as_slice(), context)
     }
 
     fn is_assignable(&self) -> bool {
@@ -169,7 +166,7 @@ impl Expression for ExpressionVariable {
                 #[cfg(feature = "Debug")]
                 debug!("ExpressionVariable::execute: {} = {}", self.name, value);
                 Ok(value.clone())
-            },
+            }
             None => {
                 if allow_undefined {
                     #[cfg(feature = "Debug")]
@@ -247,52 +244,37 @@ impl Expression for ExpressionIndex {
                         let index_guard = index_value.lock().unwrap();
                         let index_data = index_guard.deref();
                         match index_data {
-                            Data::Source(key) |
-                            Data::String(key) => {
-                                match m.get(key) {
-                                    None => {
-                                        if allow_undefined {
-                                            m.insert(key.clone(), create_data_arc(Data::None()));
-                                            Ok(m.get(key).unwrap().clone())
-                                        } else {
-                                            Err(format!("Index {} not found", key))
-                                        }
-                                    }
-                                    Some(member) => Ok(member.clone()),
-                                }
-                            }
-                            Data::Boolean(_) |
-                            Data::Array(_) |
-                            Data::Map(_) |
-                            Data::Integer(_) |
-                            Data::Double(_) |
-                            Data::Error(_) |
-                            Data::Null() |
-                            Data::None() => {
-                                Err(format!("Illegal index type '{}'", index_value ))
-                            }
-                        }
-                    },
-                    Data::Array(m) => {
-                        match numeric_to_integer(index_value.lock().unwrap().deref()) {
-                            Some(index) => {
-                                match  m.get(index as usize) {
-                                    None => {
-                                        Err(format!("Index not found: {} (len={})", index, m.len() ))
-                                    }
-                                    Some(value) => {
-                                        Ok(value.clone())
+                            Data::Source(key) | Data::String(key) => match m.get(key) {
+                                None => {
+                                    if allow_undefined {
+                                        m.insert(key.clone(), create_data_arc(Data::None()));
+                                        Ok(m.get(key).unwrap().clone())
+                                    } else {
+                                        Err(format!("Index {} not found", key))
                                     }
                                 }
-                            }
-                            None => {
-                                Err(format!("Illegal index type '{}'", index_value))
-                            }
+                                Some(member) => Ok(member.clone()),
+                            },
+                            Data::Boolean(_)
+                            | Data::Array(_)
+                            | Data::Map(_)
+                            | Data::Integer(_)
+                            | Data::Double(_)
+                            | Data::Error(_)
+                            | Data::Null()
+                            | Data::None() => Err(format!("Illegal index type '{}'", index_value)),
                         }
+                    }
+                    Data::Array(m) => match numeric_to_integer(index_value.lock().unwrap().deref()) {
+                        Some(index) => match m.get(index as usize) {
+                            None => Err(format!("Index not found: {} (len={})", index, m.len())),
+                            Some(value) => Ok(value.clone()),
+                        },
+                        None => Err(format!("Illegal index type '{}'", index_value)),
                     },
                     Data::Error(err) => Err(err.clone()),
                 }
-            },
+            }
         }
     }
 
@@ -301,7 +283,10 @@ impl Expression for ExpressionIndex {
     }
 
     fn get_copy(&self) -> Box<dyn Expression> {
-        Box::new(ExpressionIndex::new(self.left.get_copy(), self.index.get_copy()))
+        Box::new(ExpressionIndex::new(
+            self.left.get_copy(),
+            self.index.get_copy(),
+        ))
     }
 }
 
@@ -346,7 +331,7 @@ impl Expression for ExpressionMemberAccess {
                     },
                     Data::Error(err) => Err(err.clone()),
                 }
-            },
+            }
         }
     }
 
@@ -355,7 +340,10 @@ impl Expression for ExpressionMemberAccess {
     }
 
     fn get_copy(&self) -> Box<dyn Expression> {
-        Box::new(ExpressionMemberAccess::new(self.left.get_copy(), self.member_name.clone()))
+        Box::new(ExpressionMemberAccess::new(
+            self.left.get_copy(),
+            self.member_name.clone(),
+        ))
     }
 }
 
@@ -379,32 +367,29 @@ impl Expression for ExpressionAssign {
 
             match left_result {
                 Err(err) => Err(err),
-                Ok(v) => {
-                    match right_result {
-                        Err(err) => Err(err),
-                        Ok(right_arc) => {
-                            let right_guard = right_arc.lock().unwrap();
-                            match right_guard.deref() {
-                                Data::Integer(_) |
-                                Data::Double(_) |
-                                Data::String(_) |
-                                Data::Boolean(_) |
-                                Data::Array(_) |
-                                Data::Map(_) |
-                                Data::Null() |
-                                Data::Source(_) => {
-                                    if v.is_readonly() {
-                                        Err(format!("Can't set read-only {v}"))
-                                    } else {
-                                        right_guard.deref().clone_into(v.lock().unwrap().deref_mut() );
-                                        Ok(v.clone())
-                                    }
-                                }
-                                Data::Error(_) |
-                                Data::None() => {
-                                    Err(format!("Can't assign from '{}'", right_guard ))
+                Ok(v) => match right_result {
+                    Err(err) => Err(err),
+                    Ok(right_arc) => {
+                        let right_guard = right_arc.lock().unwrap();
+                        match right_guard.deref() {
+                            Data::Integer(_)
+                            | Data::Double(_)
+                            | Data::String(_)
+                            | Data::Boolean(_)
+                            | Data::Array(_)
+                            | Data::Map(_)
+                            | Data::Null()
+                            | Data::Source(_) => {
+                                if v.is_readonly() {
+                                    Err(format!("Can't set read-only {v}"))
+                                } else {
+                                    right_guard
+                                        .deref()
+                                        .clone_into(v.lock().unwrap().deref_mut());
+                                    Ok(v.clone())
                                 }
                             }
+                            Data::Error(_) | Data::None() => Err(format!("Can't assign from '{}'", right_guard)),
                         }
                     }
                 },
@@ -419,7 +404,10 @@ impl Expression for ExpressionAssign {
     }
 
     fn get_copy(&self) -> Box<dyn Expression> {
-        Box::new(ExpressionAssign::new(self.left.get_copy(), self.right.get_copy()))
+        Box::new(ExpressionAssign::new(
+            self.left.get_copy(),
+            self.right.get_copy(),
+        ))
     }
 }
 
@@ -457,7 +445,7 @@ impl Expression for ExpressionAssignUndefined {
                 }
             }
         } else {
-            Err(format!("Can't assign to {:?}", self.left ))
+            Err(format!("Can't assign to {:?}", self.left))
         }
     }
 
@@ -466,7 +454,10 @@ impl Expression for ExpressionAssignUndefined {
     }
 
     fn get_copy(&self) -> Box<dyn Expression> {
-        Box::new(ExpressionAssignUndefined::new(self.left.get_copy(), self.right.get_copy()))
+        Box::new(ExpressionAssignUndefined::new(
+            self.left.get_copy(),
+            self.right.get_copy(),
+        ))
     }
 }
 
@@ -489,7 +480,6 @@ impl ExpressionOperator {
 
 impl Expression for ExpressionOperator {
     fn execute(&self, context: &mut GlobalDataLock, allow_undefined: bool) -> ExpressionResult {
-
         #[cfg(feature = "Debug")]
         {
             debug!("ExpressionOperator::execute:");
@@ -508,19 +498,20 @@ impl Expression for ExpressionOperator {
             Ok(val) => val.clone(),
         };
         #[cfg(feature = "Debug")]
-        debug!( "ExpressionOperator::execute: <{:?}={}> {:?} <{:?}={}>",self.left, left_result, self.operator, self.right, right_result );
-        let result_data =
-            if Arc::ptr_eq(&left_result.arc, &right_result.arc) {
-                // Same object, we have to clone the content at least for one side to avoid deadlock.
-                let left_data = left_result
-                    .lock().unwrap().clone();
-                left_data.operation(self.operator.clone(), right_result.lock().unwrap().deref())
-            } else {
-                left_result
-                    .lock()
-                    .unwrap()
-                    .operation(self.operator.clone(), right_result.lock().unwrap().deref())
-            };
+        debug!(
+            "ExpressionOperator::execute: <{:?}={}> {:?} <{:?}={}>",
+            self.left, left_result, self.operator, self.right, right_result
+        );
+        let result_data = if Arc::ptr_eq(&left_result.arc, &right_result.arc) {
+            // Same object, we have to clone the content at least for one side to avoid deadlock.
+            let left_data = left_result.lock().unwrap().clone();
+            left_data.operation(self.operator.clone(), right_result.lock().unwrap().deref())
+        } else {
+            left_result
+                .lock()
+                .unwrap()
+                .operation(self.operator.clone(), right_result.lock().unwrap().deref())
+        };
         Ok(create_data_arc(result_data))
     }
 
@@ -529,8 +520,11 @@ impl Expression for ExpressionOperator {
     }
 
     fn get_copy(&self) -> Box<dyn Expression> {
-        Box::new(ExpressionOperator::new(self.operator.clone(), self.left.get_copy(), self.right.get_copy()))
-
+        Box::new(ExpressionOperator::new(
+            self.operator.clone(),
+            self.left.get_copy(),
+            self.right.get_copy(),
+        ))
     }
 }
 
@@ -540,35 +534,21 @@ pub struct ExpressionNot {
 }
 impl ExpressionNot {
     pub fn new(right: Box<dyn Expression>) -> ExpressionNot {
-        ExpressionNot {
-            right
-        }
+        ExpressionNot { right }
     }
 }
 
 impl Expression for ExpressionNot {
     fn execute(&self, context: &mut GlobalDataLock, allow_undefined: bool) -> ExpressionResult {
         match self.right.execute(context, allow_undefined) {
-            Err(err) => {
-                Err(err)
-            }
-            Ok(val) => {
-                match val.lock() {
-                    Ok(val_guard) => {
-                        match val_guard.deref() {
-                            Data::Boolean(bool_val) => {
-                                Ok(create_data_arc(Data::Boolean(!bool_val)))
-                            }
-                            _ => {
-                                Err("'!' can only be applied on boolean expressions.".to_string())
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        Err(err.to_string())
-                    }
-                }
-            }
+            Err(err) => Err(err),
+            Ok(val) => match val.lock() {
+                Ok(val_guard) => match val_guard.deref() {
+                    Data::Boolean(bool_val) => Ok(create_data_arc(Data::Boolean(!bool_val))),
+                    _ => Err("'!' can only be applied on boolean expressions.".to_string()),
+                },
+                Err(err) => Err(err.to_string()),
+            },
         }
     }
 
@@ -578,18 +558,16 @@ impl Expression for ExpressionNot {
 
     fn get_copy(&self) -> Box<dyn Expression> {
         Box::new(ExpressionNot::new(self.right.get_copy()))
-
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
     use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
+    use std::collections::HashMap;
 
     #[test]
     fn can_assign_members() {
@@ -597,11 +575,13 @@ mod tests {
         let mut data_members = HashMap::new();
         data_members.insert("b".to_string(), create_data_arc(Data::Null()));
         let mut gdata = ec.global_data.lock().unwrap();
-        gdata.data.set_undefined("a".to_string(), Data::Map(data_members));
+        gdata
+            .data
+            .set_undefined("a".to_string(), Data::Map(data_members));
         let rs = ExpressionParser::execute("a.b = 2".to_string(), &mut gdata);
 
         println!("{:?}", rs);
-        assert_eq!( rs, ExpressionResult::Ok(create_data_arc(Data::Integer(2))));
+        assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(2))));
     }
 
     #[test]
