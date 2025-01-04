@@ -1,6 +1,6 @@
 [package]
 name = "rfsm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 default-run = "fsm"
 
@@ -9,12 +9,11 @@ strip = true  # Automatically strip symbols from the binary.
 
 [[bin]]
 name = "fsm"
-required-features = ["RfsmExpressionModel", "ECMAScript", "xml"]
 
 [[bin]]
 name = "test"
 path = "src/bin/test.rs"
-required-features = ["ECMAScript", "RfsmExpressionModel", "xml", "Debug", "EnvLog" ]
+required-features = [ ]
 
 [[bin]]
 name = "scxml_to_fsm"
@@ -27,12 +26,15 @@ path = "src/lib.rs"
 [features]
 default = [ "json-config", "ECMAScript", "RfsmExpressionModel", "Debug", "xml", "EnvLog"  ]
 ECMAScript = ["boa_engine", "boa_gc"]
-RfsmExpressionModel = []
+RfsmExpressionModel = ["ExpressionEngine"]
 BasicHttpEventIOProcessor = ["hyper", "http-body-util", "hyper-util", "form_urlencoded"]
 yaml-config = ["yaml-rust"]
 json-config = ["serde", "serde_json", "serde/serde_derive"]
 serializer = []
 xml = ["quick-xml", "reqwest"]
+
+# Enables the expression engine runtime
+ExpressionEngine = []
 
 # "Trace" enables the trace module, uses by the other trace features
 Trace = []

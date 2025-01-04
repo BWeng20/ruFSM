@@ -16,7 +16,9 @@ use rfsm::test::{abort_test, load_fsm, run_test, TestSpecification, TestUseCase}
 #[cfg(feature = "Trace")]
 use rfsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
 
-use rfsm::{get_features, init_logging};
+#[cfg(feature = "Debug")]
+use rfsm::get_features;
+use rfsm::init_logging;
 
 #[cfg(feature = "TraceServer")]
 use rfsm::remote_tracer::run_trace_server;

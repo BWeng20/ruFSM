@@ -14,8 +14,11 @@ use log::warn;
 
 use crate::actions::ActionMap;
 use crate::event_io_processor::EventIOProcessor;
-use crate::expression_engine::expressions::Operator;
-use crate::expression_engine::parser::{ExpressionLexer, Token};
+
+#[cfg(feature = "ExpressionEngine")]
+use crate::expression_engine::lexer::Operator;
+
+use crate::expression_engine::lexer::{ExpressionLexer, Token};
 use crate::fsm::{
     vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter, State,
     StateId,
@@ -852,6 +855,7 @@ impl Display for Data {
 }
 
 impl Data {
+    #[cfg(feature = "ExpressionEngine")]
     pub fn operation(&self, op: Operator, right: &Data) -> Data {
         match op {
             Operator::Multiply => operation_multiply(self, right),

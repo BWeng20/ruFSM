@@ -214,6 +214,7 @@ impl ECMAScriptDatamodel {
                     debug!("Execute: {} => undefined", script);
                     Ok(create_data_arc(Data::Null()))
                 } else {
+                    #[cfg(feature = "Debug")]
                     debug!("Execute: {} => {:?}", script, res);
                     match Self::js_to_data_value(&res, &mut self.context) {
                         Ok(s) => Ok(create_data_arc(s)),

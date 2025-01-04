@@ -1,9 +1,12 @@
 //! Implements the SCXML Data model for rFSM Expressions.\
 
 use crate::actions::Action;
-use log::{debug, error};
+use log::error;
 use std::collections::HashMap;
 use std::ops::Deref;
+
+#[cfg(feature = "Debug")]
+use log::debug;
 
 use crate::datamodel::{
     create_data_arc, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
@@ -456,6 +459,7 @@ impl Datamodel for RFsmExpressionDatamodel {
                     Data::Map(map) => {
                         let mut idx: i64 = 0;
                         if self.assign_internal(item_name, "null", true) {
+                            #[allow(unused_variables)]
                             for (name, item_value) in map {
                                 #[cfg(feature = "Debug")]
                                 debug!("ForEach: #{} {} {}={}", idx, name, item_name, item_value);

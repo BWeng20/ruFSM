@@ -180,6 +180,8 @@ pub fn get_features() -> Vec<&'static str> {
         "ECMAScript",
         #[cfg(feature = "RfsmExpressionModel")]
         "RfsmExpressionModel",
+        #[cfg(feature = "ExpressionEngine")]
+        "ExpressionEngine",
         #[cfg(feature = "BasicHttpEventIOProcessor")]
         "BasicHttpEventIOProcessor",
         #[cfg(feature = "yaml-config")]

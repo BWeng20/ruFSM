@@ -8,6 +8,7 @@ use std::sync::Arc;
 use log::debug;
 
 use crate::datamodel::{create_data_arc, numeric_to_integer, Data, DataArc, GlobalDataLock, ToAny};
+use crate::expression_engine::lexer::Operator;
 
 pub type ExpressionResult = Result<DataArc, String>;
 
@@ -187,27 +188,6 @@ impl Expression for ExpressionVariable {
     fn get_copy(&self) -> Box<dyn Expression> {
         Box::new(ExpressionVariable::new(self.name.as_str()))
     }
-}
-
-#[derive(PartialEq, Debug, Clone)]
-#[repr(u8)]
-pub enum Operator {
-    Multiply,
-    Divide,
-    Plus,
-    Minus,
-    Less,
-    LessEqual,
-    Greater,
-    GreaterEqual,
-    Assign,
-    AssignUndefined,
-    Equal,
-    NotEqual,
-
-    /// C-like modulus (mathematically the remainder) function.
-    Modulus,
-    Not,
 }
 
 #[derive(Debug)]
