@@ -53,11 +53,11 @@ The available operators and their meaning
 | `/`, `:`             | Division       | Works only on numeric types. Returns a Data::Double if at least one operant is Double, otherwise Data::Integer.      |
 | `+`                  | Aggregation    | Computes the sum for Data::Integer or Data::Double and the aggregation for Data::Map and Data::Array.                |
 | `-`                  | Minus          | Computes the difference of left and right. Works only on numeric types.                                              |
-| `%`                  | Modulus        | Computes the remainder of the of dividing left by right. Works only on numeric types.                                |
+| `%`                  | Modulus        | Computes the remainder of dividing left by right. Works only on numeric types.                                       |
 
 SCXML requires that only declared variables can be written. An `=` to an undefined variable will return an error.
 Nevertheless, it should  be possible to declare variables in the global &lt;script&gt; element.<br/>
-In ECMA (which is executed  in strict mode) this is done via a _"var"_ declaration. <br/>
+In the ECMA-datamodel (in which the ECMA-interpreter is executed in strict mode) this is done via a _"var"_ declaration. <br/>
 This expression language is not a script languages and thus has no such declaration syntax. Instead, you can use the "Initialisation" assignment operator `?=` 
 to create and initialize a variable.<br/>
 
