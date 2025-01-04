@@ -97,6 +97,7 @@ impl RFsmExpressionDatamodel {
         actions.add_action("indexOf", Box::new(IndexOfAction {}));
         actions.add_action("length", Box::new(LengthAction {}));
         actions.add_action("isDefined", Box::new(IsDefinedAction {}));
+        actions.add_action("abs", Box::new(AbsAction {}));
     }
 
     fn resolve_source_data(&mut self, data: &Data) -> Result<DataArc, String> {
@@ -210,6 +211,26 @@ impl Action for LengthAction {
             Ok(Data::Integer(r as i64))
         } else {
             Err("Wrong number of arguments for 'length'.".to_string())
+        }
+    }
+
+    fn get_copy(&self) -> Box<dyn Action> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct AbsAction {}
+impl Action for AbsAction {
+    fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
+        if arguments.len() == 1 {
+            match &arguments[0] {
+                Data::Integer(value) => Ok(Data::Integer(value.abs())),
+                Data::Double(value) => Ok(Data::Double(value.abs())),
+                _ => Err("Wrong argument type for 'abs'.".to_string()),
+            }
+        } else {
+            Err("Wrong number of arguments for 'abs'.".to_string())
         }
     }
 
@@ -652,5 +673,25 @@ mod tests {
         );
 
         println!("{:?}", rs);
+    }
+
+    #[test]
+    fn abs_of_works() {
+        let mut fsm = Fsm::new();
+        let mut ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        ec.add_internal_functions(&mut fsm);
+
+        // As normal function.
+        let rs = ExpressionParser::execute(
+            "abs(-102.111)".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+
+        assert_eq!(rs, Ok(create_data_arc(Data::Double(102.111))));
+
+        // As Member function.
+        let rs = ExpressionParser::execute("abs(-124)".to_string(), &mut ec.global_data.lock().unwrap());
+
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(124))));
     }
 }

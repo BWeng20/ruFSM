@@ -70,24 +70,23 @@ replaced by a tracer that communicates via the Remote-Trace-Server with some rem
 FSMs normally are used embedded inside other software to control some state-full workflow.<br/> 
 The operations of this workflow are triggered from the transitions or the states-handlers.  
 To add such operations different approaches exits. In hard-codes FSMs methods-calls are directly
-linked to the transition or states during compile-time.<br/>
+linked to the transitions or states during compile-time.<br/>
 
 This implementation loads FSMs during runtime, so the binding needs to be dynamically.<br/> 
 
-Form some huge project, you can re-implement to Datamodel-trait and implement an optimized way to trigger you 
-functionality.<br/>
-Must simpler is to use the module "Action". You find examples how to use this.
+To bind business logic, SCXML defines a _Datamodel_.
 
 ### Datamodel
 
-For details about the Datamodel-concept in SCXML see the W3C documentation.<br/>
-This lib provides some implementations of the Datamodel, but you can implement
-other models as well.
-
+For details about the Datamodel-concept in SCXML see the W3C documentation. This lib provides some implementations of 
+the Datamodel, but you can implement your own models as well.<br/>
 The Datamodel in SCXML is responsible to execute code and expressions. Custom business logic
-can be implemented this way. For a simpler approach (without implement a full Datamodel), see 
-"Custom Actions" below.
+can be implemented this way.<br/>
+For some huge project, it may be feasible to implement the Datamodel-trait with some optimized way to trigger the 
+business-functionality.<br/>
 
+For a simpler approach (without implement a full Datamodel), see "Custom Actions" below.
+You can also find some examples inside folder "examples".<br/>
 The Datamodel is selected in the SCXML, so you can provide multiple model-implementation in
 one binary.
 
@@ -101,6 +100,8 @@ To add new data-models, use function `rfsm::fsm::register_datamodel`.
 
 As the EMCAScript-Datamodel is based on boa-engine, it results in a huge binary. 
 If you need only basic logic in your scripts, use "rfsm-expression" instead.
+
+For details see the [Expression-Engine-Readme](src/expression_engine/README.md).
 
 ### Custom Actions
 

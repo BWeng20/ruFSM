@@ -621,5 +621,15 @@ mod tests {
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
         );
+
+        let rs = ExpressionParser::execute(
+            "1.0e1 <= 11".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        println!("{:?}", rs);
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
+        );
     }
 }
