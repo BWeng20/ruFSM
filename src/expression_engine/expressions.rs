@@ -541,6 +541,39 @@ impl Expression for ExpressionNot {
     }
 }
 
+#[derive(Debug)]
+pub struct ExpressionSequence {
+    pub expressions: Vec<Box<dyn Expression>>,
+}
+
+impl ExpressionSequence {
+    pub fn new(expressions: Vec<Box<dyn Expression>>) -> ExpressionSequence {
+        ExpressionSequence { expressions }
+    }
+}
+
+impl Expression for ExpressionSequence {
+    fn execute(&self, context: &mut GlobalDataLock, allow_undefined: bool) -> ExpressionResult {
+        let mut r = ExpressionResult::Ok(create_data_arc(Data::None()));
+        for exp in &self.expressions {
+            r = exp.execute(context, allow_undefined);
+        }
+        r
+    }
+
+    fn is_assignable(&self) -> bool {
+        false
+    }
+
+    fn get_copy(&self) -> Box<dyn Expression> {
+        let mut v = Vec::with_capacity(self.expressions.len());
+        for e in &self.expressions {
+            v.push(e.get_copy());
+        }
+        Box::new(ExpressionSequence::new(v))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
@@ -657,5 +690,18 @@ mod tests {
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
         );
+    }
+
+    #[test]
+    fn sequence_work() {
+        init_logging();
+
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let rs = ExpressionParser::execute(
+            "1+1;2+2;3*3".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        println!("{:?}", rs);
+        assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(9))));
     }
 }

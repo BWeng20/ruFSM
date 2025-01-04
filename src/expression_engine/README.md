@@ -12,6 +12,7 @@ To select this model in SCXML use `datamodel="rfsm-expression"`.
 ### Syntax (_DRAFT_)
 
 ```
+  <expression-list>  ::= <expression> {";" <expression>}
   <expression>       ::= <sub-expression> [<operator> <expression>]
   <sub-expression>   ::= {"!"}<data>{ "." <method> | "." <identifier> | <index-expression> }
   <data>             ::= <method> | <identifier> | <constant>

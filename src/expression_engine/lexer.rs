@@ -59,6 +59,8 @@ pub enum Token {
     Bracket(char),
     /// A - none whitespace, none bracket - separator
     Separator(char),
+    /// The expression separator to join multiple expressions.
+    ExpressionSeparator(),
     /// a Null value
     Null(),
     /// Indicates a lexer error.
@@ -97,14 +99,17 @@ impl ExpressionLexer {
     fn is_stop(c: char) -> bool {
         Self::is_whitespace(c)
             || match c {
-            '\0' | '.' | '!' | ',' | '\\' | ';' |
+            '\0' | '.' | '!' | ',' | '\\' |
             // Operators
             '-' | '+' | '/' | ':' | '*' | '&' | '|' |
             '<' | '>' | '=' | '%' | '?' |
             // Brackets
             '[' | ']' | '(' | ')' | '{' | '}' |
             // String
-            '"' | '\'' => { true }
+            '"' | '\'' |
+            // Expressions Separator
+            ';'
+            => { true }
             _ => { false }
 
         }
@@ -401,6 +406,9 @@ impl ExpressionLexer {
                             }
                             '{' | '}' | '(' | ')' | '[' | ']' => {
                                 return Token::Bracket(c);
+                            }
+                            ';' => {
+                                return Token::ExpressionSeparator();
                             }
                             _ => {
                                 return Token::Separator(c);

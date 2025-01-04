@@ -4,7 +4,7 @@ use crate::datamodel::{Data, GlobalDataLock};
 use crate::expression_engine::expressions::{
     get_expression_as, Expression, ExpressionArray, ExpressionAssign, ExpressionAssignUndefined, ExpressionConstant,
     ExpressionIndex, ExpressionMemberAccess, ExpressionMethod, ExpressionNot, ExpressionOperator, ExpressionResult,
-    ExpressionVariable,
+    ExpressionSequence, ExpressionVariable,
 };
 use crate::expression_engine::lexer::{ExpressionLexer, NumericToken, Operator, Token};
 
@@ -96,6 +96,7 @@ impl ExpressionParser {
         // Translate the lexer tokens and put them to the stack. Resolve method calls and sub-expressions.
         // The result will be a stack sequence of identifier / operators / expressions.
         // All remaining "Identifier" are variables.
+        let mut expressions = Vec::new();
         let mut stack: Vec<ExpressionParserItem> = Vec::new();
         let mut stop = '\0';
         loop {
@@ -173,6 +174,7 @@ impl ExpressionParser {
                                     }
                                     Token::Error(_) => {}
                                     Token::EOE => {}
+                                    Token::ExpressionSeparator() => {}
                                 },
                                 ExpressionParserItem::SExpression(_) => {
                                     return Result::Err(format!("Unexpected '{}'", br));
@@ -182,7 +184,7 @@ impl ExpressionParser {
                     }
                     '[' => {
                         let si = stack.pop();
-                        let new_stack_item : Box<dyn Expression> = match si {
+                        let new_stack_item: Box<dyn Expression> = match si {
                             None => {
                                 let v = Self::parse_argument_list(lexer, ']')?;
                                 Box::new(ExpressionArray::new(v))
@@ -247,16 +249,33 @@ impl ExpressionParser {
                         stack.push(ExpressionParserItem::SToken(Token::Separator('.')));
                     }
                 }
+                Token::ExpressionSeparator() => {
+                    let expression = Self::stack_to_expression(&mut stack)?;
+                    if !stack.is_empty() {
+                        return Err("Failed to evaluate expression".to_string());
+                    }
+                    if let Some(e) = expression {
+                        expressions.push(e);
+                    }
+                }
                 Token::Error(err) => {
                     return Result::Err(err.clone());
                 }
             }
         }
-        let expression = Self::stack_to_expression(&mut stack)?;
+        if let Some(e) = Self::stack_to_expression(&mut stack)? {
+            expressions.push(e);
+        }
         if !stack.is_empty() {
             Err("Failed to evaluate expression".to_string())
         } else {
-            Ok((stop, expression))
+            if expressions.is_empty() {
+                Ok((stop, None))
+            } else if expressions.len() == 1 {
+                Ok((stop, expressions.pop()))
+            } else {
+                Ok((stop, Some(Box::new(ExpressionSequence::new(expressions)))))
+            }
         }
     }
 
