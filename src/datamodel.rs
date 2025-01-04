@@ -546,11 +546,6 @@ pub fn operation_plus(left: &Data, right: &Data) -> Data {
                 r.push_str(right.to_string().as_str());
                 Data::String(r)
             }
-            (_, Data::String(s) | Data::Source(s)) => {
-                let mut r = left.to_string();
-                r.push_str(s);
-                Data::String(r)
-            }
             (Data::Array(a1), Data::Array(a2)) => {
                 let mut a1_copy = a1.clone();
                 a1_copy.append(&mut a2.clone());
@@ -560,6 +555,11 @@ pub fn operation_plus(left: &Data, right: &Data) -> Data {
                 let mut a1_copy = a1.clone();
                 a1_copy.push(create_data_arc(right.clone()));
                 Data::Array(a1_copy)
+            }
+            (_, Data::String(s) | Data::Source(s)) => {
+                let mut r = left.to_string();
+                r.push_str(s);
+                Data::String(r)
             }
             (Data::Map(m1), Data::Map(m2)) => {
                 let mut m1_copy = m1.clone();

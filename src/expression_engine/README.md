@@ -63,6 +63,13 @@ The available operators and their meaning
 | `-`                  | Minus          | Computes the difference of left and right. Works only on numeric types.                                              |
 | `%`                  | Modulus        | Computes the remainder of dividing left by right. Works only on numeric types.                                       |
 
+As mentioned above, aggregates the `+` operator arrays and maps. If the first operant is an `Data::Array` or `Data::Map` the second
+operant will be added. If the second operant is the same type, the containers are merged. <br/>
+This expression will return _true_:
+```
+    ['a'] + ['b'] + 'c' == ['a','b'] + ['c']
+```
+
 SCXML requires that only declared variables can be written. An `=` to an undefined variable will return an error.
 Nevertheless, it should  be possible to declare variables in the global &lt;script&gt; element.<br/>
 In the ECMA-datamodel (in which the ECMA-interpreter is executed in strict mode) this is done via a _"var"_ declaration. <br/>
@@ -72,6 +79,11 @@ to create and initialize a variable.<br/>
 ```
   myVar ?= [1,2,3,4]
 ```
+
+SCXML aldo requires that system variables are read-only. To support this, the Datamodel has a "readonly" flag in each data-element. 
+Assignments to a read-only marked data will fail. <br/>
+There is currently no way to set this flag from the expression language. 
+
 
 ### Custom Actions
 

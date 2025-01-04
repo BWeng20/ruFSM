@@ -630,6 +630,27 @@ mod tests {
         // Use [] outside []
         let rs = ExpressionParser::execute("v1[4][1]".to_string(), &mut ec.global_data.lock().unwrap());
         assert_eq!(rs, Ok(create_data_arc(Data::String("b".to_string()))));
+
+        let abc_array = vec![
+            create_data_arc(Data::String("a".to_string())),
+            create_data_arc(Data::String("b".to_string())),
+            create_data_arc(Data::String("c".to_string()))];
+
+        // Add an element (as standalone element)
+        let rs = ExpressionParser::execute("['a','b'] + 'c'".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::Array(abc_array.clone()))));
+
+        // Add an element (as element inside an array)
+        let rs = ExpressionParser::execute("['a','b'] + ['c']".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::Array(abc_array.clone()))));
+
+        // as part of some compare
+        let rs = ExpressionParser::execute("['a']+['b']+'c' == ['a','b'] + ['c']".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::Boolean(true))));
+
+        // Test if the missing char is detected
+        let rs = ExpressionParser::execute("['a'] + ['b'] == ['a','b'] + ['c']".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::Boolean(false))));
     }
 
     #[test]
