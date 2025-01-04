@@ -12,7 +12,7 @@ See [Test Readme](test/w3c/README.md) and the [Test Report](test/w3c/REPORT.MD).
 ## To-Dos:
 
 + Implement BasicHttpEvent I/O Processor _(ongoing, see [basic_http_event_io_processor.rs](src/basic_http_event_io_processor.rs))_.
-+ Design a concept for dynamic binding of business-logic to the FSM (to do real things). 
++ Implement the Trace-Server to bind IDEs to runtime.
 
 
 > [!NOTE]
