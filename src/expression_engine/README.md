@@ -39,6 +39,13 @@ To select this model in SCXML use `datamodel="rfsm-expression"`.
 
 Numbers are represented as specified in JSON.
 
+The expressions will be authored as part of the SCXML document, here the encoding of the XML document is used.
+The XML parser will convert all text into the encoding of the RUST-runtime. We expect RUST will stick to utf-8,
+so the effective structure of a string in the runtime will be utf-8-encoded.<br/>
+The structure of such strings is therefore not always identical to the XML source. 
+In particular, the length and the individual characters can be different. 
+Keep this in mind when performing string operations.   
+
 ### Operators
 
 The available operators and their meaning
