@@ -554,12 +554,12 @@ mod tests {
     fn can_assign_members() {
         let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
         let mut data_members = HashMap::new();
-        data_members.insert("b".to_string(), create_data_arc(Data::Null()));
+        data_members.insert("_b".to_string(), create_data_arc(Data::Null()));
         let mut gdata = ec.global_data.lock().unwrap();
         gdata
             .data
             .set_undefined("a".to_string(), Data::Map(data_members));
-        let rs = ExpressionParser::execute("a.b = 2".to_string(), &mut gdata);
+        let rs = ExpressionParser::execute("a._b = 2".to_string(), &mut gdata);
 
         println!("{:?}", rs);
         assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(2))));
@@ -571,6 +571,32 @@ mod tests {
         let rs = ExpressionParser::execute("a = 2".to_string(), &mut ec.global_data.lock().unwrap());
 
         println!("{:?}", rs);
+    }
+
+    #[test]
+    fn arrays_work() {
+        init_logging();
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+
+        let _ = ExpressionParser::execute(
+            "v1 ?= [1,2,4, 'abc', ['a', 'b', 'c']]".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+
+        let rs = ExpressionParser::execute("v1[1]".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(2))));
+
+        // Cascaded []
+        let rs = ExpressionParser::execute("v1[v1[1]]".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(4))));
+
+        // Use sub-expression inside []
+        let rs = ExpressionParser::execute("v1[1+2]".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::String("abc".to_string()))));
+
+        // Use [] outside []
+        let rs = ExpressionParser::execute("v1[4][1]".to_string(), &mut ec.global_data.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::String("b".to_string()))));
     }
 
     #[test]

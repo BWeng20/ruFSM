@@ -182,11 +182,10 @@ impl ExpressionParser {
                     }
                     '[' => {
                         let si = stack.pop();
-                        match si {
+                        let new_stack_item : Box<dyn Expression> = match si {
                             None => {
                                 let v = Self::parse_argument_list(lexer, ']')?;
-                                let x = Box::new(ExpressionArray::new(v));
-                                stack.push(ExpressionParserItem::SExpression(x));
+                                Box::new(ExpressionArray::new(v))
                             }
                             Some(si) => match si {
                                 ExpressionParserItem::SToken(token) => match token {
@@ -205,28 +204,31 @@ impl ExpressionParser {
                                                 "index operator '[]' allows only one argument".to_string(),
                                             );
                                         }
-                                        let x = Box::new(ExpressionIndex::new(
+                                        Box::new(ExpressionIndex::new(
                                             Box::new(ExpressionVariable::new(id.as_str())),
                                             v.remove(0),
-                                        ));
-                                        stack.push(ExpressionParserItem::SExpression(x));
+                                        ))
                                     }
                                     Token::Operator(_) => {
                                         // Put token back on stack.
                                         stack.push(ExpressionParserItem::SToken(token));
                                         let v = Self::parse_argument_list(lexer, ']')?;
-                                        let x = Box::new(ExpressionArray::new(v));
-                                        stack.push(ExpressionParserItem::SExpression(x));
+                                        Box::new(ExpressionArray::new(v))
                                     }
                                     _ => {
                                         return Result::Err(format!("Internal Error at '{}'", br));
                                     }
                                 },
-                                ExpressionParserItem::SExpression(_) => {
-                                    return Result::Err(format!("Unexpected '{}'", br));
+                                ExpressionParserItem::SExpression(expression) => {
+                                    let mut v = Self::parse_argument_list(lexer, ']')?;
+                                    if v.len() != 1 {
+                                        return Result::Err("index operator '[]' allows only one argument".to_string());
+                                    }
+                                    Box::new(ExpressionIndex::new(expression, v.remove(0)))
                                 }
                             },
-                        }
+                        };
+                        stack.push(ExpressionParserItem::SExpression(new_stack_item));
                     }
                     _ => {
                         if stops.contains(br) {
