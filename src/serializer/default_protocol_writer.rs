@@ -1,16 +1,16 @@
 //! Default implementation of the write-protocol.\
 //! The format is independent of the platform byte-order
 
-use crate::serializer::default_protocol_definitions::*;
-use crate::serializer::protocol_writer::ProtocolWriter;
-use byteorder::WriteBytesExt;
+use std::io::Write;
 
+use byteorder::WriteBytesExt;
 #[cfg(feature = "Debug_Serializer")]
 use log::debug;
+use log::error;
 
 use crate::datamodel::Data;
-use log::error;
-use std::io::Write;
+use crate::serializer::default_protocol_definitions::*;
+use crate::serializer::protocol_writer::ProtocolWriter;
 
 pub struct DefaultProtocolWriter<W> {
     pub writer: W,
@@ -81,7 +81,7 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
         }
     }
 
-    fn write_data_value(&mut self, value: &Data) {
+    fn write_data(&mut self, value: &Data) {
         match value {
             Data::Integer(val) => {
                 self.write_u8(1);
@@ -103,7 +103,7 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
                 self.write_u8(5);
                 self.write_usize(val.len());
                 for v in val {
-                    self.write_data_value(v);
+                    self.write_data_arc(v);
                 }
             }
             Data::Map(val) => {
@@ -111,8 +111,19 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
                 self.write_usize(val.len());
                 for (key, v) in val {
                     self.write_str(key.as_str());
-                    self.write_data_value(v);
+                    self.write_data_arc(v);
                 }
+            }
+            Data::Error(s) => {
+                self.write_u8(7);
+                self.write_str(s.as_str());
+            }
+            Data::Source(s) => {
+                self.write_u8(8);
+                self.write_str(s.as_str());
+            }
+            Data::None() => {
+                self.write_u8(9);
             }
             Data::Null() => {
                 self.write_u8(0);

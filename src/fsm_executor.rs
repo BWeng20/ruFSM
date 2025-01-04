@@ -2,8 +2,11 @@
 
 extern crate core;
 
+use crate::fsm::Fsm;
 use std::collections::HashMap;
+#[cfg(feature = "serializer")]
 use std::fs::File;
+#[cfg(feature = "serializer")]
 use std::io::BufReader;
 
 use std::path::PathBuf;
@@ -23,8 +26,11 @@ use crate::fsm::{Event, FinishMode, InvokeId, ParamPair, ScxmlSession, SessionId
 use crate::scxml_event_io_processor::ScxmlEventIOProcessor;
 #[cfg(feature = "xml")]
 use crate::scxml_reader;
+#[cfg(feature = "xml")]
 use crate::scxml_reader::include_path_from_arguments;
+#[cfg(feature = "serializer")]
 use crate::serializer::default_protocol_reader::DefaultProtocolReader;
+#[cfg(feature = "serializer")]
 use crate::serializer::fsm_reader::FsmReader;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
@@ -152,9 +158,12 @@ impl FsmExecutor {
         invoke_id: &InvokeId,
         #[cfg(feature = "Trace")] trace: TraceMode,
     ) -> Result<ScxmlSession, String> {
+        #[allow(unused_variables)]
         let extension = uri.rsplit('.').next().unwrap_or_default();
 
-        let mut sm = Err("".to_string());
+        #[allow(unused_variables)]
+        #[allow(unused_mut)]
+        let mut sm: Result<Box<Fsm>, String> = Err("".to_string());
 
         // Use reader to parse the scxml file:
         #[cfg(feature = "xml")]
@@ -197,6 +206,7 @@ impl FsmExecutor {
     /// Loads and starts the specified FSM with some data set.\
     /// Normally used if a child-FSM is started from a parent FSM, in this case via inline content.
     #[allow(clippy::too_many_arguments)]
+    #[allow(unused_variables)]
     pub fn execute_with_data_from_xml(
         &mut self,
         xml: &str,

@@ -1,0 +1,5 @@
+test/w3c/transform_tests_to_rfsm_expression.sh text eol=lf
+test/w3c/execute_all_rfsm_expression.sh text eol=lf
+test/w3c/confRExp.xsl text eol=lf
+
+

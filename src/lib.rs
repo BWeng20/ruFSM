@@ -49,7 +49,11 @@ pub mod event_io_processor;
 #[cfg(feature = "Trace")]
 pub mod tracer;
 
+#[cfg(feature = "TraceServer")]
+pub mod remote_tracer;
+
 pub mod actions;
+pub mod expression_engine;
 pub mod test;
 
 #[cfg(feature = "Trace")]
@@ -146,7 +150,7 @@ pub fn get_arguments(arguments: &[&ArgOption]) -> (HashMap<&'static str, String>
 pub fn init_logging() {
     #[cfg(feature = "EnvLog")]
     {
-        env_logger::builder()
+        let _ = env_logger::builder()
             .format(|buf, record| {
                 let thread_name = {
                     if let Some(n) = std::thread::current().name() {
@@ -164,6 +168,45 @@ pub fn init_logging() {
                     record.args()
                 )
             })
-            .init();
+            .try_init();
     }
+}
+
+/// Get active project features.
+pub fn get_features() -> Vec<&'static str> {
+    // TODO: Any generic way to do this?
+    vec![
+        #[cfg(feature = "ECMAScript")]
+        "ECMAScript",
+        #[cfg(feature = "RfsmExpressionModel")]
+        "RfsmExpressionModel",
+        #[cfg(feature = "BasicHttpEventIOProcessor")]
+        "BasicHttpEventIOProcessor",
+        #[cfg(feature = "yaml-config")]
+        "yaml-config",
+        #[cfg(feature = "json-config")]
+        "json-config",
+        #[cfg(feature = "serializer")]
+        "serializer",
+        #[cfg(feature = "xml")]
+        "xml",
+        #[cfg(feature = "Trace")]
+        "Trace",
+        #[cfg(feature = "TraceServer")]
+        "TraceServer",
+        #[cfg(feature = "Debug_Reader")]
+        "Debug_Reader",
+        #[cfg(feature = "Debug_Serializer")]
+        "Debug_Serializer",
+        #[cfg(feature = "EnvLog")]
+        "EnvLog",
+        #[cfg(feature = "Trace_Method")]
+        "Trace_Method",
+        #[cfg(feature = "Trace_State")]
+        "Trace_State",
+        #[cfg(feature = "Trace_Event")]
+        "Trace_Event",
+        #[cfg(feature = "Debug")]
+        "Debug",
+    ]
 }
