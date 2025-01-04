@@ -251,7 +251,11 @@ impl ExpressionParser {
             }
         }
         let expression = Self::stack_to_expression(&mut stack)?;
-        Ok((stop, expression))
+        if !stack.is_empty() {
+            Err("Failed to evaluate expression".to_string())
+        } else {
+            Ok((stop, expression))
+        }
     }
 
     /// Removes both neighbours of the item at the index, then call the function with the
@@ -313,9 +317,11 @@ impl ExpressionParser {
                     Token::Operator(operator) => {
                         let prio = match operator {
                             Operator::Not => 3u8,
+                            Operator::And => 5,
                             Operator::Multiply => 5,
                             Operator::Divide => 5,
                             Operator::Modulus => 5,
+                            Operator::Or => 6,
                             Operator::Plus => 6,
                             Operator::Minus => 6,
                             Operator::Less => 9,
@@ -327,7 +333,7 @@ impl ExpressionParser {
                             Operator::Assign => 16,
                             Operator::AssignUndefined => 16,
                         };
-                        if prio < best_idx_prio {
+                        if prio <= best_idx_prio {
                             best_idx = si;
                             best_idx_prio = prio;
                         }
@@ -349,6 +355,8 @@ impl ExpressionParser {
             if let Some(op) = op {
                 match op.clone() {
                     Operator::Divide
+                    | Operator::And
+                    | Operator::Or
                     | Operator::Plus
                     | Operator::Minus
                     | Operator::Less
@@ -452,7 +460,7 @@ mod tests {
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data, GlobalDataArc};
     use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
     use crate::expression_engine::expressions::ExpressionResult;
-    use crate::expression_engine::parser::{ExpressionLexer, ExpressionParser, NumericToken, Operator, Token};
+    use crate::expression_engine::parser::ExpressionParser;
     use crate::fsm::GlobalData;
     use std::collections::HashMap;
     use std::ops::Deref;

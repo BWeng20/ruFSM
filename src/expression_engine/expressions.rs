@@ -547,6 +547,7 @@ mod tests {
     use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
+    use crate::init_logging;
     use std::collections::HashMap;
 
     #[test]
@@ -570,5 +571,55 @@ mod tests {
         let rs = ExpressionParser::execute("a = 2".to_string(), &mut ec.global_data.lock().unwrap());
 
         println!("{:?}", rs);
+    }
+
+    #[test]
+    fn operators_work() {
+        init_logging();
+
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let rs = ExpressionParser::execute("2 + 1".to_string(), &mut ec.global_data.lock().unwrap());
+        println!("{:?}", rs);
+        assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(3))));
+
+        let rs = ExpressionParser::execute(
+            "true | false".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        println!("{:?}", rs);
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
+        );
+
+        let rs = ExpressionParser::execute(
+            "true & false".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        println!("{:?}", rs);
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Boolean(false)))
+        );
+
+        let rs = ExpressionParser::execute(
+            "true & !false".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        println!("{:?}", rs);
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
+        );
+
+        let rs = ExpressionParser::execute(
+            "!!true & !false".to_string(),
+            &mut ec.global_data.lock().unwrap(),
+        );
+        println!("{:?}", rs);
+        assert_eq!(
+            rs,
+            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
+        );
     }
 }

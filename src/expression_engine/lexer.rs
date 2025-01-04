@@ -18,6 +18,8 @@ pub enum Operator {
     AssignUndefined,
     Equal,
     NotEqual,
+    And,
+    Or,
 
     /// C-like modulus (mathematically the remainder) function.
     Modulus,
@@ -97,7 +99,7 @@ impl ExpressionLexer {
             || match c {
             '\0' | '.' | '!' | ',' | '\\' | ';' |
             // Operators
-            '-' | '+' | '/' | ':' | '*' |
+            '-' | '+' | '/' | ':' | '*' | '&' | '|' |
             '<' | '>' | '=' | '%' | '?' |
             // Brackets
             '[' | ']' | '(' | ')' | '{' | '}' |
@@ -207,6 +209,8 @@ impl ExpressionLexer {
             '+' => Operator::Plus,
             '*' => Operator::Multiply,
             ':' | '/' => Operator::Divide,
+            '&' => Operator::And,
+            '|' => Operator::Or,
             '%' => Operator::Modulus,
             _ => {
                 let second = self.next_char();
@@ -392,7 +396,7 @@ impl ExpressionLexer {
                             '\0' => {
                                 return Token::EOE;
                             }
-                            '?' | '+' | '-' | '*' | '<' | '>' | '=' | '%' | '/' | ':' | '!' => {
+                            '?' | '+' | '-' | '*' | '<' | '>' | '=' | '%' | '/' | ':' | '!' | '&' | '|' => {
                                 return self.read_operator(c);
                             }
                             '{' | '}' | '(' | ')' | '[' | ']' => {
@@ -618,7 +622,15 @@ mod tests {
 
     #[test]
     fn lexer_can_parse_operators() {
-        let mut l = ExpressionLexer::new("=<>!+-*/:% <= >= != ==".to_string());
+        let mut l = ExpressionLexer::new("|&=<>!+-*/:% <= >= != ==".to_string());
+
+        let n = l.next_token();
+        print!("{:?}", n);
+        assert_eq!(n, Token::Operator(Operator::Or));
+
+        let n = l.next_token();
+        print!("{:?}", n);
+        assert_eq!(n, Token::Operator(Operator::And));
 
         let n = l.next_token();
         print!("{:?}", n);

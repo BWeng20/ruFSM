@@ -566,8 +566,25 @@ pub fn operation_plus(left: &Data, right: &Data) -> Data {
                 m1_copy.extend(m2.clone());
                 Data::Map(m1_copy)
             }
+            (Data::Boolean(b1), Data::Boolean(b2)) => Data::Boolean(*b1 && *b2),
             _ => Data::Error("Wrong argument types for '+'".to_string()),
         }
+    }
+}
+
+pub fn operation_and(left: &Data, right: &Data) -> Data {
+    match (left, right) {
+        (_, Data::Error(err)) | (Data::Error(err), _) => Data::Error(err.clone()),
+        (Data::Boolean(b1), Data::Boolean(b2)) => Data::Boolean(*b1 && *b2),
+        _ => Data::Error("Wrong argument types for '&'".to_string()),
+    }
+}
+
+pub fn operation_or(left: &Data, right: &Data) -> Data {
+    match (left, right) {
+        (_, Data::Error(err)) | (Data::Error(err), _) => Data::Error(err.clone()),
+        (Data::Boolean(b1), Data::Boolean(b2)) => Data::Boolean(*b1 || *b2),
+        _ => Data::Error("Wrong argument types for '|'".to_string()),
     }
 }
 
@@ -866,6 +883,8 @@ impl Data {
             Operator::LessEqual => operation_less_equal(self, right),
             Operator::Greater => operation_greater(self, right),
             Operator::GreaterEqual => operation_greater_equal(self, right),
+            Operator::And => operation_and(self, right),
+            Operator::Or => operation_or(self, right),
             Operator::Equal => operation_equal(self, right),
             Operator::NotEqual => operation_not_equal(self, right),
             Operator::Modulus => operation_modulus(self, right),

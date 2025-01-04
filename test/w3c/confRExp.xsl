@@ -531,8 +531,8 @@
 
     <!-- returns true if all the required fields of _event are bound -->
     <xsl:template match="//@conf:eventFieldsAreBound">
-        <xsl:attribute name="cond">isDefined(_event.name) &amp;&amp; isDefined(_event.type) &amp;&amp; isDefined(_event.sendid) &amp;&amp; isDefined(_event.origin)
-            &amp;&amp; isDefined(_event.origintype) &amp;&amp; isDefined(_event.invokeid) &amp;&amp; isDefined(_event.data)</xsl:attribute>
+        <xsl:attribute name="cond">isDefined(_event.name) &amp; isDefined(_event.type) &amp; isDefined(_event.sendid) &amp; isDefined(_event.origin)
+            &amp; isDefined(_event.origintype) &amp; isDefined(_event.invokeid) &amp; isDefined(_event.data)</xsl:attribute>
     </xsl:template>
 
     <!-- returns true if  _event.data contains the specified item -->
