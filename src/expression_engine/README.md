@@ -121,7 +121,7 @@ This works for all actions with at least one argument.
 
 There are several pre-defined Actions:
 
-| Action    | Arguments                                                                                                                                                                                          | Return value  | Description                                                                                    |
+| Action    | Arguments                                                                                                                                                                                          | Return Type   | Description                                                                                    |
 |-----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|------------------------------------------------------------------------------------------------|
 | abs       | One argument of type <ul><li>Data::Double</li><li>Data::Integer</li></ul>                                                                                                                          | Same as input | Computes the absolute value.                                                                   |
 | length    | One argument of type <ul><li>Data::String - number of characters</li><li>Data::Array - number of items</li><li>Data::Map - number of entries</li><li>Data::Source - number of characters</li></ul> | Data::Integer | Get the length of the argument.                                                                |
