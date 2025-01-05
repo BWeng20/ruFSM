@@ -747,6 +747,11 @@ mod tests {
         assert_eq!(rs, data_false);
         let rs = ExpressionParser::execute_str("{'a':1} == {'b':1,'a':1} ", context);
         assert_eq!(rs, data_false);
+
+        // Check that identical fields are overwritten by merge
+        let rs = ExpressionParser::execute_str("{'a':1} == {'a':2} + {'a':1} ", context);
+        assert_eq!(rs, data_true);
+
     }
 
     #[test]

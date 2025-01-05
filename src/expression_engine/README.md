@@ -65,10 +65,10 @@ The available operators and their meaning
 | `-`                  | Minus          | Computes the difference of left and right. Works only on numeric types.                                              |
 | `%`                  | Modulus        | Computes the remainder of dividing left by right. Works only on numeric types.                                       |
 
-As mentioned above, aggregates the `+` operator arrays and maps. 
+As mentioned above, the "+" operator aggregates arrays and maps.
 
 If the first operant is an `Data::Array` the second operant will be added to the resulting array. 
-If the second operant is also some array, both are merged. <br/>
+If the second operant is also some array, both will be merged. <br/>
 The following expression will return _true_:
 ```
     ['a'] + ['b'] + 'c' == ['a','b'] + ['c']
@@ -79,6 +79,11 @@ the second operant must be also a `Data::Map`, as we can't add elements without 
 The following expression will return _true_:
 ```
     {'b':'abc'} + {'a':123} == {'a':123, 'b':'abc'}
+```
+Due to the nature of maps, identical fields are overwritten by a merge:
+
+```
+    {'a':1} == {'a':2} + {'a':1}
 ```
 
 SCXML requires that only declared variables can be written. An `=` to an undefined variable will return an error.
