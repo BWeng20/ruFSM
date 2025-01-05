@@ -9,13 +9,14 @@ use std::ops::Deref;
 use log::debug;
 
 use crate::datamodel::{
-    create_data_arc, CompilationId, Data, DataArc, Datamodel, DatamodelFactory, DatamodelSource, GlobalDataArc,
-    GlobalDataLock, EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME,
-    EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID,
-    EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
+    create_data_arc, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, SourceCode,
+    EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
+    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::SYS_IO_PROCESSORS;
-use crate::expression_engine::expressions::{Expression, ExpressionResult};
+use crate::expression_engine::expressions::{
+    Expression, ExpressionAssign, ExpressionAssignUndefined, ExpressionConstant,
+};
 use crate::expression_engine::parser::ExpressionParser;
 use crate::fsm::{Event, ExecutableContentId, Fsm, GlobalData, StateId};
 
@@ -37,58 +38,121 @@ impl RFsmExpressionDatamodel {
         }
     }
 
-    fn assign_internal(&mut self, left_expr: &str, right_expr: &str, allow_undefined: bool) -> bool {
-        let exp = if allow_undefined {
-            format!("{}?={}", left_expr, right_expr)
+    fn compile(&mut self, source: &SourceCode) -> Result<Box<dyn Expression>, String> {
+        if source.source_id == 0 {
+            ExpressionParser::parse(source.source.clone())
         } else {
-            format!("{}={}", left_expr, right_expr)
-        };
-        #[cfg(feature = "Debug")]
-        debug!("assign_internal: {} ", exp);
+            let compiled = self.compilations.get(&source.source_id);
+            match compiled {
+                None => {
+                    let expression = ExpressionParser::parse(source.source.clone())?;
+                    self.compilations
+                        .insert(source.source_id, expression.get_copy());
+                    Ok(expression)
+                }
+                Some(expression) => {
+                    #[cfg(feature = "Debug")]
+                    debug!(
+                        "get expression from cache : #{} '{}' -> {:?} ",
+                        source.source_id, source.source, expression
+                    );
+                    Ok(expression.get_copy())
+                }
+            }
+        }
+    }
 
-        let ex = ExpressionParser::execute(exp, &mut self.global_data.lock().unwrap());
-        let r = match ex {
-            Ok(_) => true,
-            Err(error) => {
-                // W3C says:\
-                // If the location expression does not denote a valid location in the data model or
-                // if the value specified (by 'expr' or children) is not a legal value for the
-                // location specified, the SCXML Processor must place the error 'error.execution'
-                // in the internal event queue.
-                self.log(format!("Can't assign {}={}: {}.", left_expr, right_expr, error).as_str());
-                self.internal_error_execution();
+    fn parse(&mut self, data: &Data) -> Result<Box<dyn Expression>, String> {
+        match data {
+            Data::String(_)
+            | Data::Boolean(_)
+            | Data::Array(_)
+            | Data::Map(_)
+            | Data::Null()
+            | Data::Integer(_)
+            | Data::None()
+            | Data::Double(_) => Ok(Box::new(ExpressionConstant::new(data.clone()))),
+            Data::Error(err) => Err(err.clone()),
+            Data::Source(source) => self.compile(source),
+        }
+    }
+
+    fn assign_internal(&mut self, left_expr: &Data, right_expr: &Data, allow_undefined: bool) -> bool {
+        let r = match (self.parse(left_expr), self.parse(right_expr)) {
+            (Ok(left_parsed), Ok(right_parsed)) => {
+                let expression: Box<dyn Expression> = if allow_undefined {
+                    Box::new(ExpressionAssignUndefined::new(left_parsed, right_parsed))
+                } else {
+                    Box::new(ExpressionAssign::new(left_parsed, right_parsed))
+                };
+                #[cfg(feature = "Debug")]
+                debug!("assign_internal: {:?} ", expression);
+                let ex = expression.execute(&mut self.global_data.lock().unwrap(), allow_undefined);
+                let r = match ex {
+                    Ok(_) => true,
+                    Err(error) => {
+                        self.log(format!("Can't assign {:?}: {}.", expression, error).as_str());
+                        false
+                    }
+                };
+                r
+            }
+            (Err(e1), _) => {
+                self.log(format!("Can't assign {}={}: {}", left_expr, right_expr, e1).as_str());
+                false
+            }
+            (_, Err(e2)) => {
+                self.log(format!("Can't assign {}={}: {}", left_expr, right_expr, e2).as_str());
                 false
             }
         };
+        if !r {
+            // W3C says:\
+            // If the location expression does not denote a valid location in the data model or
+            // if the value specified (by 'expr' or children) is not a legal value for the
+            // location specified, the SCXML Processor must place the error 'error.execution'
+            // in the internal event queue.
+            self.internal_error_execution();
+        }
         r
+    }
+
+    fn execute_internal_source(&mut self, source: &SourceCode, handle_error: bool) -> Result<DataArc, String> {
+        let parser_result = self.compile(source);
+        match parser_result {
+            Ok(expression) => {
+                let result = expression.execute(&mut self.global_data.lock().unwrap(), false);
+                match result {
+                    Ok(val) => {
+                        let value = val.lock().unwrap();
+                        if let Data::Null() = value.deref() {
+                            Ok(val.clone())
+                        } else if let Data::Error(err) = value.deref() {
+                            let msg = format!("Script Error: {} => {}", source, err);
+                            error!("{}", msg);
+                            if handle_error {
+                                self.internal_error_execution();
+                            }
+                            Err(msg)
+                        } else {
+                            Ok(val.clone())
+                        }
+                    }
+                    Err(e) => {
+                        // Pretty print the error
+                        let msg = format!("Script Error:  {} => {} ", source, e);
+                        error!("{}", msg);
+                        Err(msg)
+                    }
+                }
+            }
+            Err(err) => return Err(err),
+        }
     }
 
     fn execute_internal(&mut self, script: &Data, handle_error: bool) -> Result<DataArc, String> {
         if let Data::Source(source) = script {
-            let result = ExpressionParser::execute(source.clone(), &mut self.global_data.lock().unwrap());
-            match result {
-                Ok(val) => {
-                    let value = val.lock().unwrap();
-                    if let Data::Null() = value.deref() {
-                        Ok(val.clone())
-                    } else if let Data::Error(err) = value.deref() {
-                        let msg = format!("Script Error: {} => {}", script, err);
-                        error!("{}", msg);
-                        if handle_error {
-                            self.internal_error_execution();
-                        }
-                        Err(msg)
-                    } else {
-                        Ok(val.clone())
-                    }
-                }
-                Err(e) => {
-                    // Pretty print the error
-                    let msg = format!("Script Error:  {} => {} ", script, e);
-                    error!("{}", msg);
-                    Err(msg)
-                }
-            }
+            self.execute_internal_source(source, handle_error)
         } else {
             Ok(create_data_arc(script.clone()))
         }
@@ -300,8 +364,8 @@ impl Datamodel for RFsmExpressionDatamodel {
                 if let Data::Source(src) = value.lock().unwrap().deref() {
                     if !src.is_empty() {
                         // The data from state-data needs to be evaluated
+                        let rs = self.execute_internal_source(src, false);
                         let data_lock = &mut self.global_data.lock().unwrap();
-                        let rs = ExpressionParser::execute(src.clone(), data_lock);
                         match rs {
                             Ok(val) => {
                                 data_lock.data.set_undefined_arc(name.clone(), val.clone());
@@ -426,12 +490,12 @@ impl Datamodel for RFsmExpressionDatamodel {
         ds.data.set_undefined_arc(event_name, event_arc);
     }
 
-    fn assign(&mut self, left_expr: &str, right_expr: &str) -> bool {
+    fn assign(&mut self, left_expr: &Data, right_expr: &Data) -> bool {
         self.assign_internal(left_expr, right_expr, false)
     }
 
     fn get_by_location(&mut self, location: &str) -> Result<DataArc, String> {
-        match self.execute_internal(&Data::Source(location.to_string()), false) {
+        match self.execute_internal(&str_to_source(location), false) {
             Err(msg) => {
                 self.internal_error_execution();
                 Err(msg)
@@ -465,21 +529,21 @@ impl Datamodel for RFsmExpressionDatamodel {
 
     fn execute_for_each(
         &mut self,
-        array_expression: &str,
+        array_expression: &Data,
         item_name: &str,
         index: &str,
         execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
     ) -> bool {
         #[cfg(feature = "Debug")]
         debug!("ForEach: array: {}", array_expression);
-        let data = ExpressionParser::execute_str(array_expression, &mut self.global_data.lock().unwrap());
+        let data = self.execute_internal(array_expression, false);
         match data {
             Ok(r) => {
                 let dc = r.lock().unwrap().clone();
                 match dc {
                     Data::Map(map) => {
                         let mut idx: i64 = 0;
-                        if self.assign_internal(item_name, "null", true) {
+                        if self.assign_internal(&str_to_source(item_name), &Data::Null(), true) {
                             #[allow(unused_variables)]
                             for (name, item_value) in map {
                                 #[cfg(feature = "Debug")]
@@ -497,7 +561,7 @@ impl Datamodel for RFsmExpressionDatamodel {
                     }
                     Data::Array(array) => {
                         let mut idx: i64 = 0;
-                        if self.assign_internal(item_name, "null", true) {
+                        if self.assign_internal(&str_to_source(item_name), &Data::Null(), true) {
                             for data in array {
                                 #[cfg(feature = "Debug")]
                                 debug!("ForEach: #{} {:?}", idx, data);
@@ -545,7 +609,8 @@ impl Datamodel for RFsmExpressionDatamodel {
                     Ok(!(v != v || v.abs() == 0))
                 }
                 Data::Double(v) => Ok(!(v != v || v.abs() == 0f64)),
-                Data::Source(s) | Data::String(s) => Ok(!s.is_empty()),
+                Data::Source(s) => Ok(!s.is_empty()),
+                Data::String(s) => Ok(!s.is_empty()),
                 Data::Boolean(b) => Ok(*b),
                 Data::Array(_) => Ok(true),
                 Data::Map(_) => Ok(true),

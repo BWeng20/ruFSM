@@ -11,11 +11,11 @@ use std::path::{Path, PathBuf};
 use std::println as debug;
 
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, mem, str, string::String};
 
-use crate::datamodel::{create_data_arc, Data};
+use crate::datamodel::{create_data_arc, Data, SourceCode};
 use crate::ArgOption;
 #[cfg(feature = "Debug_Reader")]
 #[cfg(not(test))]
@@ -43,6 +43,7 @@ pub type AttributeMap = HashMap<String, String>;
 pub type XReader<'a> = Reader<&'a [u8]>;
 
 static DOC_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+static SOURCE_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 pub static INCLUDE_PATH_ARGUMENT_OPTION: ArgOption = ArgOption {
     name: "includePaths",
@@ -378,6 +379,20 @@ impl ReaderState {
     fn generate_name(&mut self) -> String {
         self.id_count += 1;
         format!("__id{}", self.id_count)
+    }
+
+    fn create_source(&mut self, src: &String) -> Data {
+        Data::Source(SourceCode::new(
+            src.as_str(),
+            SOURCE_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ))
+    }
+
+    fn create_source_moved(&mut self, src: String) -> Data {
+        Data::Source(SourceCode::new_move(
+            src,
+            SOURCE_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ))
     }
 
     fn parse_location_expressions(&mut self, location_expr: &str, targets: &mut Vec<String>) {
@@ -821,9 +836,10 @@ impl ReaderState {
         } else {
             "".to_string()
         };
+        let src = self.create_source(&data_value);
         self.get_current_state()
             .data
-            .insert(id.to_string(), create_data_arc(Data::Source(data_value)));
+            .insert(id.to_string(), create_data_arc(src));
     }
 
     /// A "initial" element started (the element, not the attribute)
@@ -844,18 +860,18 @@ impl ReaderState {
         let mut invoke = Invoke::new();
 
         if let Some(type_opt) = attr.get(ATTR_TYPE) {
-            invoke.type_name = Data::Source(type_opt.clone());
+            invoke.type_name = self.create_source(type_opt);
         }
         if let Some(typeexpr) = attr.get(ATTR_TYPEEXPR) {
-            invoke.type_expr = Data::Source(typeexpr.clone());
+            invoke.type_expr = self.create_source(typeexpr);
         }
 
         // W3c: Must not occur with the 'srcexpr' attribute or the <content> element.
         if let Some(src) = attr.get(ATTR_SRC) {
-            invoke.src = Data::Source(src.clone());
+            invoke.src = self.create_source(src);
         }
         if let Some(srcexpr) = attr.get(ATTR_SRCEXPR) {
-            invoke.src_expr = Data::Source(srcexpr.to_string());
+            invoke.src_expr = self.create_source(srcexpr);
         }
 
         // TODO--
@@ -939,7 +955,7 @@ impl ReaderState {
 
         let cond = attr.get(ATTR_COND);
         if cond.is_some() {
-            t.cond = Data::Source(cond.unwrap().clone());
+            t.cond = self.create_source(cond.unwrap());
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -1014,7 +1030,7 @@ impl ReaderState {
                 Ok(source) => {
                     #[cfg(feature = "Debug_Reader")]
                     debug!("src='{}':\n{}", file_src, source);
-                    s.content = Data::Source(source);
+                    s.content = self.create_source(&source);
                 }
                 Err(e) => {
                     panic!("Can't read script '{}'. {}", file_src, e);
@@ -1034,7 +1050,7 @@ impl ReaderState {
             if !s.content.is_empty() {
                 panic!("<script> with 'src' attribute shall not have content.")
             }
-            s.content = Data::Source(src.to_string());
+            s.content = self.create_source_moved(src.to_string());
         }
 
         self.add_executable_content(Box::new(s));
@@ -1058,8 +1074,7 @@ impl ReaderState {
 
         let ec_id = self.current_executable_content;
         let mut fe = ForEach::new();
-        fe.array
-            .clone_from(Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr));
+        fe.array = self.create_source(Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr));
         fe.item
             .clone_from(Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr));
         if let Some(index) = attr.get(ATTR_INDEX) {
@@ -1112,7 +1127,7 @@ impl ReaderState {
             }
             cancel.send_id.clone_from(sendid_value);
         } else if let Some(sendidexpr_value) = sendidexpr {
-            cancel.send_id_expr = Data::Source(sendidexpr_value.clone());
+            cancel.send_id_expr = self.create_source(sendidexpr_value);
         } else {
             panic!(
                 "{}: attribute {} or {} must be given",
@@ -1159,7 +1174,7 @@ impl ReaderState {
             ],
         );
 
-        let ec_if = If::new(Self::get_required_attr(TAG_IF, ATTR_COND, attr));
+        let ec_if = If::new(self.create_source(Self::get_required_attr(TAG_IF, ATTR_COND, attr)));
         self.add_executable_content(Box::new(ec_if));
         let if_id = self.current_executable_content;
 
@@ -1197,7 +1212,7 @@ impl ReaderState {
         let else_id = self.current_executable_content;
 
         // Add new "if"
-        let else_if = If::new(Self::get_required_attr(TAG_IF, ATTR_COND, attr));
+        let else_if = If::new(self.create_source(Self::get_required_attr(TAG_IF, ATTR_COND, attr)));
         self.add_executable_content(Box::new(else_if));
 
         let else_if_content_id = self.start_executable_content_region(true, TAG_ELSEIF);
@@ -1291,9 +1306,9 @@ impl ReaderState {
                     TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR
                 );
             }
-            send_params.event = Data::Source(event_value.clone());
+            send_params.event = self.create_source(event_value);
         } else if let Some(eventexpr_value) = eventexpr {
-            send_params.event_expr = Data::Source(eventexpr_value.clone());
+            send_params.event_expr = self.create_source(eventexpr_value);
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -1305,9 +1320,9 @@ impl ReaderState {
                     TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR
                 );
             }
-            send_params.target = Data::Source(target_val.clone());
+            send_params.target = self.create_source(target_val);
         } else if let Some(targetexpr_value) = targetexpr {
-            send_params.target_expr = Data::Source(targetexpr_value.clone());
+            send_params.target_expr = self.create_source(targetexpr_value);
         }
 
         let type_attr = attr.get(ATTR_TYPE);
@@ -1319,9 +1334,9 @@ impl ReaderState {
                     TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR
                 );
             }
-            send_params.type_value = Data::Source(type_attr_value.clone());
+            send_params.type_value = self.create_source(type_attr_value);
         } else if let Some(typeexpr_value) = typeexpr {
-            send_params.type_expr = Data::Source(typeexpr_value.clone());
+            send_params.type_expr = self.create_source(typeexpr_value);
         }
 
         let id = attr.get(ATTR_ID);
@@ -1348,7 +1363,7 @@ impl ReaderState {
                     TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR
                 );
             }
-            send_params.delay_expr = Data::Source(delay_expr_attr_value.clone());
+            send_params.delay_expr = self.create_source(delay_expr_attr_value);
         } else if delay_attr.is_some() {
             if (!delay_attr.unwrap().is_empty()) && type_attr.is_some() && type_attr.unwrap().eq(TARGET_INTERNAL) {
                 panic!(
@@ -1561,13 +1576,11 @@ impl ReaderState {
         );
 
         let mut assign = Assign::new();
-        assign
-            .location
-            .clone_from(Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr));
+        assign.location = self.create_source(Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr));
 
         let expr = attr.get(ATTR_EXPR);
         if let Some(expr_value) = expr {
-            assign.expr.clone_from(expr_value);
+            assign.expr = self.create_source(expr_value);
         }
 
         let assign_text = if has_content {
@@ -1587,7 +1600,7 @@ impl ReaderState {
             if !assign.expr.is_empty() {
                 panic!("<assign> with 'expr' attribute shall not have content.")
             }
-            assign.expr = assign_src.to_string();
+            assign.expr = self.create_source_moved(assign_src.to_string());
         }
 
         self.add_executable_content(Box::new(assign));

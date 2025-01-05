@@ -15,7 +15,7 @@ use log::debug;
 #[cfg(not(test))]
 use log::{info, warn};
 
-use crate::datamodel::{Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
+use crate::datamodel::{str_to_source, string_to_source, Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
 use crate::expression_engine::lexer::ExpressionLexer;
 use crate::fsm::{
     opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair, Parameter,
@@ -188,7 +188,7 @@ pub struct If {
 
 #[derive(Debug, Default)]
 pub struct ForEach {
-    pub array: String,
+    pub array: Data,
     pub item: String,
     pub index: String,
     pub content: ExecutableContentId,
@@ -210,15 +210,15 @@ pub struct Raise {
 
 #[derive(Default)]
 pub struct Assign {
-    pub location: String,
-    pub expr: String,
+    pub location: Data,
+    pub expr: Data,
 }
 
 impl Assign {
     pub fn new() -> Assign {
         Assign {
-            location: String::new(),
-            expr: String::new(),
+            location: Data::None(),
+            expr: Data::None(),
         }
     }
 }
@@ -242,7 +242,13 @@ impl ExecutableContent for Assign {
     }
 
     fn trace(&self, tracer: &mut dyn ExecutableContentTracer, _fsm: &Fsm) {
-        tracer.print_name_and_attributes(self, &[("location", &self.location), ("expr", &self.expr)]);
+        tracer.print_name_and_attributes(
+            self,
+            &[
+                ("location", &self.location.to_string()),
+                ("expr", &self.expr.to_string()),
+            ],
+        );
     }
 }
 
@@ -307,7 +313,7 @@ impl ExecutableContent for Script {
 impl Expression {
     pub fn new() -> Expression {
         Expression {
-            content: Data::Source(String::new()),
+            content: str_to_source(""),
         }
     }
 }
@@ -331,7 +337,7 @@ impl Log {
     pub fn new(label: &Option<&String>, expression: &str) -> Log {
         Log {
             label: label.unwrap_or(&"".to_string()).clone(),
-            expression: Data::Source(expression.to_string()),
+            expression: str_to_source(expression),
         }
     }
 }
@@ -357,9 +363,9 @@ impl ExecutableContent for Log {
 }
 
 impl If {
-    pub fn new(condition: &str) -> If {
+    pub fn new(condition: Data) -> If {
         If {
-            condition: Data::Source(condition.to_string()),
+            condition,
             content: 0,
             else_content: 0,
         }
@@ -408,9 +414,9 @@ pub const INDEX_TEMP: &str = "__$index";
 impl ForEach {
     pub fn new() -> ForEach {
         ForEach {
-            array: "".to_string(),
-            item: "".to_string(),
-            index: "".to_string(),
+            array: Data::None(),
+            item: String::new(),
+            index: String::new(),
             content: 0,
         }
     }
@@ -448,9 +454,9 @@ impl ExecutableContent for ForEach {
         tracer.print_name_and_attributes(
             self,
             &[
-                ("array", &self.array),
-                ("item", &self.item),
-                ("index", &self.index),
+                ("array", &self.array.to_string()),
+                ("item", &self.item.to_string()),
+                ("index", &self.index.to_string()),
             ],
         );
         tracer.print_sub_content("content", fsm, self.content);
@@ -486,7 +492,7 @@ impl ExecutableContent for Cancel {
     /// the event has already been delivered by the time the \<cancel> tag executes.
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         if let Ok(send_id) =
-            datamodel.get_expression_alternative_value(&Data::Source(self.send_id.clone()), &self.send_id_expr)
+            datamodel.get_expression_alternative_value(&string_to_source(&self.send_id), &self.send_id_expr)
         {
             get_global!(datamodel)
                 .delayed_send

@@ -3,6 +3,7 @@
 use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
@@ -168,7 +169,7 @@ pub trait Datamodel {
 
     /// Execute an assign expression.
     /// Returns true if the assignment was correct.
-    fn assign(&mut self, left_expr: &str, right_expr: &str) -> bool;
+    fn assign(&mut self, left_expr: &Data, right_expr: &Data) -> bool;
 
     /// Gets a global variable by a location expression.\
     /// If the location is undefined or the location expression is invalid,
@@ -233,7 +234,7 @@ pub trait Datamodel {
     /// Executes a for-each loop
     fn execute_for_each(
         &mut self,
-        array_expression: &str,
+        array_expression: &Data,
         item: &str,
         index: &str,
         execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
@@ -298,7 +299,7 @@ pub trait Datamodel {
                             Err(_) => create_data_arc(Data::String(ct_content.clone())),
                         }),
                     Some(expr) => {
-                        match self.execute(&Data::Source(expr.clone())) {
+                        match self.execute(&string_to_source(expr)) {
                             Err(msg) => {
                                 // W3C:\
                                 // If the evaluation of 'expr' produces an error, the Processor must place
@@ -342,7 +343,7 @@ pub trait Datamodel {
                             }
                         }
                     } else if !param.expr.is_empty() {
-                        match self.execute(&Data::Source(param.expr.clone())) {
+                        match self.execute(&string_to_source(&param.expr)) {
                             Err(msg) => {
                                 //  W3C:\
                                 // ...if the evaluation of the 'expr' produces an error, the SCXML
@@ -462,7 +463,7 @@ impl Datamodel for NullDatamodel {
         // nothing to do
     }
 
-    fn assign(&mut self, _left_expr: &str, _right_expr: &str) -> bool {
+    fn assign(&mut self, _left_expr: &Data, _right_expr: &Data) -> bool {
         // nothing to do
         true
     }
@@ -483,7 +484,7 @@ impl Datamodel for NullDatamodel {
 
     fn execute_for_each(
         &mut self,
-        _array_expression: &str,
+        _array_expression: &Data,
         _item: &str,
         _index: &str,
         _execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
@@ -541,10 +542,15 @@ pub fn operation_plus(left: &Data, right: &Data) -> Data {
     } else {
         match (left, right) {
             (_, Data::Error(err)) | (Data::Error(err), _) => Data::Error(err.clone()),
-            (Data::String(s) | Data::Source(s), _) => {
+            (Data::String(s), _) => {
                 let mut r = s.clone();
                 r.push_str(right.to_string().as_str());
                 Data::String(r)
+            }
+            (Data::Source(s), _) => {
+                let mut r = s.source.clone();
+                r.push_str(right.to_string().as_str());
+                Data::Source(SourceCode::new_move(r, 0))
             }
             (Data::Array(a1), Data::Array(a2)) => {
                 let mut a1_copy = a1.clone();
@@ -556,10 +562,15 @@ pub fn operation_plus(left: &Data, right: &Data) -> Data {
                 a1_copy.push(create_data_arc(right.clone()));
                 Data::Array(a1_copy)
             }
-            (_, Data::String(s) | Data::Source(s)) => {
+            (_, Data::String(s)) => {
                 let mut r = left.to_string();
                 r.push_str(s);
                 Data::String(r)
+            }
+            (_, Data::Source(s)) => {
+                let mut r = left.to_string();
+                r.push_str(s.as_str());
+                Data::Source(SourceCode::new_move(r, 0))
             }
             (Data::Map(m1), Data::Map(m2)) => {
                 let mut m1_copy = m1.clone();
@@ -651,7 +662,9 @@ pub fn operation_less(left: &crate::datamodel::Data, right: &crate::datamodel::D
         Data::Boolean(left.as_number() < right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 < s2),
+            (Data::String(_) | Data::Source(_), Data::String(_) | Data::Source(_)) => {
+                Data::Boolean(left.to_string() < right.to_string())
+            }
             _ => {
                 #[cfg(feature = "Debug")]
                 warn!("'<' supports only numeric or string types");
@@ -666,7 +679,9 @@ pub fn operation_less_equal(left: &crate::datamodel::Data, right: &crate::datamo
         Data::Boolean(left.as_number() <= right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 <= s2),
+            (Data::String(_) | Data::Source(_), Data::String(_) | Data::Source(_)) => {
+                Data::Boolean(left.to_string() <= right.to_string())
+            }
             _ => {
                 #[cfg(feature = "Debug")]
                 warn!("'<=' supports only numeric or string types");
@@ -681,7 +696,9 @@ pub fn operation_greater(left: &crate::datamodel::Data, right: &crate::datamodel
         Data::Boolean(left.as_number() > right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 > s2),
+            (Data::String(_) | Data::Source(_), Data::String(_) | Data::Source(_)) => {
+                Data::Boolean(left.to_string() > right.to_string())
+            }
             _ => Data::Error("'>' supports only numeric or string types".to_string()),
         }
     }
@@ -692,7 +709,9 @@ pub fn operation_greater_equal(left: &Data, right: &Data) -> Data {
         Data::Boolean(left.as_number() >= right.as_number())
     } else {
         match (left, right) {
-            (Data::String(s1) | Data::Source(s1), Data::String(s2) | Data::Source(s2)) => Data::Boolean(s1 >= s2),
+            (Data::String(_) | Data::Source(_), Data::String(_) | Data::Source(_)) => {
+                Data::Boolean(left.to_string() >= right.to_string())
+            }
             _ => {
                 #[cfg(feature = "Debug")]
                 warn!("'>=' supports only numeric or string types");
@@ -725,6 +744,45 @@ impl<T: Debug + 'static> ToAny for T {
     }
 }
 
+pub type SourceId = usize;
+
+#[derive(Clone)]
+pub struct SourceCode {
+    pub source: String,
+    pub source_id: SourceId,
+}
+
+impl SourceCode {
+    pub fn new(source: &str, source_id: SourceId) -> SourceCode {
+        SourceCode {
+            source: source.to_string(),
+            source_id,
+        }
+    }
+
+    pub fn new_move(source: String, source_id: SourceId) -> SourceCode {
+        SourceCode { source, source_id }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.source.is_empty()
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.source.as_str()
+    }
+
+    pub fn len(&self) -> usize {
+        self.source.len()
+    }
+}
+
+impl Display for SourceCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
 /// Data Variant used to handle data type-safe but
 /// Datamodel-agnostic way.
 #[derive(Clone)]
@@ -739,9 +797,17 @@ pub enum Data {
     /// Special placeholder to indicate an error
     Error(String),
     /// Special placeholder to indicate source (from FSM definition) that needs to be evaluated by the datamodel.
-    Source(String),
+    Source(SourceCode),
     /// Special placeholder to indicate an empty content.
     None(),
+}
+
+pub fn string_to_source(str: &String) -> Data {
+    Data::Source(SourceCode::new_move(str.clone(), 0))
+}
+
+pub fn str_to_source(str: &str) -> Data {
+    Data::Source(SourceCode::new(str, 0))
 }
 
 /// Tries to convert the numeric data to an integer value.
@@ -809,7 +875,7 @@ impl PartialEq for Data {
                 }
                 (Data::Null(), Data::Null()) => true,
                 (Data::Error(a), Data::Error(b)) => a == b,
-                (Data::Source(a), Data::Source(b)) => a == b,
+                (Data::Source(a), Data::Source(b)) => a.source == b.source,
                 (Data::None(), Data::None()) => true,
                 _ => false,
             }
@@ -913,7 +979,7 @@ impl Data {
             Data::Null() => 0f64,
             Data::Error(_) => 0f64,
             Data::Source(src) => {
-                let r = src.parse::<f64>();
+                let r = src.source.parse::<f64>();
                 r.unwrap_or(0f64)
             }
             Data::None() => 0f64,
@@ -932,7 +998,7 @@ impl Data {
             Data::Map(_) => self.to_string(),
             Data::Null() => "null".to_string(),
             Data::Error(_) => "".to_string(),
-            Data::Source(s) => s.clone(),
+            Data::Source(s) => s.source.clone(),
             Data::None() => "".to_string(),
         }
     }

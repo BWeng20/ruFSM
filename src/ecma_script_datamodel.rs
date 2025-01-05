@@ -31,8 +31,8 @@ use boa_gc::{empty_trace, Finalize, Trace};
 use log::{error, warn};
 
 use crate::datamodel::{
-    create_data_arc, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
-    EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
+    create_data_arc, str_to_source, string_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
+    EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
     EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::SYS_IO_PROCESSORS;
@@ -270,7 +270,7 @@ impl ECMAScriptDatamodel {
         if allow_undefined && self.strict_mode {
             self.context.strict(false);
         }
-        let r = match self.eval(&Data::Source(exp)) {
+        let r = match self.eval(&string_to_source(&exp)) {
             Ok(_) => true,
             Err(error) => {
                 // W3C says:\
@@ -328,7 +328,7 @@ impl ECMAScriptDatamodel {
                 JsValue::from(js_map)
             }
             Data::Error(_error) => JsValue::Null,
-            Data::Source(source) => JsValue::String(js_string!(source.clone())),
+            Data::Source(source) => JsValue::String(js_string!(source.source.clone())),
         }
     }
 
@@ -670,12 +670,16 @@ impl Datamodel for ECMAScriptDatamodel {
         }
     }
 
-    fn assign(self: &mut ECMAScriptDatamodel, left_expr: &str, right_expr: &str) -> bool {
-        self.assign_internal(left_expr, right_expr, false)
+    fn assign(self: &mut ECMAScriptDatamodel, left_expr: &Data, right_expr: &Data) -> bool {
+        self.assign_internal(
+            left_expr.as_script().as_str(),
+            right_expr.as_script().as_str(),
+            false,
+        )
     }
 
     fn get_by_location(self: &mut ECMAScriptDatamodel, location: &str) -> Result<DataArc, String> {
-        match self.execute_internal(&Data::Source(location.to_string()), false) {
+        match self.execute_internal(&str_to_source(location), false) {
             Err(msg) => {
                 self.internal_error_execution();
                 Err(msg)
@@ -692,14 +696,17 @@ impl Datamodel for ECMAScriptDatamodel {
 
     fn execute_for_each(
         &mut self,
-        array_expression: &str,
+        array_expression: &Data,
         item_name: &str,
         index: &str,
         execute_body: &mut dyn FnMut(&mut dyn Datamodel) -> bool,
     ) -> bool {
         #[cfg(feature = "Debug")]
         debug!("ForEach: array: {}", array_expression);
-        match self.context.eval(Source::from_bytes(array_expression)) {
+        match self
+            .context
+            .eval(Source::from_bytes(&array_expression.as_script()))
+        {
             Ok(r) => {
                 match r.get_type() {
                     Type::Object => {
@@ -718,7 +725,7 @@ impl Datamodel for ECMAScriptDatamodel {
                                             #[cfg(feature = "Debug")]
                                             debug!("ForEach: #{} {}={:?}", idx, item_name, item);
                                             let str = js_to_string(item, &mut self.context);
-                                            if self.assign(item_name, str.as_str()) {
+                                            if self.assign(&str_to_source(item_name), &string_to_source(&str)) {
                                                 if !index.is_empty() {
                                                     self.set_js_property(index, idx);
                                                 }
@@ -759,7 +766,7 @@ impl Datamodel for ECMAScriptDatamodel {
         //   The Processor must convert ECMAScript expressions used in conditional expressions into their effective boolean value using the ToBoolean operator
         //   as described in Section 9.2 of [ECMASCRIPT-262].
         let to_boolean_expression = format!("({})?true:false", script.as_script());
-        match self.execute_internal(&Data::Source(to_boolean_expression.clone()), false) {
+        match self.execute_internal(&string_to_source(&to_boolean_expression), false) {
             Ok(val) => match val.lock().unwrap().deref() {
                 Data::Boolean(b) => Ok(*b),
                 _ => Ok(false),

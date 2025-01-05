@@ -270,7 +270,19 @@ impl Expression for ExpressionIndex {
                         let index_guard = index_value.lock().unwrap();
                         let index_data = index_guard.deref();
                         match index_data {
-                            Data::Source(key) | Data::String(key) => match m.get(key) {
+                            Data::Source(key) => match m.get(key.source.as_str()) {
+                                None => {
+                                    if allow_undefined {
+                                        let data_arc = create_data_arc(Data::None());
+                                        m.insert(key.as_str().to_string(), data_arc.clone());
+                                        Ok(data_arc)
+                                    } else {
+                                        Err(format!("Index {} not found", key))
+                                    }
+                                }
+                                Some(member) => Ok(member.clone()),
+                            },
+                            Data::String(key) => match m.get(key) {
                                 None => {
                                     if allow_undefined {
                                         m.insert(key.clone(), create_data_arc(Data::None()));
