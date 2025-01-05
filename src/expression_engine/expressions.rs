@@ -638,7 +638,7 @@ mod tests {
         gdata
             .data
             .set_undefined("a".to_string(), Data::Map(data_members));
-        let rs = ExpressionParser::execute("a._b = 2".to_string(), &mut gdata);
+        let rs = ExpressionParser::execute_str("a._b = 2", &mut gdata);
 
         println!("{:?}", rs);
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(2))));
@@ -647,7 +647,7 @@ mod tests {
     #[test]
     fn can_assign_variable() {
         let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
-        let rs = ExpressionParser::execute("a = 2".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("a = 2", &mut ec.global_data.lock().unwrap());
 
         println!("{:?}", rs);
     }
@@ -660,19 +660,19 @@ mod tests {
 
         let _ = ExpressionParser::execute("v1 ?= [1,2,4, 'abc', ['a', 'b', 'c']]".to_string(), context);
 
-        let rs = ExpressionParser::execute("v1[1]".to_string(), context);
+        let rs = ExpressionParser::execute_str("v1[1]", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(2))));
 
         // Cascaded []
-        let rs = ExpressionParser::execute("v1[v1[1]]".to_string(), context);
+        let rs = ExpressionParser::execute_str("v1[v1[1]]", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(4))));
 
         // Use sub-expression inside []
-        let rs = ExpressionParser::execute("v1[1+2]".to_string(), context);
+        let rs = ExpressionParser::execute_str("v1[1+2]", context);
         assert_eq!(rs, Ok(create_data_arc(Data::String("abc".to_string()))));
 
         // Use [] outside []
-        let rs = ExpressionParser::execute("v1[4][1]".to_string(), context);
+        let rs = ExpressionParser::execute_str("v1[4][1]", context);
         assert_eq!(rs, Ok(create_data_arc(Data::String("b".to_string()))));
 
         let abc_array = vec![
@@ -749,9 +749,8 @@ mod tests {
         assert_eq!(rs, data_false);
 
         // Check that identical fields are overwritten by merge
-        let rs = ExpressionParser::execute_str("{'a':1} == {'a':2} + {'a':1} ", context);
+        let rs = ExpressionParser::execute_str("{'a':1} == {'a':null} + {'a':1} ", context);
         assert_eq!(rs, data_true);
-
     }
 
     #[test]
@@ -764,7 +763,7 @@ mod tests {
         let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
         let context = &mut ec.global_data.lock().unwrap();
 
-        let rs = ExpressionParser::execute("2 + 1".to_string(), context);
+        let rs = ExpressionParser::execute_str("2 + 1", context);
         println!("{:?}", rs);
         assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(3))));
 

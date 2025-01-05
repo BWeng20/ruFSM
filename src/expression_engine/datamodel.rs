@@ -9,11 +9,13 @@ use std::ops::Deref;
 use log::debug;
 
 use crate::datamodel::{
-    create_data_arc, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, EVENT_VARIABLE_FIELD_DATA,
-    EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
-    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
+    create_data_arc, CompilationId, Data, DataArc, Datamodel, DatamodelFactory, DatamodelSource, GlobalDataArc,
+    GlobalDataLock, EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME,
+    EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID,
+    EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::SYS_IO_PROCESSORS;
+use crate::expression_engine::expressions::{Expression, ExpressionResult};
 use crate::expression_engine::parser::ExpressionParser;
 use crate::fsm::{Event, ExecutableContentId, Fsm, GlobalData, StateId};
 
@@ -23,6 +25,7 @@ pub const RFSM_EXPRESSION_DATAMODEL_LC: &str = "rfsm-expression";
 pub struct RFsmExpressionDatamodel {
     pub global_data: GlobalDataArc,
     null_data: DataArc,
+    compilations: HashMap<usize, Box<dyn Expression>>,
 }
 
 impl RFsmExpressionDatamodel {
@@ -30,6 +33,7 @@ impl RFsmExpressionDatamodel {
         RFsmExpressionDatamodel {
             global_data,
             null_data: create_data_arc(Data::Null()),
+            compilations: HashMap::new(),
         }
     }
 
@@ -296,7 +300,6 @@ impl Datamodel for RFsmExpressionDatamodel {
                 if let Data::Source(src) = value.lock().unwrap().deref() {
                     if !src.is_empty() {
                         // The data from state-data needs to be evaluated
-                        // TODO: Escape
                         let data_lock = &mut self.global_data.lock().unwrap();
                         let rs = ExpressionParser::execute(src.clone(), data_lock);
                         match rs {
@@ -469,10 +472,7 @@ impl Datamodel for RFsmExpressionDatamodel {
     ) -> bool {
         #[cfg(feature = "Debug")]
         debug!("ForEach: array: {}", array_expression);
-        let data = ExpressionParser::execute(
-            array_expression.to_string(),
-            &mut self.global_data.lock().unwrap(),
-        );
+        let data = ExpressionParser::execute_str(array_expression, &mut self.global_data.lock().unwrap());
         match data {
             Ok(r) => {
                 let dc = r.lock().unwrap().clone();
@@ -690,7 +690,7 @@ mod tests {
         assert_eq!(rs, Ok(create_data_arc(Data::Double(102.111))));
 
         // As Member function.
-        let rs = ExpressionParser::execute("abs(-124)".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("abs(-124)", &mut ec.global_data.lock().unwrap());
 
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(124))));
     }
