@@ -380,6 +380,10 @@ impl ExpressionLexer {
 
     /// Parse and return the next token.
     pub fn next_token(&mut self) -> Token {
+        self.next_token_with_stop(&[])
+    }
+
+    pub fn next_token_with_stop(&mut self, hard_stops: &[char]) -> Token {
         // at start of new symbol, eat all spaces
         self.eat_space();
         self.buffer.clear();
@@ -395,6 +399,8 @@ impl ExpressionLexer {
                     if Self::is_string_delimiter(c) {
                         // At start of string
                         return self.read_string(c);
+                    } else if hard_stops.contains(&c) {
+                        return Token::Separator(c);
                     } else {
                         // return the current stop as symbol
                         match c {

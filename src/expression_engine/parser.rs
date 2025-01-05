@@ -3,8 +3,8 @@
 use crate::datamodel::{Data, GlobalDataLock};
 use crate::expression_engine::expressions::{
     get_expression_as, Expression, ExpressionArray, ExpressionAssign, ExpressionAssignUndefined, ExpressionConstant,
-    ExpressionIndex, ExpressionMemberAccess, ExpressionMethod, ExpressionNot, ExpressionOperator, ExpressionResult,
-    ExpressionSequence, ExpressionVariable,
+    ExpressionIndex, ExpressionMap, ExpressionMemberAccess, ExpressionMethod, ExpressionNot, ExpressionOperator,
+    ExpressionResult, ExpressionSequence, ExpressionVariable,
 };
 use crate::expression_engine::lexer::{ExpressionLexer, NumericToken, Operator, Token};
 
@@ -36,7 +36,48 @@ impl Display for ExpressionParserItem {
 }
 
 impl ExpressionParser {
-    /// Parse a argument list, stops at the matching ")"
+    /// Parse a member list, stops at the matching stop char
+    fn parse_member_list(
+        lexer: &mut ExpressionLexer,
+        stop: char,
+    ) -> Result<Vec<(Box<dyn Expression>, Box<dyn Expression>)>, String> {
+        let mut r = Vec::new();
+        let mut stop_c;
+        loop {
+            let (_stop_key, key_expression_option) = Self::parse_sub_expression(lexer, &[':', stop])?;
+            match key_expression_option {
+                None => {
+                    if r.is_empty() {
+                        // Special case: empty member list
+                        break;
+                    } else {
+                        return Err("Error in member list".to_string());
+                    }
+                }
+                Some(key_expression) => {
+                    let (stop_val, value_expression_option) = Self::parse_sub_expression(lexer, &[',', stop])?;
+                    stop_c = stop_val;
+                    match value_expression_option {
+                        None => {
+                            return Err("Missing value expression in member list".to_string());
+                        }
+                        Some(value_expression) => {
+                            r.push((key_expression, value_expression));
+                        }
+                    }
+                }
+            }
+            if stop_c == stop {
+                break;
+            }
+            if stop_c == '\0' {
+                return Err(format!("Missing '{}'", stop));
+            }
+        }
+        Ok(r)
+    }
+
+    /// Parse an argument list, stops at the matching stop char
     fn parse_argument_list(lexer: &mut ExpressionLexer, stop: char) -> Result<Vec<Box<dyn Expression>>, String> {
         let mut r = Vec::new();
         loop {
@@ -76,6 +117,12 @@ impl ExpressionParser {
 
     /// Parses and executes an expression.\
     /// If possible, please use "parse" and re-use the parsed expressions.
+    pub fn execute_str(source: &str, context: &mut GlobalDataLock) -> ExpressionResult {
+        Self::execute(source.to_string(), context)
+    }
+
+    /// Parses and executes an expression.\
+    /// If possible, please use "parse" and re-use the parsed expressions.
     pub fn execute(source: String, context: &mut GlobalDataLock) -> ExpressionResult {
         #[cfg(feature = "Debug")]
         debug!("ExpressionParser::execute: {}", source);
@@ -100,7 +147,7 @@ impl ExpressionParser {
         let mut stack: Vec<ExpressionParserItem> = Vec::new();
         let mut stop = '\0';
         loop {
-            let t = lexer.next_token();
+            let t = lexer.next_token_with_stop(stops);
             match &t {
                 Token::EOE => {
                     break;
@@ -231,6 +278,12 @@ impl ExpressionParser {
                             },
                         };
                         stack.push(ExpressionParserItem::SExpression(new_stack_item));
+                    }
+                    '{' => {
+                        let v = Self::parse_member_list(lexer, '}')?;
+                        stack.push(ExpressionParserItem::SExpression(Box::new(
+                            ExpressionMap::new(v),
+                        )));
                     }
                     _ => {
                         if stops.contains(br) {

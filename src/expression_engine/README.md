@@ -18,7 +18,9 @@ To select this model in SCXML use `datamodel="rfsm-expression"`.
   <data>             ::= <method> | <identifier> | <constant>
   <method>           ::= <identifier> "(" <arguments> ")"
   <index-expression> ::= "[" <sub-expression> "]"
-  <constant>         ::= "null" | <array> | <boolean> | <string> | <number>
+  <constant>         ::= "null" | <map> | <array> | <boolean> | <string> | <number>
+  <map>              ::= "{" [<map-field>{ "," <map-field> } ] "}"
+  <map-field>        ::= <sub-expression> ":" <sub-expression>
   <array>            ::= "[" <arguments> "]"
   <boolean>          ::= "true" | "false"
   
@@ -31,7 +33,7 @@ To select this model in SCXML use `datamodel="rfsm-expression"`.
 
   <string>           ::= '"' { <character> } '"' | "'" { <character> } "'"
   <character>        ::= As specified in JSON: unicode character. '"', "'", '\' and control characters escaped. 
-  <arguments>        ::= <sub-expression>{"," <sub-expression>}
+  <arguments>        ::= [ <sub-expression>{"," <sub-expression>} ]
   <identifier>       ::= <letter>{<letter>|<digit>}
   <operator>         ::= "?=" | "=" | "==" | ">=" | "<=" | "*" | "%" | "+" | "-" | ":" | "/" | "&" | "|"
   <letter>           ::= "A" .. "Z" | "a" .. "z" | "_"  
@@ -63,11 +65,20 @@ The available operators and their meaning
 | `-`                  | Minus          | Computes the difference of left and right. Works only on numeric types.                                              |
 | `%`                  | Modulus        | Computes the remainder of dividing left by right. Works only on numeric types.                                       |
 
-As mentioned above, aggregates the `+` operator arrays and maps. If the first operant is an `Data::Array` or `Data::Map` the second
-operant will be added. If the second operant is the same type, the containers are merged. <br/>
-This expression will return _true_:
+As mentioned above, aggregates the `+` operator arrays and maps. 
+
+If the first operant is an `Data::Array` the second operant will be added to the resulting array. 
+If the second operant is also some array, both are merged. <br/>
+The following expression will return _true_:
 ```
     ['a'] + ['b'] + 'c' == ['a','b'] + ['c']
+```
+
+If the first operant is an `Data::Map` (which represents objects),
+the second operant must be also a `Data::Map`, as we can't add elements without a name.<br/>
+The following expression will return _true_:
+```
+    {'b':'abc'} + {'a':123} == {'a':123, 'b':'abc'}
 ```
 
 SCXML requires that only declared variables can be written. An `=` to an undefined variable will return an error.

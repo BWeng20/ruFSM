@@ -1,5 +1,6 @@
 //! Implementation of a simple expression parser.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -60,6 +61,51 @@ impl Expression for ExpressionArray {
             ac.push(e.get_copy())
         }
         Box::new(ExpressionArray::new(ac))
+    }
+}
+
+#[derive(Debug)]
+pub struct ExpressionMap {
+    pub map: Vec<(Box<dyn Expression>, Box<dyn Expression>)>,
+}
+
+impl ExpressionMap {
+    pub fn new(map: Vec<(Box<dyn Expression>, Box<dyn Expression>)>) -> ExpressionMap {
+        ExpressionMap { map }
+    }
+}
+
+impl Expression for ExpressionMap {
+    fn execute(&self, context: &mut GlobalDataLock, allow_undefined: bool) -> ExpressionResult {
+        let mut v = HashMap::with_capacity(self.map.len());
+        for (key, item) in &self.map {
+            match key.execute(context, allow_undefined) {
+                Err(err) => {
+                    return Err(err);
+                }
+                Ok(key_val) => match item.execute(context, allow_undefined) {
+                    Err(err) => {
+                        return Err(err);
+                    }
+                    Ok(val) => {
+                        v.insert(key_val.to_string(), val);
+                    }
+                },
+            }
+        }
+        Ok(create_data_arc(Data::Map(v)))
+    }
+
+    fn is_assignable(&self) -> bool {
+        false
+    }
+
+    fn get_copy(&self) -> Box<dyn Expression> {
+        let mut mc = Vec::with_capacity(self.map.len());
+        for (key, val) in &self.map {
+            mc.push((key.get_copy(), val.get_copy()));
+        }
+        Box::new(ExpressionMap::new(mc))
     }
 }
 
@@ -595,7 +641,7 @@ mod tests {
         let rs = ExpressionParser::execute("a._b = 2".to_string(), &mut gdata);
 
         println!("{:?}", rs);
-        assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(2))));
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(2))));
     }
 
     #[test]
@@ -610,107 +656,132 @@ mod tests {
     fn arrays_work() {
         init_logging();
         let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let context = &mut ec.global_data.lock().unwrap();
 
-        let _ = ExpressionParser::execute(
-            "v1 ?= [1,2,4, 'abc', ['a', 'b', 'c']]".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let _ = ExpressionParser::execute("v1 ?= [1,2,4, 'abc', ['a', 'b', 'c']]".to_string(), context);
 
-        let rs = ExpressionParser::execute("v1[1]".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute("v1[1]".to_string(), context);
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(2))));
 
         // Cascaded []
-        let rs = ExpressionParser::execute("v1[v1[1]]".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute("v1[v1[1]]".to_string(), context);
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(4))));
 
         // Use sub-expression inside []
-        let rs = ExpressionParser::execute("v1[1+2]".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute("v1[1+2]".to_string(), context);
         assert_eq!(rs, Ok(create_data_arc(Data::String("abc".to_string()))));
 
         // Use [] outside []
-        let rs = ExpressionParser::execute("v1[4][1]".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute("v1[4][1]".to_string(), context);
         assert_eq!(rs, Ok(create_data_arc(Data::String("b".to_string()))));
 
         let abc_array = vec![
             create_data_arc(Data::String("a".to_string())),
             create_data_arc(Data::String("b".to_string())),
-            create_data_arc(Data::String("c".to_string()))];
+            create_data_arc(Data::String("c".to_string())),
+        ];
 
         // Add an element (as standalone element)
-        let rs = ExpressionParser::execute("['a','b'] + 'c'".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("['a','b'] + 'c'", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Array(abc_array.clone()))));
 
         // Add an element (as element inside an array)
-        let rs = ExpressionParser::execute("['a','b'] + ['c']".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("['a','b'] + ['c']", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Array(abc_array.clone()))));
 
         // as part of some compare
-        let rs = ExpressionParser::execute("['a']+['b']+'c' == ['a','b'] + ['c']".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("['a']+['b']+'c' == ['a','b'] + ['c']", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Boolean(true))));
 
         // Test if the missing char is detected
-        let rs = ExpressionParser::execute("['a'] + ['b'] == ['a','b'] + ['c']".to_string(), &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("['a'] + ['b'] == ['a','b'] + ['c']", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Boolean(false))));
+    }
+
+    #[test]
+    fn maps_work() {
+        init_logging();
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+
+        let data_true = Ok(create_data_arc(Data::Boolean(true)));
+        let data_false = Ok(create_data_arc(Data::Boolean(false)));
+
+        let context = &mut ec.global_data.lock().unwrap();
+
+        let _ = ExpressionParser::execute_str("v1 ?= {'m1':'abc'}", context);
+        let _ = ExpressionParser::execute_str("v2 ?= {'m2': 123}", context);
+
+        let _ = ExpressionParser::execute_str("v3 ?= {'m2': 123, 'm1': 'abc'}", context);
+
+        let rs = ExpressionParser::execute_str("v1.m1", context);
+        assert_eq!(rs, Ok(create_data_arc(Data::String("abc".to_string()))));
+
+        let rs = ExpressionParser::execute_str("v1 + v2 == v3", context);
+        assert_eq!(rs, data_true);
+
+        // Assign a new value to field
+        let rs = ExpressionParser::execute_str("v3.m1 = 10", context);
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(10))));
+
+        // Now the compare shall return false
+        let rs = ExpressionParser::execute_str("v1 + v2 == v3", context);
+        assert_eq!(rs, data_false);
+
+        // Compare with constants on both sides (also testing an empty map).
+        let rs = ExpressionParser::execute_str(
+            "{} + {'b':'abc'} + {'a':123}== {'a':123, 'b':'abc'}",
+            context,
+        );
+        assert_eq!(rs, data_true);
+
+        // Compare with Empty on both sides
+        let rs = ExpressionParser::execute_str("{} == {} ", context);
+        assert_eq!(rs, data_true);
+
+        // Compare with Empty on one side (shall fail)
+        let rs = ExpressionParser::execute_str("{} == {'a':1} ", context);
+        assert_eq!(rs, data_false);
+
+        // Check that compare fails for additional elements
+        let rs = ExpressionParser::execute_str("{'a':1} == {'a':1, 'b':1} ", context);
+        assert_eq!(rs, data_false);
+        let rs = ExpressionParser::execute_str("{'a':1} == {'b':1,'a':1} ", context);
+        assert_eq!(rs, data_false);
     }
 
     #[test]
     fn operators_work() {
         init_logging();
 
+        let data_true = Ok(create_data_arc(Data::Boolean(true)));
+        let data_false = Ok(create_data_arc(Data::Boolean(false)));
+
         let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
-        let rs = ExpressionParser::execute("2 + 1".to_string(), &mut ec.global_data.lock().unwrap());
+        let context = &mut ec.global_data.lock().unwrap();
+
+        let rs = ExpressionParser::execute("2 + 1".to_string(), context);
         println!("{:?}", rs);
         assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(3))));
 
-        let rs = ExpressionParser::execute(
-            "true | false".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute_str("true | false", context);
         println!("{:?}", rs);
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
-        );
+        assert_eq!(rs, data_true);
 
-        let rs = ExpressionParser::execute(
-            "true & false".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute_str("true & false", context);
         println!("{:?}", rs);
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Boolean(false)))
-        );
+        assert_eq!(rs, data_false);
 
-        let rs = ExpressionParser::execute(
-            "true & !false".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute_str("true & !false", context);
         println!("{:?}", rs);
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
-        );
+        assert_eq!(rs, data_true);
 
-        let rs = ExpressionParser::execute(
-            "!!true & !false".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute_str("!!true & !false", context);
         println!("{:?}", rs);
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
-        );
+        assert_eq!(rs, data_true);
 
-        let rs = ExpressionParser::execute(
-            "1.0e1 <= 11".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute_str("1.0e1 <= 11", context);
         println!("{:?}", rs);
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Boolean(true)))
-        );
+        assert_eq!(rs, data_true);
     }
 
     #[test]
@@ -718,10 +789,7 @@ mod tests {
         init_logging();
 
         let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
-        let rs = ExpressionParser::execute(
-            "1+1;2+2;3*3".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute_str("1+1;2+2;3*3", &mut ec.global_data.lock().unwrap());
         println!("{:?}", rs);
         assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(9))));
     }
