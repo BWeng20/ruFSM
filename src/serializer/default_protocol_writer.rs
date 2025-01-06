@@ -120,7 +120,8 @@ impl<W: Write> ProtocolWriter<W> for DefaultProtocolWriter<W> {
             }
             Data::Source(s) => {
                 self.write_u8(8);
-                self.write_str(s.as_str());
+                self.write_str(s.source.as_str());
+                self.write_usize(s.source_id);
             }
             Data::None() => {
                 self.write_u8(9);

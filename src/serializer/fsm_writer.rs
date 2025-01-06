@@ -341,7 +341,7 @@ where
     pub fn write_executable_content_for_each(&mut self, executable_content_for_each: &ForEach) {
         self.write_executable_content_id(executable_content_for_each.content);
         self.writer.write_str(&executable_content_for_each.index);
-        self.writer.write_str(&executable_content_for_each.array);
+        self.writer.write_data(&executable_content_for_each.array);
         self.writer.write_str(&executable_content_for_each.item);
     }
     pub fn write_executable_content_send(&mut self, executable_content_send: &SendParameters) {
@@ -381,7 +381,7 @@ where
     }
 
     pub fn write_executable_content_assign(&mut self, executable_content_assign: &Assign) {
-        self.writer.write_str(&executable_content_assign.expr);
-        self.writer.write_str(&executable_content_assign.location);
+        self.writer.write_data(&executable_content_assign.expr);
+        self.writer.write_data(&executable_content_assign.location);
     }
 }

@@ -37,6 +37,7 @@ impl Display for ExpressionParserItem {
 
 impl ExpressionParser {
     /// Parse a member list, stops at the matching stop char
+    #[allow(clippy::type_complexity)]
     fn parse_member_list(
         lexer: &mut ExpressionLexer,
         stop: char,

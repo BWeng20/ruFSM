@@ -332,8 +332,8 @@ where
     }
 
     pub fn read_executable_content_if(&mut self) -> Box<dyn ExecutableContent> {
-        let condition = self.reader.read_string();
-        let mut ec = If::new(condition.as_str());
+        let condition = self.reader.read_data();
+        let mut ec = If::new(condition);
 
         ec.content = self.read_executable_content_id();
         ec.else_content = self.read_executable_content_id();
@@ -358,8 +358,8 @@ where
 
     pub fn read_executable_content_log(&mut self) -> Box<dyn ExecutableContent> {
         let label = self.reader.read_string();
-        let expression = self.reader.read_string();
-        Box::new(Log::new(&Some(&label), &expression))
+        let expression = self.reader.read_data();
+        Box::new(Log::new(&Some(&label), expression))
     }
 
     pub fn read_executable_content_for_each(&mut self) -> Box<dyn ExecutableContent> {
@@ -367,7 +367,7 @@ where
 
         ec.content = self.read_executable_content_id();
         ec.index = self.reader.read_string();
-        ec.array = self.reader.read_string();
+        ec.array = self.reader.read_data();
         ec.item = self.reader.read_string();
 
         Box::new(ec)
@@ -417,8 +417,8 @@ where
 
     pub fn read_executable_content_assign(&mut self) -> Box<dyn ExecutableContent> {
         let mut ec = Assign::new();
-        ec.expr = self.reader.read_string();
-        ec.location = self.reader.read_string();
+        ec.expr = self.reader.read_data();
+        ec.location = self.reader.read_data();
         Box::new(ec)
     }
 }

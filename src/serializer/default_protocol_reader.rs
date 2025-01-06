@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[cfg(feature = "Debug_Serializer")]
 use log::debug;
 
-use crate::datamodel::Data;
+use crate::datamodel::{Data, SourceCode};
 use log::error;
 use std::io::Read;
 
@@ -150,7 +150,8 @@ impl<R: Read> DefaultProtocolReader<R> {
             }
             8 => {
                 let k = self.read_string();
-                Data::Source(k)
+                let id = self.read_usize();
+                Data::Source(SourceCode::new(k.as_str(), id))
             }
             9 => Data::None(),
 

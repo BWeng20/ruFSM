@@ -334,10 +334,10 @@ impl ExecutableContent for Expression {
 }
 
 impl Log {
-    pub fn new(label: &Option<&String>, expression: &str) -> Log {
+    pub fn new(label: &Option<&String>, expression: Data) -> Log {
         Log {
             label: label.unwrap_or(&"".to_string()).clone(),
-            expression: str_to_source(expression),
+            expression,
         }
     }
 }

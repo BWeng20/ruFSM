@@ -1558,7 +1558,8 @@ impl ReaderState {
         let label = attr.get(ATTR_LABEL);
         let expr = attr.get(ATTR_EXPR);
         if let Some(exprs) = expr {
-            self.add_executable_content(Box::new(Log::new(&label, exprs.as_str())));
+            let expression = self.create_source(exprs.as_str());
+            self.add_executable_content(Box::new(Log::new(&label, expression)));
         }
     }
 
