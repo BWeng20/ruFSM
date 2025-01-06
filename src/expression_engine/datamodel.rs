@@ -146,7 +146,7 @@ impl RFsmExpressionDatamodel {
                     }
                 }
             }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         }
     }
 

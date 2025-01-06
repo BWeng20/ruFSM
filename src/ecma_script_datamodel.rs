@@ -31,7 +31,7 @@ use boa_gc::{empty_trace, Finalize, Trace};
 use log::{error, warn};
 
 use crate::datamodel::{
-    create_data_arc, str_to_source, string_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
+    create_data_arc, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
     EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
     EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
@@ -270,7 +270,7 @@ impl ECMAScriptDatamodel {
         if allow_undefined && self.strict_mode {
             self.context.strict(false);
         }
-        let r = match self.eval(&string_to_source(&exp)) {
+        let r = match self.eval(&str_to_source(exp.as_str())) {
             Ok(_) => true,
             Err(error) => {
                 // W3C says:\
@@ -725,7 +725,7 @@ impl Datamodel for ECMAScriptDatamodel {
                                             #[cfg(feature = "Debug")]
                                             debug!("ForEach: #{} {}={:?}", idx, item_name, item);
                                             let str = js_to_string(item, &mut self.context);
-                                            if self.assign(&str_to_source(item_name), &string_to_source(&str)) {
+                                            if self.assign(&str_to_source(item_name), &str_to_source(str.as_str())) {
                                                 if !index.is_empty() {
                                                     self.set_js_property(index, idx);
                                                 }
@@ -766,7 +766,7 @@ impl Datamodel for ECMAScriptDatamodel {
         //   The Processor must convert ECMAScript expressions used in conditional expressions into their effective boolean value using the ToBoolean operator
         //   as described in Section 9.2 of [ECMASCRIPT-262].
         let to_boolean_expression = format!("({})?true:false", script.as_script());
-        match self.execute_internal(&string_to_source(&to_boolean_expression), false) {
+        match self.execute_internal(&str_to_source(to_boolean_expression.as_str()), false) {
             Ok(val) => match val.lock().unwrap().deref() {
                 Data::Boolean(b) => Ok(*b),
                 _ => Ok(false),

@@ -299,7 +299,7 @@ pub trait Datamodel {
                             Err(_) => create_data_arc(Data::String(ct_content.clone())),
                         }),
                     Some(expr) => {
-                        match self.execute(&string_to_source(expr)) {
+                        match self.execute(&str_to_source(expr.as_str())) {
                             Err(msg) => {
                                 // W3C:\
                                 // If the evaluation of 'expr' produces an error, the Processor must place
@@ -343,7 +343,7 @@ pub trait Datamodel {
                             }
                         }
                     } else if !param.expr.is_empty() {
-                        match self.execute(&string_to_source(&param.expr)) {
+                        match self.execute(&str_to_source(param.expr.as_str())) {
                             Err(msg) => {
                                 //  W3C:\
                                 // ...if the evaluation of the 'expr' produces an error, the SCXML
@@ -800,10 +800,6 @@ pub enum Data {
     Source(SourceCode),
     /// Special placeholder to indicate an empty content.
     None(),
-}
-
-pub fn string_to_source(str: &String) -> Data {
-    Data::Source(SourceCode::new_move(str.clone(), 0))
 }
 
 pub fn str_to_source(str: &str) -> Data {

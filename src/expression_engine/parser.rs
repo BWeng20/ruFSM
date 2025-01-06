@@ -321,14 +321,12 @@ impl ExpressionParser {
         }
         if !stack.is_empty() {
             Err("Failed to evaluate expression".to_string())
+        } else if expressions.is_empty() {
+            Ok((stop, None))
+        } else if expressions.len() == 1 {
+            Ok((stop, expressions.pop()))
         } else {
-            if expressions.is_empty() {
-                Ok((stop, None))
-            } else if expressions.len() == 1 {
-                Ok((stop, expressions.pop()))
-            } else {
-                Ok((stop, Some(Box::new(ExpressionSequence::new(expressions)))))
-            }
+            Ok((stop, Some(Box::new(ExpressionSequence::new(expressions)))))
         }
     }
 

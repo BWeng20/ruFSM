@@ -381,9 +381,9 @@ impl ReaderState {
         format!("__id{}", self.id_count)
     }
 
-    fn create_source(&mut self, src: &String) -> Data {
+    fn create_source(&mut self, src: &str) -> Data {
         Data::Source(SourceCode::new(
-            src.as_str(),
+            src,
             SOURCE_ID_COUNTER.fetch_add(1, Ordering::Relaxed),
         ))
     }
@@ -836,7 +836,7 @@ impl ReaderState {
         } else {
             "".to_string()
         };
-        let src = self.create_source(&data_value);
+        let src = self.create_source(data_value.as_str());
         self.get_current_state()
             .data
             .insert(id.to_string(), create_data_arc(src));
@@ -860,10 +860,10 @@ impl ReaderState {
         let mut invoke = Invoke::new();
 
         if let Some(type_opt) = attr.get(ATTR_TYPE) {
-            invoke.type_name = self.create_source(type_opt);
+            invoke.type_name = self.create_source(type_opt.as_str());
         }
         if let Some(typeexpr) = attr.get(ATTR_TYPEEXPR) {
-            invoke.type_expr = self.create_source(typeexpr);
+            invoke.type_expr = self.create_source(typeexpr.as_str());
         }
 
         // W3c: Must not occur with the 'srcexpr' attribute or the <content> element.
@@ -871,7 +871,7 @@ impl ReaderState {
             invoke.src = self.create_source(src);
         }
         if let Some(srcexpr) = attr.get(ATTR_SRCEXPR) {
-            invoke.src_expr = self.create_source(srcexpr);
+            invoke.src_expr = self.create_source(srcexpr.as_str());
         }
 
         // TODO--
@@ -955,7 +955,7 @@ impl ReaderState {
 
         let cond = attr.get(ATTR_COND);
         if cond.is_some() {
-            t.cond = self.create_source(cond.unwrap());
+            t.cond = self.create_source(cond.unwrap().as_str());
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -1030,7 +1030,7 @@ impl ReaderState {
                 Ok(source) => {
                     #[cfg(feature = "Debug_Reader")]
                     debug!("src='{}':\n{}", file_src, source);
-                    s.content = self.create_source(&source);
+                    s.content = self.create_source_moved(source);
                 }
                 Err(e) => {
                     panic!("Can't read script '{}'. {}", file_src, e);

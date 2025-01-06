@@ -15,7 +15,7 @@ use log::debug;
 #[cfg(not(test))]
 use log::{info, warn};
 
-use crate::datamodel::{str_to_source, string_to_source, Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
+use crate::datamodel::{str_to_source, Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
 use crate::expression_engine::lexer::ExpressionLexer;
 use crate::fsm::{
     opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair, Parameter,
@@ -492,7 +492,7 @@ impl ExecutableContent for Cancel {
     /// the event has already been delivered by the time the \<cancel> tag executes.
     fn execute(&self, datamodel: &mut dyn Datamodel, _fsm: &Fsm) -> bool {
         if let Ok(send_id) =
-            datamodel.get_expression_alternative_value(&string_to_source(&self.send_id), &self.send_id_expr)
+            datamodel.get_expression_alternative_value(&str_to_source(self.send_id.as_str()), &self.send_id_expr)
         {
             get_global!(datamodel)
                 .delayed_send
