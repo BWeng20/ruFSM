@@ -1,6 +1,9 @@
 use std::path::Path;
 
-#[cfg(feature = "Debug")]
+#[cfg(all(feature = "Debug", not(feature = "EnvLog")))]
+use std::println as debug;
+
+#[cfg(all(feature = "Debug", feature = "EnvLog"))]
 use log::debug;
 
 use rfsm::fsm::Fsm;

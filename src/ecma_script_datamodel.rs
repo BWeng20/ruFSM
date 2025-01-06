@@ -6,16 +6,18 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::string::ToString;
-#[cfg(test)]
-use std::{println as warn, println as error};
 
 #[cfg(test)]
-#[cfg(feature = "Debug")]
+use std::{println as warn, println as error, println as info};
+
+#[cfg(all(test, feature = "Debug"))]
 use std::println as debug;
 
-#[cfg(not(test))]
-#[cfg(feature = "Debug")]
-use log::debug;
+#[cfg(all(not(test), feature = "Debug", not(feature = "EnvLog")))]
+use std::{println as warn, println as debug};
+
+#[cfg(all(not(test), feature = "Debug", feature = "EnvLog"))]
+use log::{debug, warn};
 
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
@@ -26,9 +28,6 @@ use boa_engine::value::Type;
 use boa_engine::{js_string, native_function::NativeFunction, Context, JsBigInt, JsError, JsValue, Source};
 use boa_engine::{JsArgs, JsData, JsResult};
 use boa_gc::{empty_trace, Finalize, Trace};
-
-#[cfg(not(test))]
-use log::{error, warn};
 
 use crate::datamodel::{
     create_data_arc, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
@@ -404,7 +403,7 @@ impl ECMAScriptDatamodel {
         for arg in args {
             msg.push_str(js_to_string(arg, ctx).as_str());
         }
-        println!("{}", msg);
+        info!("{}", msg);
         Ok(JsValue::Null)
     }
 }
@@ -513,7 +512,6 @@ impl Datamodel for ECMAScriptDatamodel {
                 if let Data::Source(src) = data_guard.deref() {
                     if !src.is_empty() {
                         let rs = self.context.eval(Source::from_bytes(src.as_str()));
-                        println!("set_from_state_data {} -> {:?}", src, rs);
                         match rs {
                             Ok(val) => {
                                 self.set_js_property(name.as_str(), val);
@@ -534,13 +532,6 @@ impl Datamodel for ECMAScriptDatamodel {
                     };
                 } else {
                     let ds = self.data_value_to_js(data_guard.deref());
-                    println!(
-                        "set_from_state_data {} / {:?} -> {:?}",
-                        name,
-                        data_guard.deref(),
-                        ds
-                    );
-
                     self.set_js_property(name.as_str(), ds);
                 }
             } else {

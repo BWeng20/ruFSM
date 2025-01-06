@@ -28,9 +28,13 @@ use std::{fmt, thread};
 use log::error;
 
 use crate::actions::{Action, ActionWrapper};
-#[cfg(not(test))]
-#[cfg(feature = "Debug")]
+
+#[cfg(all(not(test), feature = "Debug", not(feature = "EnvLog")))]
+use std::println as debug;
+
+#[cfg(all(not(test), feature = "Debug", feature = "EnvLog"))]
 use log::debug;
+
 use timer::Guard;
 
 use crate::datamodel::{

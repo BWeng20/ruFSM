@@ -7,14 +7,23 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::time::Duration;
-#[cfg(test)]
-use std::{println as error, println as info};
 use std::{process, thread};
 
 use crate::actions::ActionWrapper;
 use log::warn;
-#[cfg(not(test))]
+
+#[cfg(all(not(test), feature = "Debug", not(feature = "EnvLog")))]
+use std::{println as error, println as info};
+
+#[cfg(all(not(test), feature = "Debug", feature = "EnvLog"))]
 use log::{error, info};
+
+#[cfg(test)]
+use std::{println as error, println as info};
+
+#[cfg(all(feature = "Debug", feature = "EnvLog"))]
+use log::debug;
+
 #[cfg(feature = "json-config")]
 use serde::Deserialize;
 #[cfg(feature = "yaml-config")]

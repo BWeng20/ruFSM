@@ -1,15 +1,23 @@
 //! Module to write a persistent binary version of a Fsm.\
 //! The format is independent of the platform byte-order
 
-#[cfg(feature = "Debug_Serializer")]
-use log::debug;
 use std::collections::HashMap;
-
-use crate::datamodel::{Data, DataArc};
-use log::info;
 use std::io::Read;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(all(feature = "Debug_Serializer", not(feature = "EnvLog")))]
+use std::println as debug;
+
+#[cfg(all(feature = "Debug_Serializer", feature = "EnvLog"))]
+use log::debug;
+
+#[cfg(not(feature = "EnvLog"))]
+use std::println as info;
+
+#[cfg(feature = "EnvLog")]
+use log::info;
+
+use crate::datamodel::{Data, DataArc};
 use crate::executable_content;
 use crate::executable_content::{
     Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters,

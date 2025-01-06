@@ -5,10 +5,17 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-#[cfg(feature = "Debug")]
+#[cfg(all(feature = "Debug", not(feature = "EnvLog")))]
+use std::println as debug;
+
+#[cfg(all(feature = "Debug", feature = "EnvLog"))]
 use log::debug;
 
-use crate::datamodel::{create_data_arc, numeric_to_integer, Data, DataArc, GlobalDataLock, ToAny};
+use crate::datamodel::{
+    create_data_arc, numeric_to_integer, operation_and, operation_divide, operation_equal, operation_greater,
+    operation_greater_equal, operation_less, operation_less_equal, operation_minus, operation_modulus,
+    operation_multiply, operation_not_equal, operation_or, operation_plus, Data, DataArc, GlobalDataLock, ToAny,
+};
 use crate::expression_engine::lexer::Operator;
 
 pub type ExpressionResult = Result<DataArc, String>;
@@ -514,6 +521,29 @@ impl ExpressionOperator {
             operator: op,
         }
     }
+
+    pub fn operation(left: &Data, op: &Operator, right: &Data) -> Data {
+        match op {
+            Operator::Multiply => operation_multiply(left, right),
+            Operator::Divide => operation_divide(left, right),
+            Operator::Plus => operation_plus(left, right),
+            Operator::Minus => operation_minus(left, right),
+            Operator::Less => operation_less(left, right),
+            Operator::LessEqual => operation_less_equal(left, right),
+            Operator::Greater => operation_greater(left, right),
+            Operator::GreaterEqual => operation_greater_equal(left, right),
+            Operator::And => operation_and(left, right),
+            Operator::Or => operation_or(left, right),
+            Operator::Equal => operation_equal(left, right),
+            Operator::NotEqual => operation_not_equal(left, right),
+            Operator::Modulus => operation_modulus(left, right),
+            Operator::Assign | Operator::AssignUndefined | Operator::Not => {
+                // These "operation" are handled by explicit Expression-implementations
+                // and this line should never be reached.
+                Data::Error("Internal Error".to_string())
+            }
+        }
+    }
 }
 
 impl Expression for ExpressionOperator {
@@ -543,12 +573,17 @@ impl Expression for ExpressionOperator {
         let result_data = if Arc::ptr_eq(&left_result.arc, &right_result.arc) {
             // Same object, we have to clone the content at least for one side to avoid deadlock.
             let left_data = left_result.lock().unwrap().clone();
-            left_data.operation(self.operator.clone(), right_result.lock().unwrap().deref())
+            Self::operation(
+                &left_data,
+                &self.operator,
+                right_result.lock().unwrap().deref(),
+            )
         } else {
-            left_result
-                .lock()
-                .unwrap()
-                .operation(self.operator.clone(), right_result.lock().unwrap().deref())
+            Self::operation(
+                &left_result.lock().unwrap(),
+                &self.operator,
+                right_result.lock().unwrap().deref(),
+            )
         };
         Ok(create_data_arc(result_data))
     }

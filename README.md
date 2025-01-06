@@ -29,17 +29,26 @@ See [SW Design](SW_Design.md)
 
 ## Main Crate Features
 
-| Name                      | Description                                                                           | Related crates                                            | Impact on Size<br/>of Release Build |
-|---------------------------|---------------------------------------------------------------------------------------|-----------------------------------------------------------|-------------------------------------|
-| ECMAScript                | Adds an EMCAScript datamodel implementation.                                          | boa_engine                                                | +&#160;~&#160;10.25&#160;MiB        |
-| xml                       | Enables reading SCXML (xml) files.                                                    | quick-xml, reqwest                                        | +&#160;~&#160;2,5&#160;MiB          |
-| RfsmExpressionModel       | Adds a datamodel implementation based on the internal Expression-Engine.              |                                                           | +&#160;~&#160;0.09&#160;MiB         |
-| serializer                | Support for reading/writing FSMs in a property binary format - as alternative to xml. |                                                           | +&#160;~&#160;0.1 MiB               |
-| BasicHttpEventIOProcessor | Adds an implementation of BasicHttpEventIOProcessor                                   | hyper, http-body-util, hyper-util, tokio, form_urlencoded | _- not finished -_                  |
-| json-config               | The test tool can read configurations in JSON.                                        | serde_json                                                | +&#160;~&#160;0.003&#160;MiB        |
-| yaml-config               | The test tool can read configurations in YAML.                                        | yaml-rust                                                 | -&#160;~&#160;0.001&#160;MiB        |
-| EnvLog                    | The crate "env_log" is used as "log" implementation.                                  | env_log                                                   | +&#160;~&#160;1.21&#160;MiB         |
-| TraceServer               | Enables Remote Trace Server.                                                          |                                                           | _- not finished -_                  |
+| Name                      | Description                                                                                                     | Related crates                                            | Impact on Size<br/>of Release Build |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|-------------------------------------|
+| ECMAScript                | Adds an EMCAScript datamodel implementation.                                                                    | boa_engine                                                | +&#160;~&#160;10.25&#160;MiB        |
+| xml                       | Enables reading SCXML (xml) files.                                                                              | quick-xml, reqwest                                        | +&#160;~&#160;2,5&#160;MiB          |
+| RfsmExpressionModel       | Adds a datamodel implementation based on the internal Expression-Engine.                                        |                                                           | +&#160;~&#160;0.09&#160;MiB         |
+| serializer                | Support for reading/writing FSMs in a property binary format - as alternative to xml.                           |                                                           | +&#160;~&#160;0.1 MiB               |
+| BasicHttpEventIOProcessor | Adds an implementation of BasicHttpEventIOProcessor                                                             | hyper, http-body-util, hyper-util, tokio, form_urlencoded | _- not finished -_                  |
+| json-config               | The test tool can read configurations in JSON.                                                                  | serde_json                                                | +&#160;~&#160;0.003&#160;MiB        |
+| yaml-config               | The test tool can read configurations in YAML.                                                                  | yaml-rust                                                 | -&#160;~&#160;0.001&#160;MiB        |
+| EnvLog                    | The crate "env_log" is used as "log" implementation and for internal logging. Otherwise `std::println` is used. | env_log                                                   | +&#160;~&#160;1.21&#160;MiB         |
+| TraceServer               | Enables Remote Trace Server.                                                                                    |                                                           | _- not finished -_                  |
+
+The minimal feature set for a MVP is 
+ + json-config - _used by the test-application_.
+ + RfsmExpressionModel - _Datamodel for expression-language_
+ + serializer - _Reads binary `rfsm` files_.
+
+The rfsm files can be converted offline from SCXML by `scxml_to_fsm`.<br/>
+This leads to a release binary of ~1.4 MiB in size. 
+ 
 
 ## Extended Crate Features (for test and debugging)
 

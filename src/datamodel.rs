@@ -8,22 +8,26 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
-use log::{debug, error};
-
-#[cfg(feature = "Debug")]
+#[cfg(all(feature = "Debug", feature = "EnvLog"))]
 use log::warn;
 
-use crate::actions::ActionMap;
-use crate::event_io_processor::EventIOProcessor;
+#[cfg(all(feature = "Debug", not(feature = "EnvLog")))]
+use std::println as warn;
 
-#[cfg(feature = "ExpressionEngine")]
-use crate::expression_engine::lexer::Operator;
+#[cfg(not(feature = "EnvLog"))]
+use std::{println as info, println as debug, println as error};
+
+#[cfg(feature = "EnvLog")]
+use log::{debug, error, info};
 
 use crate::expression_engine::lexer::{ExpressionLexer, Token};
 use crate::fsm::{
     vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter, State,
     StateId,
 };
+
+use crate::actions::ActionMap;
+use crate::event_io_processor::EventIOProcessor;
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
 
@@ -95,16 +99,17 @@ macro_rules! get_global {
 
 pub type GlobalDataLock<'a> = MutexGuard<'a, GlobalData>;
 
-/// Currently we assume that we need access to the global-data via a mutex.
-/// If not, change this type to "GlobalData" and adapt implementation.
+/// Currently we assume that we need access to the global-data via a mutex as RUST doesn't allow access to it
+/// from callbacks as used in ECMA-implementations and timers. If not, change this type to "GlobalData" and adapt implementation.
 pub type GlobalDataArc = Arc<Mutex<GlobalData>>;
 
+/// Helper to create the global data instance. Should be used to minimize dependencies.
 pub fn create_global_data_arc() -> GlobalDataArc {
     GlobalDataArc::new(Mutex::from(crate::fsm::GlobalData::new()))
 }
 
-/// Data model interface trait.
-/// *W3C says*:
+/// Data model interface trait.\
+/// *W3C says*:\
 /// The Data Model offers the capability of storing, reading, and modifying a set of data that is internal to the state machine.
 /// This specification does not mandate any specific data model, but instead defines a set of abstract capabilities that can
 /// be realized by various languages, such as ECMAScript or XML/XPath. Implementations may choose the set of data models that
@@ -116,7 +121,7 @@ pub fn create_global_data_arc() -> GlobalDataArc {
 pub trait Datamodel {
     /// Returns the global data.\
     /// As the data model needs access to other global variables and rust doesn't like
-    /// accessing data of parents (Fsm in this case) from inside a member (the actual Datamodel), most global data is
+    /// accessing data of parents (Fsm in this case) from inside a child (the actual Datamodel), most global data is
     /// store in the "GlobalData" struct that is owned by the data model.
     fn global(&mut self) -> &mut GlobalDataArc;
 
@@ -222,7 +227,7 @@ pub trait Datamodel {
 
     /// "log" function, use for \<log\> content.
     fn log(&mut self, msg: &str) {
-        println!("{}", msg);
+        info!("{}", msg);
     }
 
     /// Executes a script.\
@@ -530,6 +535,7 @@ impl Datamodel for NullDatamodel {
     }
 }
 
+/// Implements a "+" operation on Data items.
 pub fn operation_plus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
@@ -583,6 +589,7 @@ pub fn operation_plus(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a "&" operation on Data items.
 pub fn operation_and(left: &Data, right: &Data) -> Data {
     match (left, right) {
         (_, Data::Error(err)) | (Data::Error(err), _) => Data::Error(err.clone()),
@@ -591,6 +598,7 @@ pub fn operation_and(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a "|" operation on Data items.
 pub fn operation_or(left: &Data, right: &Data) -> Data {
     match (left, right) {
         (_, Data::Error(err)) | (Data::Error(err), _) => Data::Error(err.clone()),
@@ -599,6 +607,7 @@ pub fn operation_or(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a "-" operation on Data items.
 pub fn operation_minus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
@@ -613,6 +622,7 @@ pub fn operation_minus(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a "*" operation on Data items.
 pub fn operation_multiply(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
@@ -627,6 +637,7 @@ pub fn operation_multiply(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a ":" operation on Data items.
 pub fn operation_divide(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         let right_value = right.as_number();
@@ -642,7 +653,7 @@ pub fn operation_divide(left: &Data, right: &Data) -> Data {
     }
 }
 
-/// modulus (remainder) function
+/// Implements a "%" modulus (remainder) operation on Data items.
 pub fn operation_modulus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         match (left, right) {
@@ -657,6 +668,7 @@ pub fn operation_modulus(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a "<" (less) operation on Data items.
 pub fn operation_less(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() < right.as_number())
@@ -674,6 +686,7 @@ pub fn operation_less(left: &crate::datamodel::Data, right: &crate::datamodel::D
     }
 }
 
+/// Implements a "<=" (less or equal) operation on Data items.
 pub fn operation_less_equal(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() <= right.as_number())
@@ -691,6 +704,7 @@ pub fn operation_less_equal(left: &crate::datamodel::Data, right: &crate::datamo
     }
 }
 
+/// Implements a ">" (greater) operation on Data items.
 pub fn operation_greater(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() > right.as_number())
@@ -704,6 +718,7 @@ pub fn operation_greater(left: &crate::datamodel::Data, right: &crate::datamodel
     }
 }
 
+/// Implements a ">=" (greater or equal) operation on Data items.
 pub fn operation_greater_equal(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() >= right.as_number())
@@ -721,10 +736,12 @@ pub fn operation_greater_equal(left: &Data, right: &Data) -> Data {
     }
 }
 
+/// Implements a "==" (equal) operation on Data items.
 pub fn operation_equal(left: &Data, right: &Data) -> Data {
     Data::Boolean(left.eq(right))
 }
 
+/// Implements a "!=" (not equal) operation on Data items.
 pub fn operation_not_equal(left: &Data, right: &Data) -> Data {
     Data::Boolean(!left.eq(right))
 }
@@ -746,9 +763,13 @@ impl<T: Debug + 'static> ToAny for T {
 
 pub type SourceId = usize;
 
+/// A Wrapper for source script code with a unique Id for effective identification.
 #[derive(Clone)]
 pub struct SourceCode {
     pub source: String,
+
+    /// The unique Id of the script. Unique only inside the current life-cycle.\
+    /// Invalid if 0-
     pub source_id: SourceId,
 }
 
@@ -783,8 +804,7 @@ impl Display for SourceCode {
     }
 }
 
-/// Data Variant used to handle data type-safe but
-/// Datamodel-agnostic way.
+/// Data Variant used to handle data in a type-safe but Datamodel-agnostic way.
 #[derive(Clone)]
 pub enum Data {
     Integer(i64),
@@ -792,16 +812,19 @@ pub enum Data {
     String(String),
     Boolean(bool),
     Array(Vec<DataArc>),
+    /// A map, can also be used to store "object"-like data-structures.
     Map(HashMap<String, DataArc>),
     Null(),
     /// Special placeholder to indicate an error
     Error(String),
-    /// Special placeholder to indicate source (from FSM definition) that needs to be evaluated by the datamodel.
+    /// Special placeholder to indicate script source (from FSM definition) that needs to be evaluated by the datamodel.
     Source(SourceCode),
-    /// Special placeholder to indicate an empty content.
+    /// Special placeholder to indicate empty content.
     None(),
 }
 
+/// Create a Data::Source from a str with invalid id.\
+/// Should be used for calculated script source, that is not part of FSM definition.
 pub fn str_to_source(str: &str) -> Data {
     Data::Source(SourceCode::new(str, 0))
 }
@@ -934,30 +957,6 @@ impl Display for Data {
 }
 
 impl Data {
-    #[cfg(feature = "ExpressionEngine")]
-    pub fn operation(&self, op: Operator, right: &Data) -> Data {
-        match op {
-            Operator::Multiply => operation_multiply(self, right),
-            Operator::Divide => operation_divide(self, right),
-            Operator::Plus => operation_plus(self, right),
-            Operator::Minus => operation_minus(self, right),
-            Operator::Less => operation_less(self, right),
-            Operator::LessEqual => operation_less_equal(self, right),
-            Operator::Greater => operation_greater(self, right),
-            Operator::GreaterEqual => operation_greater_equal(self, right),
-            Operator::And => operation_and(self, right),
-            Operator::Or => operation_or(self, right),
-            Operator::Equal => operation_equal(self, right),
-            Operator::NotEqual => operation_not_equal(self, right),
-            Operator::Modulus => operation_modulus(self, right),
-            Operator::Assign | Operator::AssignUndefined | Operator::Not => {
-                // These "operation" are handled by explicit Expression-implementations
-                // and this line should never be reached.
-                Data::Error("Internal Error".to_string())
-            }
-        }
-    }
-
     pub fn as_number(&self) -> f64 {
         match self {
             Data::Integer(v) => *v as f64,

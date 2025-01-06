@@ -137,10 +137,10 @@ classDiagram
     <<Interface>> Datamodel
     class Datamodel{    
      +get_name() : String
-     +global() GlobalData
+     +global() GlobalDataArc
 
-     +initializeDataModel(Data)
-     +implement_mandatory_functionality(Fsm)
+     +initializeDataModel(Fsm, StateId, set_data)
+     +add_functions(Fsm)
      +initialize_read_only(name,value)
 
      +set(name, Data)
@@ -151,8 +151,8 @@ classDiagram
      +get_io_processors(): Map~String,EventIOProcessor~
 
      +execute(Script): String
-     +executeCondition(BooleanExpression): boolean
      +executeContent(Fsm, ExecutableContentId)
+     +execute_condition(BooleanExpression): boolean
      +execute_for_each(array_expression, item, index, body)
         
      +log(String)
@@ -160,8 +160,13 @@ classDiagram
 
     class ECMAScriptDatamodel {
      +data: DataStore
-     +global_data: GlobalData
+     +global_data: GlobalDataArc
      +context: boa_engine::Context
+    }
+
+    class RFsmExpressionDatamodel {
+        +global_data: GlobalDataArc
+        +compilations: HashMap
     }
 
     class BlockingQueue{
@@ -169,6 +174,7 @@ classDiagram
 
     NullDatamodel ..|> Datamodel
     ECMAScriptDatamodel ..|> Datamodel
+    RFsmExpressionDatamodel ..|> Datamodel
     
     class reader {
      +read_from_xml(xml) Fsm
