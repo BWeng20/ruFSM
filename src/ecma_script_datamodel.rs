@@ -89,6 +89,39 @@ fn js_to_string(jv: &JsValue, ctx: &mut Context) -> String {
     }
 }
 
+fn data_value_to_js(data: &Data, context: &mut Context) -> JsValue {
+    match data {
+        Data::None() => JsValue::Undefined,
+        Data::Null() => JsValue::Null,
+        Data::Integer(v) => JsValue::BigInt(JsBigInt::from(*v)),
+        Data::Double(v) => JsValue::Rational(*v),
+        Data::Boolean(v) => JsValue::Boolean(*v),
+        Data::String(v) => JsValue::String(js_string!(v.clone())),
+        Data::Array(v) => {
+            let js_array = JsArray::new(context);
+            for data in v {
+                let djs =
+                match data.lock() {
+                    Ok(l) => data_value_to_js(l.deref(), context),
+                    Err(_) => JsValue::Null,
+                };
+                let _ = js_array.push(djs, context);
+            }
+            JsValue::from(js_array)
+        }
+        Data::Map(v) => {
+            let js_map = JsMap::new(context);
+            for (key, d) in v {
+                let djs = data_value_to_js(&d.lock().unwrap(),context);
+                let _ = js_map.set(js_string!(key.clone()), djs, context);
+            }
+            JsValue::from(js_map)
+        }
+        Data::Error(_error) => JsValue::Null,
+        Data::Source(source) => JsValue::String(js_string!(source.source.clone())),
+    }
+}
+
 fn option_to_js_value(val: &Option<String>) -> JsValue {
     match val {
         Some(s) => JsValue::from(js_string!(s.clone())),
@@ -153,12 +186,11 @@ impl ECMAScriptDatamodel {
                         let len = ar.length(ctx).unwrap() as usize;
                         #[cfg(feature = "Debug")]
                         debug!("js2d array #{} >>", len);
-                        let dv = Vec::with_capacity(len);
+                        let mut dv = Vec::with_capacity(len);
                         for i in 0..len {
                             let v = ar.get(i, ctx).unwrap();
-                            if let Ok(_av) = Self::js_to_data_value(&v, ctx) {
-                                todo!()
-                                // dv.push(av)
+                            if let Ok(av) = Self::js_to_data_value(&v, ctx) {
+                                dv.push(create_data_arc(av))
                             }
                         }
                         #[cfg(feature = "Debug")]
@@ -310,32 +342,7 @@ impl ECMAScriptDatamodel {
     }
 
     pub fn data_value_to_js(&mut self, data: &Data) -> JsValue {
-        match data {
-            Data::None() => JsValue::Undefined,
-            Data::Null() => JsValue::Null,
-            Data::Integer(v) => JsValue::BigInt(JsBigInt::from(*v)),
-            Data::Double(v) => JsValue::Rational(*v),
-            Data::Boolean(v) => JsValue::Boolean(*v),
-            Data::String(v) => JsValue::String(js_string!(v.clone())),
-            Data::Array(v) => {
-                let js_array = JsArray::new(&mut self.context);
-                for data in v {
-                    let djs = self.data_arc_to_js(data);
-                    let _ = js_array.push(djs, &mut self.context);
-                }
-                JsValue::from(js_array)
-            }
-            Data::Map(v) => {
-                let js_map = JsMap::new(&mut self.context);
-                for (key, d) in v {
-                    let djs = self.data_value_to_js(&d.lock().unwrap());
-                    let _ = js_map.set(js_string!(key.clone()), djs, &mut self.context);
-                }
-                JsValue::from(js_map)
-            }
-            Data::Error(_error) => JsValue::Null,
-            Data::Source(source) => JsValue::String(js_string!(source.source.clone())),
-        }
+        data_value_to_js( data, &mut self.context )
     }
 
     fn call_action(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
@@ -363,18 +370,18 @@ impl ECMAScriptDatamodel {
             }
         }
         let r = if let Some(fsm) = ctx.get_data::<FsmJSWrapper>() {
-            fsm.global_data.lock().unwrap().actions.execute(
+            let global_data =fsm.global_data.lock().unwrap();
+            global_data.actions.execute(
                 action_name.as_str(),
                 &arg_list,
-                &fsm.global_data.lock().unwrap(),
+                &global_data,
             )
         } else {
             Err("Failed".to_string())
         };
         match r {
-            Ok(_v) => {
-                // Ok(self.data_value_to_js(&v)),
-                todo!();
+            Ok(v) => {
+                Ok(data_value_to_js(&v, ctx))
             }
             Err(v) => Err(JsError::from_opaque(JsValue::from(js_string!(v)))),
         }
