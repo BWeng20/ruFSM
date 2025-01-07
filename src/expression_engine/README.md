@@ -105,13 +105,13 @@ There is currently no way to set this flag from the expression language.
 
 Custom actions via the trait "Action" can be called like methods.
 
-_Call them like global functions_
+_You can call them like global functions_
 
 ```
   length("a string")
 ```
 
-_Call them like member-functions_<br/>
+_Or you can call them like member-functions_<br/>
 In this case, the value on which this action is called is given as first argument.
 This works for all actions with at least one argument.
 
@@ -128,3 +128,8 @@ There are several pre-defined Actions:
 | isDefined | One argument of any kind.                                                                                                                                                                          | Data::Boolean | Technical, this checks if the argument is not `Data::Error` or `Data::None`.                        |
 | indexOf   | Two arguments of type Data::String.                                                                                                                                                                | Data::Integer | Get the index of the second string inside the first one. Returns -1, if the string was not found.   |
 | In        | One argument of type Data::String.                                                                                                                                                                 | Data::Boolean | Implements SCXML "In" function. Returns _true_, if the given state is in the current configuration. |
+
+### Control Structures 
+
+This Expression Language has no control-structures like a script language.<br/>
+For If/For/While constructs use the SCXML Executable Content elements with this functionality.
