@@ -19,6 +19,13 @@ use std::{println as warn, println as debug};
 #[cfg(all(not(test), feature = "Debug", feature = "EnvLog"))]
 use log::{debug, warn};
 
+#[cfg(all(not(test), not(feature = "EnvLog")))]
+use std::{println as error, println as info};
+
+#[cfg(all(not(test), feature = "EnvLog"))]
+use log::{error, info};
+
+
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
 use boa_engine::object::builtins::{JsArray, JsMap};

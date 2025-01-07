@@ -21,9 +21,6 @@ use log::{error, info};
 #[cfg(test)]
 use std::{println as error, println as info};
 
-#[cfg(all(feature = "Debug", feature = "EnvLog"))]
-use log::debug;
-
 #[cfg(feature = "json-config")]
 use serde::Deserialize;
 #[cfg(feature = "yaml-config")]
