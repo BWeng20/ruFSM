@@ -530,22 +530,19 @@ impl ExpressionParser {
 
 #[cfg(test)]
 mod tests {
-    use crate::datamodel::{create_data_arc, create_global_data_arc, Data, GlobalDataArc};
-    use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
+    use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
-    use crate::fsm::GlobalData;
     use std::collections::HashMap;
     use std::ops::Deref;
-    use std::sync::Mutex;
 
     #[test]
     fn parser_can_parse_a_simple_expression_without_identifiers() {
-        let data = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let global_data = create_global_data_arc();
 
         let r = ExpressionParser::parse("12 * 3.4".to_string()).unwrap();
         print!("Parsed: {:?}", r);
-        let result_data = r.execute(&mut data.global_data.lock().unwrap(), true);
+        let result_data = r.execute(&mut global_data.lock().unwrap(), true);
         println!(" => {:?}", result_data);
         assert!(
             result_data.eq(&ExpressionResult::Ok(create_data_arc(Data::Double(
@@ -555,24 +552,24 @@ mod tests {
 
         let r = ExpressionParser::parse("(12 * 2)".to_string()).unwrap();
         print!("Parsed: {:?}", r);
-        let result_data = r.execute(&mut data.global_data.lock().unwrap(), true);
+        let result_data = r.execute(&mut global_data.lock().unwrap(), true);
         println!(" => {:?}", result_data);
         assert!(result_data.eq(&ExpressionResult::Ok(create_data_arc(Data::Integer(24)))));
 
         let r = ExpressionParser::parse("(1 * 2) + (12 * 2)".to_string()).unwrap();
         print!("Parsed: {:?}", r);
-        let result_data = r.execute(&mut data.global_data.lock().unwrap(), true);
+        let result_data = r.execute(&mut global_data.lock().unwrap(), true);
         println!(" => {:?}", result_data);
         assert!(result_data.eq(&ExpressionResult::Ok(create_data_arc(Data::Integer(26)))));
     }
 
     #[test]
     fn expressions_prioritize_multiplication_division_operations() {
-        let data = RFsmExpressionDatamodel::new(GlobalDataArc::new(Mutex::from(GlobalData::new())));
+        let global_data = create_global_data_arc();
 
         let r = ExpressionParser::parse("12 + 2 * 4".to_string()).unwrap();
         print!("Parsed: {:?}", r);
-        let result_data = r.execute(&mut data.global_data.lock().unwrap(), true);
+        let result_data = r.execute(&mut global_data.lock().unwrap(), true);
         println!(" => {:?}", result_data);
         assert!(
             result_data.eq(&ExpressionResult::Ok(create_data_arc(Data::Integer(
@@ -583,7 +580,7 @@ mod tests {
         // Check that forced "()" work
         let r = ExpressionParser::parse("(12 + 2) * 4".to_string()).unwrap();
         print!("Parsed: {:?}", r);
-        let result_data = r.execute(&mut data.global_data.lock().unwrap(), true);
+        let result_data = r.execute(&mut global_data.lock().unwrap(), true);
         println!(" => {:?}", result_data);
         assert!(
             result_data.eq(&ExpressionResult::Ok(create_data_arc(Data::Integer(
@@ -608,7 +605,7 @@ mod tests {
         let r2 = ExpressionParser::parse("A.b.c".to_string()).unwrap();
         println!("Parsed: {:?}", r2);
 
-        let data = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let global_data = create_global_data_arc();
         let mut hs1 = HashMap::new();
         let mut hs2 = HashMap::new();
         hs2.insert(
@@ -617,12 +614,12 @@ mod tests {
         );
         hs1.insert("b".to_string(), create_data_arc(Data::Map(hs2)));
 
-        data.global_data
+        global_data
             .lock()
             .unwrap()
             .data
             .set_undefined("A".to_string(), Data::Map(hs1));
-        let rs1 = r1.execute(&mut data.global_data.lock().unwrap(), true);
+        let rs1 = r1.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs1);
         assert!(if let ExpressionResult::Ok(_x) = rs1 {
             true
@@ -630,7 +627,7 @@ mod tests {
             false
         });
 
-        let rs2 = r2.execute(&mut data.global_data.lock().unwrap(), true);
+        let rs2 = r2.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs2);
         assert_eq!(
             rs2,
@@ -643,17 +640,42 @@ mod tests {
         let r1 = ExpressionParser::parse("A=2*6".to_string()).unwrap();
         println!("Parsed: {:?}", r1);
 
-        let data = RFsmExpressionDatamodel::new(create_global_data_arc());
-        // data.values.insert( "A".to_string(), Data::Integer(1));
+        let global_data = create_global_data_arc();
 
-        let rs1 = r1.execute(&mut data.global_data.lock().unwrap(), true);
+        let rs1 = r1.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs1);
         assert_eq!(
             rs1,
             ExpressionResult::Ok(create_data_arc(Data::Integer(12)))
         );
         assert_eq!(
-            data.global_data
+            global_data
+                .lock()
+                .unwrap()
+                .data
+                .get(&"A".to_string())
+                .unwrap()
+                .lock()
+                .unwrap()
+                .deref(),
+            &Data::Integer(12)
+        );
+    }
+
+    #[test]
+    fn can_parse_multiple_expressions() {
+        let r1 = ExpressionParser::parse("X?=2;A=X*6".to_string()).unwrap();
+        println!("Parsed: {:?}", r1);
+
+        let global_data = create_global_data_arc();
+        let rs1 = r1.execute(&mut global_data.lock().unwrap(), true);
+        println!("==> {:?}", rs1);
+        assert_eq!(
+            rs1,
+            ExpressionResult::Ok(create_data_arc(Data::Integer(12)))
+        );
+        assert_eq!(
+            global_data
                 .lock()
                 .unwrap()
                 .data
