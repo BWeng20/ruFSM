@@ -531,7 +531,7 @@ impl ExpressionParser {
 #[cfg(test)]
 mod tests {
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
-    use crate::expression_engine::expressions::ExpressionResult;
+    use crate::expression_engine::expressions::{get_expression_as, ExpressionIndex, ExpressionResult};
     use crate::expression_engine::parser::ExpressionParser;
     use std::collections::HashMap;
     use std::ops::Deref;
@@ -686,5 +686,12 @@ mod tests {
                 .deref(),
             &Data::Integer(12)
         );
+    }
+
+    #[test]
+    fn can_parse_array_index() {
+        let r = ExpressionParser::parse("[1,2,3,4][1]".to_string()).unwrap();
+        println!("Parsed: {:?}", r);
+        assert!(get_expression_as::<ExpressionIndex>(r.deref()).is_some());
     }
 }

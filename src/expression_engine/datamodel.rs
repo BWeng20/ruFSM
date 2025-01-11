@@ -1,6 +1,6 @@
 //! Implements the SCXML Data model for rFSM Expressions.\
 
-use crate::actions::Action;
+use crate::actions::{Action, ActionWrapper};
 use log::error;
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -9,9 +9,10 @@ use std::ops::Deref;
 use log::debug;
 
 use crate::datamodel::{
-    create_data_arc, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc, SourceCode,
-    EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
-    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
+    create_data_arc, data_to_string, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
+    SourceCode, EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME,
+    EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID,
+    EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::SYS_IO_PROCESSORS;
 use crate::expression_engine::expressions::{
@@ -158,14 +159,18 @@ impl RFsmExpressionDatamodel {
         }
     }
 
-    pub fn add_internal_functions(&mut self, fsm: &mut Fsm) {
-        let mut guard = self.global_data.lock().unwrap();
-        let actions = &mut guard.actions;
-        actions.add_action("In", Box::new(InAction::new(fsm)));
+    pub fn add_internal_functions_to_wrapper(actions: &mut ActionWrapper) {
         actions.add_action("indexOf", Box::new(IndexOfAction {}));
         actions.add_action("length", Box::new(LengthAction {}));
         actions.add_action("isDefined", Box::new(IsDefinedAction {}));
         actions.add_action("abs", Box::new(AbsAction {}));
+        actions.add_action("toString", Box::new(ToStringAction {}));
+    }
+
+    pub fn add_internal_fsm_functions(&mut self, fsm: &mut Fsm) {
+        let mut guard = self.global_data.lock().unwrap();
+        Self::add_internal_functions_to_wrapper(&mut guard.actions);
+        guard.actions.add_action("In", Box::new(InAction::new(fsm)));
     }
 
     fn resolve_source_data(&mut self, data: &Data) -> Result<DataArc, String> {
@@ -226,6 +231,26 @@ impl Action for InAction {
             }
         } else {
             Err("Wrong arguments for 'In'.".to_string())
+        }
+    }
+
+    fn get_copy(&self) -> Box<dyn Action> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct ToStringAction {}
+
+impl Action for ToStringAction {
+    fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
+        if arguments.len() == 1 {
+            match data_to_string(&arguments[0]) {
+                Ok(s) => Ok(Data::String(s)),
+                Err(err) => Err(err),
+            }
+        } else {
+            Err("Wrong number of arguments for 'toString'.".to_string())
         }
     }
 
@@ -339,7 +364,7 @@ impl Datamodel for RFsmExpressionDatamodel {
     }
 
     fn add_functions(&mut self, fsm: &mut Fsm) {
-        self.add_internal_functions(fsm);
+        self.add_internal_fsm_functions(fsm);
     }
 
     fn set_ioprocessors(&mut self) {
@@ -643,37 +668,24 @@ mod tests {
     use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
-    use crate::fsm::Fsm;
     use crate::init_logging;
     use std::collections::HashMap;
 
     #[test]
     fn index_of_works() {
-        let mut fsm = Fsm::new();
-        let mut ec = RFsmExpressionDatamodel::new(create_global_data_arc());
-        ec.add_internal_functions(&mut fsm);
+        init_logging();
+        let gd = create_global_data_arc();
+        RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         // As normal function.
-        let rs = ExpressionParser::execute(
-            "indexOf('abc', 'bc')".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("indexOf('abc', 'bc')".to_string(), &mut gd.lock().unwrap());
 
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Integer(1i64)))
-        );
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(1i64))));
 
         // As Member function.
-        let rs = ExpressionParser::execute(
-            "'abc'.indexOf('bc')".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("'abc'.indexOf('bc')".to_string(), &mut gd.lock().unwrap());
 
-        assert_eq!(
-            rs,
-            ExpressionResult::Ok(create_data_arc(Data::Integer(1i64)))
-        );
+        assert_eq!(rs, Ok(create_data_arc(Data::Integer(1i64))));
 
         println!("{:?}", rs);
     }
@@ -681,26 +693,19 @@ mod tests {
     #[test]
     fn length_works() {
         init_logging();
-        let mut fsm = Fsm::new();
-        let mut ec = RFsmExpressionDatamodel::new(create_global_data_arc());
-        ec.add_internal_functions(&mut fsm);
+        let gd = create_global_data_arc();
+        RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         // As normal function.
         // On text
-        let rs = ExpressionParser::execute(
-            "length('abc')".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("length('abc')".to_string(), &mut gd.lock().unwrap());
         assert_eq!(
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Integer(3i64)))
         );
 
         // On an array
-        let rs = ExpressionParser::execute(
-            "length([1,2,3,4])".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("length([1,2,3,4])".to_string(), &mut gd.lock().unwrap());
         assert_eq!(
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Integer(4i64)))
@@ -712,26 +717,19 @@ mod tests {
         m.insert("c".to_string(), create_data_arc(Data::Integer(4i64)));
         m.insert("d".to_string(), create_data_arc(Data::Integer(3i64)));
         m.insert("e".to_string(), create_data_arc(Data::Integer(2i64)));
-        ec.global_data
-            .lock()
+        gd.lock()
             .unwrap()
             .data
             .map
             .insert("v1".to_string(), create_data_arc(Data::Map(m)));
-        let rs = ExpressionParser::execute(
-            "v1.length()".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("v1.length()".to_string(), &mut gd.lock().unwrap());
         assert_eq!(
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Integer(5i64)))
         );
 
         // As Member function.
-        let rs = ExpressionParser::execute(
-            "'abc'.length()".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("'abc'.length()".to_string(), &mut gd.lock().unwrap());
         assert_eq!(
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Integer(3i64)))
@@ -742,21 +740,40 @@ mod tests {
 
     #[test]
     fn abs_of_works() {
-        let mut fsm = Fsm::new();
-        let mut ec = RFsmExpressionDatamodel::new(create_global_data_arc());
-        ec.add_internal_functions(&mut fsm);
+        init_logging();
+        let gd = create_global_data_arc();
+        RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         // As normal function.
-        let rs = ExpressionParser::execute(
-            "abs(-102.111)".to_string(),
-            &mut ec.global_data.lock().unwrap(),
-        );
+        let rs = ExpressionParser::execute("abs(-102.111)".to_string(), &mut gd.lock().unwrap());
 
         assert_eq!(rs, Ok(create_data_arc(Data::Double(102.111))));
 
         // As Member function.
-        let rs = ExpressionParser::execute_str("abs(-124)", &mut ec.global_data.lock().unwrap());
+        let rs = ExpressionParser::execute_str("abs(-124)", &mut gd.lock().unwrap());
 
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(124))));
+    }
+
+    #[test]
+    fn to_string_works() {
+        init_logging();
+        let gd = create_global_data_arc();
+        RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
+
+        let rs = ExpressionParser::execute("toString(-102)".to_string(), &mut gd.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::String("-102".to_string()))));
+
+        let rs = ExpressionParser::execute(
+            "[1,2,'abc',[1.2]].toString()".to_string(),
+            &mut gd.lock().unwrap(),
+        );
+        assert_eq!(
+            rs,
+            Ok(create_data_arc(Data::String("1,2,abc,1.2".to_string())))
+        );
+
+        let rs = ExpressionParser::execute("'abcdef'.toString()".to_string(), &mut gd.lock().unwrap());
+        assert_eq!(rs, Ok(create_data_arc(Data::String("abcdef".to_string()))));
     }
 }

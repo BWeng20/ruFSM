@@ -25,7 +25,6 @@ use std::{println as error, println as info};
 #[cfg(all(not(test), feature = "EnvLog"))]
 use log::{error, info};
 
-
 use crate::ArgOption;
 use boa_engine::context::ContextBuilder;
 use boa_engine::object::builtins::{JsArray, JsMap};
@@ -100,8 +99,7 @@ fn data_value_to_js(data: &Data, context: &mut Context) -> JsValue {
         Data::Array(v) => {
             let js_array = JsArray::new(context);
             for data in v {
-                let djs =
-                match data.lock() {
+                let djs = match data.lock() {
                     Ok(l) => data_value_to_js(l.deref(), context),
                     Err(_) => JsValue::Null,
                 };
@@ -112,7 +110,7 @@ fn data_value_to_js(data: &Data, context: &mut Context) -> JsValue {
         Data::Map(v) => {
             let js_map = JsMap::new(context);
             for (key, d) in v {
-                let djs = data_value_to_js(&d.lock().unwrap(),context);
+                let djs = data_value_to_js(&d.lock().unwrap(), context);
                 let _ = js_map.set(js_string!(key.clone()), djs, context);
             }
             JsValue::from(js_map)
@@ -342,7 +340,7 @@ impl ECMAScriptDatamodel {
     }
 
     pub fn data_value_to_js(&mut self, data: &Data) -> JsValue {
-        data_value_to_js( data, &mut self.context )
+        data_value_to_js(data, &mut self.context)
     }
 
     fn call_action(_this: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
@@ -370,19 +368,15 @@ impl ECMAScriptDatamodel {
             }
         }
         let r = if let Some(fsm) = ctx.get_data::<FsmJSWrapper>() {
-            let global_data =fsm.global_data.lock().unwrap();
-            global_data.actions.execute(
-                action_name.as_str(),
-                &arg_list,
-                &global_data,
-            )
+            let global_data = fsm.global_data.lock().unwrap();
+            global_data
+                .actions
+                .execute(action_name.as_str(), &arg_list, &global_data)
         } else {
             Err("Failed".to_string())
         };
         match r {
-            Ok(v) => {
-                Ok(data_value_to_js(&v, ctx))
-            }
+            Ok(v) => Ok(data_value_to_js(&v, ctx)),
             Err(v) => Err(JsError::from_opaque(JsValue::from(js_string!(v)))),
         }
     }

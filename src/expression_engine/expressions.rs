@@ -12,9 +12,10 @@ use std::println as debug;
 use log::debug;
 
 use crate::datamodel::{
-    create_data_arc, numeric_to_integer, operation_and, operation_divide, operation_equal, operation_greater,
-    operation_greater_equal, operation_less, operation_less_equal, operation_minus, operation_modulus,
-    operation_multiply, operation_not_equal, operation_or, operation_plus, Data, DataArc, GlobalDataLock, ToAny,
+    create_data_arc, data_arc_to_string, numeric_to_integer, operation_and, operation_divide, operation_equal,
+    operation_greater, operation_greater_equal, operation_less, operation_less_equal, operation_minus,
+    operation_modulus, operation_multiply, operation_not_equal, operation_or, operation_plus, Data, DataArc,
+    GlobalDataLock, ToAny,
 };
 use crate::expression_engine::lexer::Operator;
 
@@ -272,44 +273,22 @@ impl Expression for ExpressionIndex {
                     | Data::Boolean(_)
                     | Data::Source(_)
                     | Data::Null()
-                    | Data::None() => Err(format!("Can't apply index on value '{}'", data)),
-                    Data::Map(m) => {
-                        let index_guard = index_value.lock().unwrap();
-                        let index_data = index_guard.deref();
-                        match index_data {
-                            Data::Source(key) => match m.get(key.source.as_str()) {
-                                None => {
-                                    if allow_undefined {
-                                        let data_arc = create_data_arc(Data::None());
-                                        m.insert(key.as_str().to_string(), data_arc.clone());
-                                        Ok(data_arc)
-                                    } else {
-                                        Err(format!("Index {} not found", key))
-                                    }
+                    | Data::None() => Err(format!("Can't apply index on '{}'", data)),
+                    Data::Map(m) => match data_arc_to_string(&index_value) {
+                        Ok(key) => match m.get(&key) {
+                            None => {
+                                if allow_undefined {
+                                    let data_arc = create_data_arc(Data::None());
+                                    m.insert(key, data_arc.clone());
+                                    Ok(data_arc)
+                                } else {
+                                    Err(format!("Index '{}' not found", key))
                                 }
-                                Some(member) => Ok(member.clone()),
-                            },
-                            Data::String(key) => match m.get(key) {
-                                None => {
-                                    if allow_undefined {
-                                        m.insert(key.clone(), create_data_arc(Data::None()));
-                                        Ok(m.get(key).unwrap().clone())
-                                    } else {
-                                        Err(format!("Index {} not found", key))
-                                    }
-                                }
-                                Some(member) => Ok(member.clone()),
-                            },
-                            Data::Boolean(_)
-                            | Data::Array(_)
-                            | Data::Map(_)
-                            | Data::Integer(_)
-                            | Data::Double(_)
-                            | Data::Error(_)
-                            | Data::Null()
-                            | Data::None() => Err(format!("Illegal index type '{}'", index_value)),
-                        }
-                    }
+                            }
+                            Some(member) => Ok(member.clone()),
+                        },
+                        Err(err) => Err(err),
+                    },
                     Data::Array(m) => match numeric_to_integer(index_value.lock().unwrap().deref()) {
                         Some(index) => match m.get(index as usize) {
                             None => Err(format!("Index not found: {} (len={})", index, m.len())),

@@ -535,6 +535,63 @@ impl Datamodel for NullDatamodel {
     }
 }
 
+/// Converts the Data item to a string.
+pub fn data_arc_to_string(data: &DataArc) -> Result<String, String> {
+    match data.arc.try_lock() {
+        Ok(val) => data_to_string(val.deref()),
+        Err(_) => Err("locked".to_string()),
+    }
+}
+
+/// Converts the Data item to a string.
+pub fn data_to_string(data: &Data) -> Result<String, String> {
+    match data {
+        Data::Error(err) => Err(err.clone()),
+        Data::None() => Ok("none".to_string()),
+        Data::Null() => Ok("null".to_string()),
+        Data::String(s) => Ok(s.clone()),
+        Data::Source(s) => Ok(s.source.clone()),
+        Data::Integer(i) => Ok(i.to_string()),
+        Data::Double(f) => Ok(f.to_string()),
+        Data::Boolean(b) => {
+            let bs = if *b { "true" } else { "false" };
+            Ok(bs.to_string())
+        }
+        Data::Array(a) => {
+            let mut v = String::with_capacity(50);
+            for da in a {
+                match data_arc_to_string(da) {
+                    Ok(da_string) => {
+                        if !v.is_empty() {
+                            v.push(',');
+                        }
+                        v.push_str(&da_string);
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+            Ok(v)
+        }
+        Data::Map(m) => {
+            let mut v = String::with_capacity(50);
+            for (key, data_arc) in m {
+                if !v.is_empty() {
+                    v.push(',');
+                }
+                v.push_str(key);
+                v.push_str(":");
+                match data_arc_to_string(data_arc) {
+                    Ok(s) => {
+                        v.push_str(s.as_str());
+                    }
+                    Err(err) => return Err(err),
+                }
+            }
+            Ok(v)
+        }
+    }
+}
+
 /// Implements a "+" operation on Data items.
 pub fn operation_plus(left: &Data, right: &Data) -> Data {
     if left.is_numeric() && right.is_numeric() {
