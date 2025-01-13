@@ -1,12 +1,13 @@
-//! Implements the SCXML Data model for rFSM Expressions.\
+//! Implements the SCXML Data model for rFSM Expressions.
 
 use crate::actions::{Action, ActionWrapper};
-use log::error;
 use std::collections::HashMap;
 use std::ops::Deref;
 
+use crate::common::{error, info};
+
 #[cfg(feature = "Debug")]
-use log::debug;
+use crate::common::debug;
 
 use crate::datamodel::{
     create_data_arc, data_to_string, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
@@ -165,6 +166,7 @@ impl RFsmExpressionDatamodel {
         actions.add_action("isDefined", Box::new(IsDefinedAction {}));
         actions.add_action("abs", Box::new(AbsAction {}));
         actions.add_action("toString", Box::new(ToStringAction {}));
+        actions.add_action("log", Box::new(LogAction {}));
     }
 
     pub fn add_internal_fsm_functions(&mut self, fsm: &mut Fsm) {
@@ -351,6 +353,28 @@ impl Action for IsDefinedAction {
     }
 }
 
+#[derive(Clone)]
+pub struct LogAction {}
+impl Action for LogAction {
+    fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
+        if arguments.len() == 1 {
+            match data_to_string(&arguments[0]) {
+                Ok(message) => {
+                    info!("{}", message);
+                    Ok(Data::None())
+                }
+                Err(err) => Err(err),
+            }
+        } else {
+            Err("Wrong number of arguments for 'log'.".to_string())
+        }
+    }
+
+    fn get_copy(&self) -> Box<dyn Action> {
+        Box::new(self.clone())
+    }
+}
+
 impl Datamodel for RFsmExpressionDatamodel {
     fn global(&mut self) -> &mut GlobalDataArc {
         &mut self.global_data
@@ -447,17 +471,13 @@ impl Datamodel for RFsmExpressionDatamodel {
         let data_value = match &event.param_values {
             None => match &event.content {
                 None => self.null_data.clone(),
-                Some(c) => {
-                    let cd_guard = c.lock().unwrap();
-                    let cd = cd_guard.deref();
-                    match self.resolve_source_data(cd) {
-                        Ok(val) => val,
-                        Err(err) => {
-                            error!("Can't eval event content '{}': {}", cd, err);
-                            self.null_data.clone()
-                        }
+                Some(cd) => match self.resolve_source_data(cd) {
+                    Ok(val) => val,
+                    Err(err) => {
+                        error!("Can't eval event content '{}': {}", cd, err);
+                        self.null_data.clone()
                     }
-                }
+                },
             },
             Some(pv) => {
                 let mut data = HashMap::with_capacity(pv.len());
@@ -664,11 +684,11 @@ impl Datamodel for RFsmExpressionDatamodel {
 
 #[cfg(test)]
 mod tests {
+    use crate::common::init_logging;
+    use crate::datamodel::expression_engine::RFsmExpressionDatamodel;
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
-    use crate::expression_engine::datamodel::RFsmExpressionDatamodel;
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
-    use crate::init_logging;
     use std::collections::HashMap;
 
     #[test]

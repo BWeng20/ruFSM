@@ -7,23 +7,20 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "Debug_Reader")]
-#[cfg(test)]
-use std::println as debug;
+use crate::common::debug;
 
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, mem, str, string::String};
 
+use crate::common::info;
+use crate::common::ArgOption;
 use crate::datamodel::{create_data_arc, Data, SourceCode};
-use crate::ArgOption;
-#[cfg(feature = "Debug_Reader")]
-#[cfg(not(test))]
-use log::debug;
-use log::info;
 use quick_xml::events::attributes::Attributes;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
+use url::Url;
 
 use crate::executable_content::{
     get_opt_executable_content_as, get_safe_executable_content_as, parse_duration_to_milliseconds, Assign, Cancel,
@@ -671,27 +668,31 @@ impl ReaderState {
     }
 
     fn read_from_uri(&mut self, uri: &String) -> Result<String, String> {
-        let url_result = reqwest::Url::parse(uri);
+        let url_result = Url::parse(uri);
         match url_result {
-            Ok(url) => {
-                #[cfg(feature = "Debug_Reader")]
-
-                debug!("read from URL {}", url);
-
-                match url.scheme().to_ascii_lowercase().as_str() {
-                    "file" => self.read_from_relative_path(url.path()),
-                    &_ => {
-                        let resp = reqwest::blocking::get(url);
-                        match resp {
-                            Ok(r) => match r.text() {
-                                Ok(s) => Ok(s),
-                                Err(e) => Err(format!("Failed to decode from {}. {}", uri, e)),
+            Ok(url) => match url.scheme().to_ascii_lowercase().as_str() {
+                "file" => self.read_from_relative_path(url.path()),
+                &_ => {
+                    #[cfg(feature = "Debug_Reader")]
+                    debug!("read from URL {}", url);
+                    let resp = ureq::get(uri).call();
+                    match resp {
+                        Ok(r) => match r.status() {
+                            200..=299 => match r.into_string() {
+                                Ok(content) => Ok(content),
+                                Err(err) => Err(format!("Failed to load from {}. {}", uri, err)),
                             },
-                            Err(e) => Err(format!("Failed to download {}. {}", uri, e)),
-                        }
+                            _ => Err(format!(
+                                "Failed to load from {}. Status {} {}",
+                                uri,
+                                r.status(),
+                                r.status_text()
+                            )),
+                        },
+                        Err(e) => Err(format!("Failed to download {}. {}", uri, e)),
                     }
                 }
-            }
+            },
             Err(_e) => {
                 #[cfg(feature = "Debug_Reader")]
                 debug!(
@@ -1998,7 +1999,7 @@ pub fn parse_from_xml_with_includes(xml: String, include_paths: &[PathBuf]) -> R
 
 #[cfg(test)]
 mod tests {
-    use log::debug;
+    use crate::common::debug;
 
     #[test]
     #[should_panic]
@@ -2021,7 +2022,7 @@ mod tests {
     fn script_with_src_should_load_file() {
         let r = crate::scxml_reader::parse_from_xml(
             "<scxml initial='Main'><state id='Main'>\
-    <transition><script src='xml/example/script.js'></script></transition></state></scxml>"
+    <transition><script src='test/script.js'></script></transition></state></scxml>"
                 .to_string(),
         );
         assert!(r.is_ok());
@@ -2086,7 +2087,7 @@ mod tests {
     #[test]
     fn xinclude_should_read() {
         let _r = crate::scxml_reader::parse_from_xml(
-            "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text'/></state></scxml>".to_string(),
+            "<scxml><state><include href='test/include.scxml' parse='text'/></state></scxml>".to_string(),
         );
     }
 

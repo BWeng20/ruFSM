@@ -1,3 +1,5 @@
+//! Functions for automated test of FSMs.
+
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -10,16 +12,7 @@ use std::time::Duration;
 use std::{process, thread};
 
 use crate::actions::ActionWrapper;
-use log::warn;
-
-#[cfg(all(not(test), feature = "Debug", not(feature = "EnvLog")))]
-use std::{println as error, println as info};
-
-#[cfg(all(not(test), feature = "Debug", feature = "EnvLog"))]
-use log::{error, info};
-
-#[cfg(test)]
-use std::{println as error, println as info};
+use crate::common::{error, info, warn};
 
 #[cfg(feature = "json-config")]
 use serde::Deserialize;

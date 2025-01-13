@@ -4,25 +4,17 @@
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::atomic::Ordering;
-#[cfg(test)]
-use std::{println as info, println as warn};
-
-use log::error;
 
 #[cfg(feature = "Debug")]
-use log::debug;
-
-#[cfg(not(test))]
-use log::{info, warn};
-
+use crate::common::debug;
+use crate::common::{error, info, warn};
 use crate::datamodel::{str_to_source, Data, Datamodel, ToAny, SCXML_EVENT_PROCESSOR};
+use crate::event_io_processor::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
 use crate::expression_engine::lexer::ExpressionLexer;
 use crate::fsm::{
-    opt_vec_to_string, vec_to_string, CommonContent, ExecutableContentId, Fsm, ParamPair, Parameter,
+    opt_vec_to_string, vec_to_string, CommonContent, Event, EventType, ExecutableContentId, Fsm, ParamPair, Parameter,
     PLATFORM_ID_COUNTER,
 };
-use crate::scxml_event_io_processor::SCXML_TARGET_INTERNAL;
-use crate::{get_global, Event, EventType};
 
 pub const TARGET_SCXML_EVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#SCXMLEventProcessor";
 
@@ -47,6 +39,13 @@ pub const TYPE_NAMES: [&str; 9] = [
     "cancel",
     "assign",
 ];
+
+/// Gets the global data store from datamodel.
+macro_rules! get_global {
+    ($x:expr) => {
+        $x.global().lock().unwrap()
+    };
+}
 
 pub trait ExecutableContent: ToAny + Debug + Send {
     fn execute(&self, datamodel: &mut dyn Datamodel, fsm: &Fsm) -> bool;
@@ -429,11 +428,6 @@ impl ExecutableContent for ForEach {
         } else {
             self.index.clone()
         };
-        #[cfg(feature = "Debug")]
-        {
-            debug!("ForEach::execute:");
-            datamodel.global().lock().unwrap().data.dump();
-        }
         datamodel.execute_for_each(&self.array, &self.item, &idx, &mut |datamodel| -> bool {
             if self.content != 0 {
                 for e in fsm.executableContent.get(&self.content).unwrap() {
@@ -573,7 +567,9 @@ impl ExecutableContent for SendParameters {
 
         // A conformant document MUST NOT specify "namelist" or <param> with <content>.
         if self.content.is_some() {
-            content = datamodel.evaluate_content(&self.content);
+            if let Some(content_data) = datamodel.evaluate_content(&self.content) {
+                content = Some(content_data.lock().unwrap().clone())
+            }
         } else {
             datamodel.evaluate_params(&self.params, &mut data_vec);
             for name in self.name_list.as_slice() {
