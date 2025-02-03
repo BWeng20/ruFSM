@@ -1,5 +1,11 @@
 //! Defines the API used to access the data models.
 
+use crate::common::{debug, error, info, warn};
+use crate::expression_engine::lexer::{ExpressionLexer, Token};
+use crate::fsm::{
+    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter, State,
+    StateId,
+};
 use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -8,26 +14,21 @@ use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
-#[cfg(all(feature = "Debug", feature = "EnvLog"))]
-use log::warn;
-
-#[cfg(all(feature = "Debug", not(feature = "EnvLog")))]
-use std::println as warn;
-
-#[cfg(not(feature = "EnvLog"))]
-use std::{println as info, println as debug, println as error};
-
-#[cfg(feature = "EnvLog")]
-use log::{debug, error, info};
-
-use crate::expression_engine::lexer::{ExpressionLexer, Token};
-use crate::fsm::{
-    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter, State,
-    StateId,
-};
-
 use crate::actions::ActionMap;
 use crate::event_io_processor::EventIOProcessor;
+
+#[cfg(feature = "ECMAScriptModel")]
+pub mod ecma_script;
+
+#[cfg(feature = "RfsmExpressionModel")]
+pub mod expression_engine;
+
+/// Gets the global data store from datamodel.
+macro_rules! get_global {
+    ($x:expr) => {
+        $x.global().lock().unwrap()
+    };
+}
 
 pub const DATAMODEL_OPTION_PREFIX: &str = "datamodel:";
 
@@ -37,7 +38,7 @@ pub const NULL_DATAMODEL_LC: &str = "null";
 pub const SCXML_INVOKE_TYPE: &str = "http://www.w3.org/TR/scxml";
 
 /// W3C: Processors MAY define short form notations as an authoring convenience
-/// (e.g., "scxml" as equivalent to http://www.w3.org/TR/scxml/).
+/// (e.g., "scxml" as equivalent to <http://www.w3.org/TR/scxml> ).
 pub const SCXML_INVOKE_TYPE_SHORT: &str = "scxml";
 
 pub const SCXML_EVENT_PROCESSOR: &str = "http://www.w3.org/TR/scxml/#SCXMLEventProcessor";
@@ -87,14 +88,6 @@ pub const EVENT_VARIABLE_FIELD_DATA: &str = "data";
 pub trait DatamodelFactory: Send {
     /// Create a NEW datamodel.
     fn create(&mut self, global_data: GlobalDataArc, options: &HashMap<String, String>) -> Box<dyn Datamodel>;
-}
-
-/// Gets the global data store from datamodel.
-#[macro_export]
-macro_rules! get_global {
-    ($x:expr) => {
-        $x.global().lock().unwrap()
-    };
 }
 
 pub type GlobalDataLock<'a> = MutexGuard<'a, GlobalData>;
@@ -371,8 +364,9 @@ pub trait Datamodel {
     }
 }
 
+/// The "Null" Datamodel as specified by W3C. A minimal model without any data.
 /// ## W3C says:
-/// ###B.1 The Null Data Model
+/// ### B.1 The Null Data Model
 /// The value "null" for the 'datamodel' attribute results in an absent or empty data model. In particular:
 /// - B.1.1 Data Model
 ///
@@ -404,6 +398,7 @@ pub struct NullDatamodel {
     pub actions: ActionMap,
 }
 
+/// The Factory to create a new Null-Datamodel in case an FSM uses it.
 pub struct NullDatamodelFactory {}
 
 impl DatamodelFactory for NullDatamodelFactory {
@@ -579,7 +574,7 @@ pub fn data_to_string(data: &Data) -> Result<String, String> {
                     v.push(',');
                 }
                 v.push_str(key);
-                v.push_str(":");
+                v.push(':');
                 match data_arc_to_string(data_arc) {
                     Ok(s) => {
                         v.push_str(s.as_str());
@@ -1098,6 +1093,7 @@ impl Default for Data {
 
 pub const DATA_FLAG_READONLY: u8 = 1u8;
 
+/// Wrapper that maintains an Arx to a Data element.
 #[derive(Clone)]
 pub struct DataArc {
     pub arc: Arc<Mutex<Data>>,
@@ -1160,6 +1156,7 @@ pub fn create_data_arc(data: Data) -> DataArc {
     }
 }
 
+/// Wrapper to maintain the map of current data elements for one FSM.
 #[derive(Debug)]
 pub struct DataStore {
     pub map: HashMap<String, DataArc>,
@@ -1179,17 +1176,10 @@ impl DataStore {
     }
 
     pub fn get(&self, key: &str) -> Option<DataArc> {
+        #[allow(clippy::manual_map)]
         match self.map.get(key) {
-            None => {
-                #[cfg(feature = "Debug")]
-                debug!("DataStore::Get: '{}' -> Not found", key);
-                None
-            }
-            Some(v) => {
-                #[cfg(feature = "Debug")]
-                debug!("DataStore::Get: '{}' -> {}", key, v);
-                Some(v.clone())
-            }
+            None => None,
+            Some(v) => Some(v.clone()),
         }
     }
 
@@ -1231,13 +1221,5 @@ impl DataStore {
                 x.insert(data);
             }
         }
-    }
-
-    pub fn dump(&self) {
-        debug!("--- Current Data Set");
-        for (key, data) in &self.map {
-            debug!("\t{}: {}", key, data);
-        }
-        debug!("--------------------")
     }
 }

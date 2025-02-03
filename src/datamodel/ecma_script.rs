@@ -1,31 +1,10 @@
 //! Implements the SCXML Data model for ECMA with Boa Engine.\
-//! Included if feature "ECMAScript" is enabled.\
+//! Included if feature "ECMAScriptModel" is enabled.\
 //! See [W3C:The ECMAScript Data Model](/doc/W3C_SCXML_2024_07_13/index.html#ecma-profile).\
 //! See [GitHub:Boa Engine](https://github.com/boa-dev/boa).
 
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::string::ToString;
-
-#[cfg(test)]
-use std::{println as warn, println as error, println as info};
-
-#[cfg(all(test, feature = "Debug"))]
-use std::println as debug;
-
-#[cfg(all(not(test), feature = "Debug", not(feature = "EnvLog")))]
-use std::{println as warn, println as debug};
-
-#[cfg(all(not(test), feature = "Debug", feature = "EnvLog"))]
-use log::{debug, warn};
-
-#[cfg(all(not(test), not(feature = "EnvLog")))]
-use std::{println as error, println as info};
-
-#[cfg(all(not(test), feature = "EnvLog"))]
-use log::{error, info};
-
-use crate::ArgOption;
+use crate::common::ArgOption;
+use crate::common::{debug, error, info, warn};
 use boa_engine::context::ContextBuilder;
 use boa_engine::object::builtins::{JsArray, JsMap};
 use boa_engine::object::ObjectInitializer;
@@ -34,6 +13,9 @@ use boa_engine::value::Type;
 use boa_engine::{js_string, native_function::NativeFunction, Context, JsBigInt, JsError, JsValue, Source};
 use boa_engine::{JsArgs, JsData, JsResult};
 use boa_gc::{empty_trace, Finalize, Trace};
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::string::ToString;
 
 use crate::datamodel::{
     create_data_arc, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
@@ -585,7 +567,7 @@ impl Datamodel for ECMAScriptDatamodel {
         let data_value = match &event.param_values {
             None => match &event.content {
                 None => JsValue::Undefined,
-                Some(c) => self.data_arc_to_js(c),
+                Some(c) => self.data_value_to_js(c),
             },
             Some(pv) => {
                 let mut data = Vec::with_capacity(pv.len());

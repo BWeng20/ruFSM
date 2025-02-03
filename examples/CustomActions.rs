@@ -1,13 +1,12 @@
-use log::{debug, error};
-use rfsm::actions::{Action, ActionWrapper};
-use rfsm::datamodel::Data;
-use rfsm::fsm::GlobalData;
-use rfsm::fsm_executor::FsmExecutor;
-use rfsm::init_logging;
+use rufsm::actions::{Action, ActionWrapper};
+use rufsm::common::init_logging;
+use rufsm::datamodel::Data;
+use rufsm::fsm::GlobalData;
+use rufsm::fsm_executor::FsmExecutor;
 use std::process::exit;
 
 #[cfg(feature = "Trace")]
-use rfsm::tracer::TraceMode;
+use rufsm::tracer::TraceMode;
 
 #[derive(Clone)]
 pub struct MyAction {}
@@ -34,7 +33,7 @@ async fn main() {
     // if feature EnvLog is active, this will initialize env_logger.
     init_logging();
 
-    debug!(
+    println!(
         r#"Action Example
 -----------------------------------------
 The FSM will call two custom actions from different places.
@@ -74,7 +73,7 @@ These actions can be called at any element that containt expressions or executab
             session = s;
         }
         Err(err) => {
-            error!("Failed to execute: {}", err);
+            println!("Failed to execute: {}", err);
             exit(1);
         }
     };
