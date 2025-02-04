@@ -57,6 +57,14 @@ If none of the <i>Trace_xxx</i> features are used, "Tracer" module is completely
 
 [^2]: If any of the "Trace_XXXX" features is turned on, the release build will get ~ 0.03 MiB larger. 
 
+## About SCXML files 
+
+SCXML is an XML format, so you need some parser. FSMs will not get easily huge, but XML paring is expensive. 
+As alternative thi crate has a binary (but platform independent) file format that works without any dependency and
+a small code base. And it is much faster.</br>
+But you need to convert your SCXML files. The converter `scxml_to_fsm` binary build only if the 
+XML-feature is enabled, so you need to build this tool separately. Then build the main `fsm` binary without "xml".  
+
 ## Tracer
 
 The Tracer module can be used to monitor the FSM.<br/>
@@ -69,9 +77,9 @@ The Tracer has different flags to control what is traced, see Enum [TraceMode](s
 ## How To Use
 
 FSMs normally are used embedded inside other software to control some state-full workflow.<br/> 
-The transitions or the state trigger operations in the business workflow .  
+The transitions or the states trigger operations in the business workflow .  
 To bind the business logic to a state machine different approaches exits. In hard-coded FSMs methods-calls are directly
-linked to the transitions or states during compile-time. Most state machine frameworks work this way.<br/>
+linked to the transitions or state-actions during compile-time. Most state machine frameworks work this way.<br/>
 
 This crate loads FSMs during runtime, so the binding to the FSM needs to be dynamical.<br/> 
 SCXML defines a _Datamodel_ for this purpose.
@@ -125,6 +133,11 @@ For the detailed test process see [Test Readme](test/w3c/README.md) and for the 
 ## To-Dos:
 
 + Implement the Trace-Server to bind IDEs to the runtime.
++ Design and implement some meaning full I/O-processor as the "basic-html" is not usable for production.
+  + MQTT?
+  + REST-API?
+  + Some fast Domain-Socket (linux) / Pipe (Windows) based I/O-Processor? 
+
 
 
 > [!NOTE]
