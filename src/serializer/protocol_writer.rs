@@ -1,7 +1,8 @@
 //! Low level protocol used to write the binary ruFsm format.
 
-use crate::datamodel::{Data, DataArc};
 use std::io::Write;
+
+use crate::datamodel::{Data, DataArc};
 
 /// Trait for writing binary data in some platform independent way.\
 /// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).

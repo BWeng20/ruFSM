@@ -11,14 +11,13 @@ use std::sync::mpsc::Sender;
 use std::time::Duration;
 use std::{process, thread};
 
-use crate::actions::ActionWrapper;
-use crate::common::{error, info, warn};
-
 #[cfg(feature = "json-config")]
 use serde::Deserialize;
 #[cfg(feature = "yaml-config")]
 use yaml_rust::YamlLoader;
 
+use crate::actions::ActionWrapper;
+use crate::common::{error, info, warn};
 use crate::fsm;
 use crate::fsm::{Event, FinishMode, Fsm};
 use crate::fsm_executor::FsmExecutor;
@@ -73,7 +72,7 @@ pub fn load_fsm(file_path: &str, include_paths: &[PathBuf]) -> Result<Box<Fsm>, 
 
     #[cfg(feature = "xml")]
     if extension.eq_ignore_ascii_case("scxml") || extension.eq_ignore_ascii_case("xml") {
-        return scxml_reader::parse_from_uri(file_path.to_string(), include_paths);
+        return scxml_reader::parse_from_url(file_path.to_string(), include_paths);
     }
     #[cfg(feature = "serializer")]
     if extension.eq_ignore_ascii_case("rfsm") {
@@ -214,7 +213,7 @@ pub fn run_test_manual(
 pub fn run_test_manual_with_send(
     test_name: &str,
     options: &HashMap<&str, String>,
-    #[cfg(feature = "Trace")] mut fsm: Box<Fsm>,
+    #[cfg(feature = "Trace")] fsm: Box<Fsm>,
     #[cfg(not(feature = "Trace"))] fsm: Box<Fsm>,
     include_paths: &Vec<PathBuf>,
     #[cfg(feature = "Trace")] trace_mode: TraceMode,
@@ -222,9 +221,6 @@ pub fn run_test_manual_with_send(
     expected_final_configuration: &Vec<String>,
     mut cb: impl FnMut(Sender<Box<Event>>),
 ) -> bool {
-    #[cfg(feature = "Trace")]
-    fsm.tracer.enable_trace(trace_mode);
-
     let mut executor = FsmExecutor::new_without_io_processor();
     executor.set_global_options_from_arguments(options);
 
@@ -238,6 +234,8 @@ pub fn run_test_manual_with_send(
         Box::new(executor),
         &Vec::new(),
         FinishMode::KEEP_CONFIGURATION,
+        #[cfg(feature = "Trace")]
+        trace_mode,
     );
 
     let mut watchdog_sender: Option<Box<Sender<String>>> = None;
@@ -281,7 +279,10 @@ pub fn run_test_manual_with_send(
                     false
                 }
                 Some(final_configuration) => {
-                    match verify_final_configuration(expected_final_configuration, final_configuration) {
+                    match verify_final_configuration(
+                        expected_final_configuration,
+                        final_configuration,
+                    ) {
                         Ok(states) => {
                             info!(
                                 "[{}] ==> Final configuration '{}' reached",
@@ -342,7 +343,10 @@ pub fn disable_watchdog(watchdog_sender: &Sender<String>) {
 ///
 /// + expected_states - List of expected states, the FSM configuration must contain all of them.
 /// + fsm_config - The final FSM configuration to verify. May contain more than the required states.
-pub fn verify_final_configuration(expected_states: &Vec<String>, fsm_config: &[String]) -> Result<String, String> {
+pub fn verify_final_configuration(
+    expected_states: &Vec<String>,
+    fsm_config: &[String],
+) -> Result<String, String> {
     for fc_name in expected_states {
         if !fsm_config.contains(fc_name) {
             return Err(fc_name.clone());

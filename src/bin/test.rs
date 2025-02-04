@@ -2,6 +2,9 @@ use std::path::Path;
 
 #[cfg(feature = "Debug")]
 use rufsm::common::debug;
+#[cfg(feature = "Debug")]
+use rufsm::common::get_features;
+use rufsm::common::init_logging;
 use rufsm::fsm::Fsm;
 #[cfg(feature = "xml")]
 use rufsm::scxml_reader;
@@ -14,15 +17,6 @@ use rufsm::test::load_yaml_config;
 use rufsm::test::{abort_test, load_fsm, run_test, TestSpecification, TestUseCase};
 #[cfg(feature = "Trace")]
 use rufsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
-
-#[cfg(feature = "Debug")]
-use rufsm::common::get_features;
-use rufsm::common::init_logging;
-
-#[cfg(feature = "TraceServer")]
-use rufsm::remote_tracer::run_trace_server;
-#[cfg(feature = "TraceServer")]
-use rufsm::remote_tracer::TRACE_SERVER_ARGUMENT_OPTION;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -41,24 +35,12 @@ async fn main() {
     let (named_opt, final_args) = rufsm::common::get_arguments(&[
         #[cfg(feature = "Trace")]
         &TRACE_ARGUMENT_OPTION,
-        #[cfg(feature = "TraceServer")]
-        &TRACE_SERVER_ARGUMENT_OPTION,
         #[cfg(feature = "xml")]
         &INCLUDE_PATH_ARGUMENT_OPTION,
     ]);
 
     #[cfg(feature = "Trace")]
     let trace = TraceMode::from_arguments(&named_opt);
-
-    #[cfg(feature = "TraceServer")]
-    {
-        match named_opt.get(TRACE_SERVER_ARGUMENT_OPTION.name) {
-            None => {}
-            Some(trace_server_adr) => {
-                let _trace_thread = run_trace_server(trace_server_adr.as_str()).await;
-            }
-        }
-    }
 
     #[cfg(feature = "xml")]
     let include_paths = scxml_reader::include_path_from_arguments(&named_opt);
@@ -112,7 +94,9 @@ async fn main() {
                 Ok(fsm_loaded) => {
                     fsm = Some(fsm_loaded);
                 }
-                Err(err) => abort_test(format!("Failed to load fsm '{}'. {}", arg, err).to_string()),
+                Err(err) => {
+                    abort_test(format!("Failed to load fsm '{}'. {}", arg, err).to_string())
+                }
             },
             &_ => abort_test(format!("File '{}' has unsupported extension.", arg).to_string()),
         }
@@ -129,13 +113,13 @@ async fn main() {
                     match load_fsm(test_spec_file.as_str(), &include_paths) {
                         #[allow(unused_mut)]
                         Ok(mut fsm) => {
-                            #[cfg(feature = "Trace")]
-                            fsm.tracer.enable_trace(trace);
                             #[cfg(feature = "Debug")]
                             debug!("Loaded {}", test_spec_file);
                             Some(fsm)
                         }
-                        Err(_err) => abort_test(format!("Failed to load fsm '{}'", test_spec_file).to_string()),
+                        Err(_err) => abort_test(
+                            format!("Failed to load fsm '{}'", test_spec_file).to_string(),
+                        ),
                     }
                 } else {
                     fsm

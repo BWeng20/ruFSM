@@ -3,11 +3,11 @@
 
 use std::io::Write;
 
+use byteorder::WriteBytesExt;
+
 #[cfg(feature = "Debug_Serializer")]
 use crate::common::debug;
 use crate::common::error;
-use byteorder::WriteBytesExt;
-
 use crate::datamodel::Data;
 use crate::serializer::default_protocol_definitions::*;
 use crate::serializer::protocol_writer::ProtocolWriter;

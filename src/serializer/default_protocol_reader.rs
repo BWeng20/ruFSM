@@ -1,17 +1,17 @@
 //! Default implementation of the read-protocol.\
 //! The format is independent of the platform byte-order
 
-use crate::serializer::default_protocol_definitions::*;
-use crate::serializer::protocol_reader::ProtocolReader;
-use byteorder::ReadBytesExt;
 use std::collections::HashMap;
+use std::io::Read;
+
+use byteorder::ReadBytesExt;
 
 #[cfg(feature = "Debug_Serializer")]
 use crate::common::debug;
-
 use crate::common::error;
 use crate::datamodel::{Data, SourceCode};
-use std::io::Read;
+use crate::serializer::default_protocol_definitions::*;
+use crate::serializer::protocol_reader::ProtocolReader;
 
 pub struct DefaultProtocolReader<R>
 where
@@ -53,7 +53,10 @@ impl<R: Read> DefaultProtocolReader<R> {
                 | FSM_PROTOCOL_TYPE_INT_60BIT
                 | FSM_PROTOCOL_TYPE_INT_68BIT => true,
                 _ => {
-                    self.error(format!("Expected numeric type, got {}", self.type_and_value.type_id).as_str());
+                    self.error(
+                        format!("Expected numeric type, got {}", self.type_and_value.type_id)
+                            .as_str(),
+                    );
                     false
                 }
             }
@@ -65,9 +68,14 @@ impl<R: Read> DefaultProtocolReader<R> {
     fn verify_string_type(&mut self) -> bool {
         if self.ok {
             match self.type_and_value.type_id {
-                FSM_PROTOCOL_TYPE_STRING_LENGTH_4BIT | FSM_PROTOCOL_TYPE_STRING_LENGTH_12BIT => true,
+                FSM_PROTOCOL_TYPE_STRING_LENGTH_4BIT | FSM_PROTOCOL_TYPE_STRING_LENGTH_12BIT => {
+                    true
+                }
                 _ => {
-                    self.error(format!("Expected string type, got #{}", self.type_and_value.type_id).as_str());
+                    self.error(
+                        format!("Expected string type, got #{}", self.type_and_value.type_id)
+                            .as_str(),
+                    );
                     false
                 }
             }
@@ -108,7 +116,10 @@ impl<R: Read> DefaultProtocolReader<R> {
                 match rv.parse::<i64>() {
                     Ok(val) => Data::Integer(val),
                     Err(err) => {
-                        self.error(format!("Protocol error in Integer data value: {} -> {}", rv, err).as_str());
+                        self.error(
+                            format!("Protocol error in Integer data value: {} -> {}", rv, err)
+                                .as_str(),
+                        );
                         self.ok = false;
                         Data::Null()
                     }
@@ -119,7 +130,10 @@ impl<R: Read> DefaultProtocolReader<R> {
                 match rv.parse::<f64>() {
                     Ok(val) => Data::Double(val),
                     Err(err) => {
-                        self.error(format!("Protocol error in Double data value: {} -> {}", rv, err).as_str());
+                        self.error(
+                            format!("Protocol error in Double data value: {} -> {}", rv, err)
+                                .as_str(),
+                        );
                         self.ok = false;
                         Data::Null()
                     }
@@ -156,7 +170,9 @@ impl<R: Read> DefaultProtocolReader<R> {
             9 => Data::None(),
 
             _ => {
-                self.error(format!("Protocol error in data value: unknown variant {}", what).as_str());
+                self.error(
+                    format!("Protocol error in data value: unknown variant {}", what).as_str(),
+                );
                 self.ok = false;
                 Data::Null()
             }
@@ -225,7 +241,9 @@ impl<R: Read> DefaultProtocolReader<R> {
                                     self.type_and_value.string.insert_str(0, val);
                                 }
                                 Err(err_utf) => {
-                                    self.error(format!("Error in utf8 sequence: {}", err_utf).as_str());
+                                    self.error(
+                                        format!("Error in utf8 sequence: {}", err_utf).as_str(),
+                                    );
                                 }
                             },
                             Err(err) => {
@@ -248,7 +266,10 @@ impl<R: Read> DefaultProtocolReader<R> {
                                             self.type_and_value.string.insert_str(0, val);
                                         }
                                         Err(err_utf) => {
-                                            self.error(format!("Error in utf8 sequence: {}", err_utf).as_str());
+                                            self.error(
+                                                format!("Error in utf8 sequence: {}", err_utf)
+                                                    .as_str(),
+                                            );
                                         }
                                     },
                                     Err(err) => {
@@ -312,7 +333,9 @@ impl<R: Read> ProtocolReader<R> for DefaultProtocolReader<R> {
                     Some(self.type_and_value.string.clone())
                 }
                 _ => {
-                    self.error(format!("Expected string, got {}", self.type_and_value.type_id).as_str());
+                    self.error(
+                        format!("Expected string, got {}", self.type_and_value.type_id).as_str(),
+                    );
                     None
                 }
             };

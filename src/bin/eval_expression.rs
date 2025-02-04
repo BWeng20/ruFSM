@@ -9,6 +9,7 @@ use rufsm::common::init_logging;
 use rufsm::datamodel::create_global_data_arc;
 use rufsm::datamodel::expression_engine::RFsmExpressionDatamodel;
 use rufsm::expression_engine::parser::ExpressionParser;
+use rufsm::tracer::TraceMode;
 
 fn main() {
     init_logging();
@@ -20,7 +21,10 @@ fn main() {
         process::exit(1);
     }
 
-    let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+    let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+        #[cfg(feature = "Trace")]
+        TraceMode::ALL,
+    ));
 
     for s in final_args {
         let rs = ExpressionParser::execute_str(s.as_str(), &mut ec.global_data.lock().unwrap());

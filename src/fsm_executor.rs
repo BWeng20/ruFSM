@@ -2,28 +2,30 @@
 
 extern crate core;
 
-use crate::fsm::Fsm;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 #[cfg(feature = "serializer")]
 use std::fs::File;
 #[cfg(feature = "serializer")]
 use std::io::BufReader;
-
-use std::path::PathBuf;
+#[cfg(feature = "BasicHttpEventIOProcessor")]
+use std::net::{IpAddr, Ipv4Addr};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{SendError, Sender};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
+use crate::actions::ActionWrapper;
 #[cfg(feature = "Debug")]
 use crate::common::debug;
-
-use crate::actions::ActionWrapper;
 use crate::datamodel::DATAMODEL_OPTION_PREFIX;
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use crate::event_io_processor::http_event_io_processor::BasicHTTPEventIOProcessor;
 use crate::event_io_processor::scxml_event_io_processor::ScxmlEventIOProcessor;
+#[cfg(feature = "ThriftIOProcessor")]
+use crate::event_io_processor::thrift::thrift_event_io_processor::ThriftEventIOProcessor;
 use crate::event_io_processor::EventIOProcessor;
 use crate::fsm;
+use crate::fsm::Fsm;
 use crate::fsm::{Event, FinishMode, InvokeId, ParamPair, ScxmlSession, SessionId};
 #[cfg(feature = "xml")]
 use crate::scxml_reader;
@@ -35,8 +37,6 @@ use crate::serializer::default_protocol_reader::DefaultProtocolReader;
 use crate::serializer::fsm_reader::FsmReader;
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
-#[cfg(feature = "BasicHttpEventIOProcessor")]
-use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Default)]
 pub struct ExecutorState {
@@ -139,12 +139,21 @@ impl FsmExecutor {
             );
             e.add_processor(w);
         }
+        #[cfg(feature = "ThriftIOProcessor")]
+        {
+            // TODO
+            let w = Box::new(ThriftEventIOProcessor::new(e.state.clone()));
+            e.add_processor(w);
+        }
         e.add_processor(Box::new(ScxmlEventIOProcessor::new()));
         e
     }
 
     #[cfg(feature = "xml")]
-    pub fn set_include_paths_from_arguments(&mut self, named_arguments: &HashMap<&'static str, String>) {
+    pub fn set_include_paths_from_arguments(
+        &mut self,
+        named_arguments: &HashMap<&'static str, String>,
+    ) {
         self.set_include_paths(&include_path_from_arguments(named_arguments));
     }
 
@@ -217,13 +226,18 @@ impl FsmExecutor {
         if extension.eq_ignore_ascii_case("scxml") || extension.eq_ignore_ascii_case("xml") {
             #[cfg(feature = "Debug")]
             debug!("Loading FSM from XML {}", uri);
-            sm = scxml_reader::parse_from_uri(uri.to_string(), &self.include_paths);
+            if Path::new(uri).exists() {
+                sm = scxml_reader::parse_from_xml_file(Path::new(uri), &self.include_paths);
+            } else {
+                sm = scxml_reader::parse_from_url(uri.to_string(), &self.include_paths);
+            }
         }
 
         #[cfg(feature = "serializer")]
         if extension.eq_ignore_ascii_case("rfsm") {
             #[cfg(feature = "Debug")]
             debug!("Loading FSM from binary {}", uri);
+            // @TODO: will not work for urls.
             sm = match File::open(uri) {
                 Ok(f) => {
                     let protocol = DefaultProtocolReader::new(BufReader::new(f));
@@ -243,14 +257,22 @@ impl FsmExecutor {
 
         match sm {
             Ok(mut fsm) => {
-                #[cfg(feature = "Trace")]
-                fsm.tracer.enable_trace(trace);
                 fsm.caller_invoke_id = Some(invoke_id.clone());
                 fsm.parent_session_id = parent;
-                let session = fsm::start_fsm_with_data(fsm, actions, Box::new(self.clone()), data);
+                let session = fsm::start_fsm_with_data(
+                    fsm,
+                    actions,
+                    Box::new(self.clone()),
+                    data,
+                    #[cfg(feature = "Trace")]
+                    trace,
+                );
                 Ok(session)
             }
-            Err(message) => Err(message),
+            Err(message) => {
+                debug!("Error: {}", message);
+                Err(message)
+            }
         }
     }
 
@@ -279,8 +301,6 @@ impl FsmExecutor {
 
         match sm {
             Ok(mut fsm) => {
-                #[cfg(feature = "Trace")]
-                fsm.tracer.enable_trace(trace);
                 fsm.caller_invoke_id = Some(invoke_id.clone());
                 fsm.parent_session_id = parent;
                 let session = fsm::start_fsm_with_data_and_finish_mode(
@@ -289,6 +309,8 @@ impl FsmExecutor {
                     Box::new(self.clone()),
                     data,
                     finish_mode,
+                    #[cfg(feature = "Trace")]
+                    trace,
                 );
                 Ok(session)
             }
@@ -315,7 +337,11 @@ impl FsmExecutor {
     }
 
     /// Sends some event to a session.
-    pub fn send_to_session(&self, session_id: SessionId, event: Event) -> Result<(), SendError<Box<Event>>> {
+    pub fn send_to_session(
+        &self,
+        session_id: SessionId,
+        event: Event,
+    ) -> Result<(), SendError<Box<Event>>> {
         match self.get_session_sender(session_id) {
             None => {
                 todo!("Handling of unknown session")

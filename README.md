@@ -29,7 +29,7 @@ The main functional feature switches of the project:
 | json-config               | The test tool can read configurations in JSON.                                                                  | serde_json             | + ~ 0.003 MiB                              |
 | yaml-config               | The test tool can read configurations in YAML.                                                                  | yaml-rust              | – ~ 0.001 MiB                              |
 | EnvLog                    | Uses the `env_log` crate as a logging backend. Otherwise, `std::println` is used.                               | env_log                | + ~ 1.21 MiB                               |
-| TraceServer               | Enables Remote Trace Server.                                                                                    |                        | _– not finished –_                         |
+| ThriftTrace               | Enables Thrift Trace Server.                                                                                      |                        | _– not finished –_                         |
 
 [^1]: Features share dependencies, so the resulting binary size of combined features is smaller than the sum of individual features.
 
@@ -65,82 +65,83 @@ Then you can build the main FSM crate without `xml`.
 
 ## Tracer
 
-The `Tracer` module can be used to monitor FSM execution.
+The Tracer module can be used to monitor the FSM.<br/>
 
-The default tracer prints traced actions. If the `TraceServer` feature is enabled, a remote server is started (work in progress).
+The default-tracer simply prints the traced actions. If the Remote-Trace-Server-Feature is enabled, a Server is 
+started that can be used by remote-clients (_to be done_).
 
-The tracer has various flags to control what is being traced — see the `TraceMode` enum in [`src/tracer.rs`](src/tracer.rs).
+The Tracer has different flags to control what is traced, see Enum [TraceMode](src/tracer.rs) for details.
 
-## How to Use
+## How To Use
 
-FSMs are typically embedded in software to control stateful workflows.  
-Transitions or states trigger operations in the business logic.  
-In hard-coded FSMs, methods are directly bound to states or transitions at compile time (which is what most FSM frameworks do).
+FSMs normally are used embedded inside other software to control some state-full workflow.<br/> 
+The transitions or the states trigger operations in the business workflow .  
+To bind the business logic to a state machine different approaches exits. In hard-coded FSMs methods-calls are directly
+linked to the transitions or state-actions during compile-time. Most state machine frameworks work this way.<br/>
 
-Since this crate loads FSMs at runtime, the bindings need to be dynamic.  
-SCXML provides a _datamodel_ abstraction for this purpose.
+This crate loads FSMs during runtime, so the binding to the FSM needs to be dynamical.<br/> 
+SCXML defines a _Datamodel_ for this purpose.
 
 ### Datamodel
 
-See the W3C documentation for more details on the SCXML datamodel concept.  
-This library provides several implementations — or you can define your own.  
-The datamodel executes scripts and expressions and may serve as an interface to business logic.
+For details about the Datamodel-concept in SCXML see the W3C documentation. This lib provides some implementations of 
+the Datamodel, but you can implement your own models as well.<br/>
+The Datamodel in SCXML is responsible to execute scripts and formulas. Custom business logic
+can be implemented this way.<br/>
+For some huge project, it may be feasible to implement the Datamodel-trait with some optimized way to trigger the 
+business-functionality.<br/>
 
-For large projects, you might consider implementing the `Datamodel` trait to trigger business functionality efficiently.
+For a simpler approach (without implement a full Datamodel), see "Custom Actions" below.
+You can also find some examples inside folder "examples".<br/>
+Each Datamodel has a unique identifier, that can be selected in the SCXML-source, so you can provide multiple model-implementation in
+one binary and use them in parallel in different FSMs.
 
-If you don’t want to implement a full datamodel, see the **Custom Actions** section below.  
-Examples can be found in the `examples/` directory.  
+To add new data-models, use function `rufsm::fsm::register_datamodel`.
 
-Each datamodel has a unique ID that can be referenced in the SCXML source.  
-This enables multiple datamodels to coexist in a single binary and be used in parallel.
+### Provided Datamodel Implementations
 
-To register new datamodels, call:
-```rust
-rufsm::fsm::register_datamodel
-```
-
-### Built-in Datamodels
-
-+ ECMAScript datamodel, use `datamodel="ecmascript"` (requires feature `ECMAScriptModel` feature).
++ EMCAScript-Datamodel, use `datamodel="ecmascript"`. Available if feature _"ECMAScriptModel"_ is turned on.
 + The Null-Datamodel, use `datamodel="null"`
-+ Internal Expression Engine Datamodel, use `datamodel="rfsm-expression"` (requires feature `RfsmExpressionModel`).
++ Internal Expression Engine Datamodel, use `datamodel="rfsm-expression"`. Available if feature _"RfsmExpressionModel"_ is turned on.
 
-Note: The ECMAScript engine depends on `boa-engine`, which substantially increases binary size. 
-If you only need basic expressions, use `rfsm-expression`.
+As the EMCAScript-Datamodel is based on boa-engine, it results in a huge binary. 
+If you need only basic logic in your scripts, use "rfsm-expression" instead.
 
-More info: [Expression-Engine-Readme](src/expression_engine/README.md).
+For details see the [Expression-Engine-Readme](src/expression_engine/README.md).
 
 ### Custom Actions
 
-You can define custom logic by implementing the `Action` trait. 
-Each FSM instance can register its own actions; these are inherited by child sessions.
+You can use the trait "Action" to add custom functions to the FSM. See the Examples for a How-To.
+Each FSM instance can have a different set of Actions. Action are inherited by child-sessions.
 
-In the ECMAScript or `rfsm-expression` datamodels, these actions can be called like normal functions. 
-Parameters and return values are converted automatically — see the `Data` enum for supported types.
+If using ECMAScript- or RfsmExpressions-Datamodel, these actions can be called like normal methods. 
+Arguments and return values will be converted from and to JavaScript/Data-values. See enum "Data" for supported data-types.
 
-Custom actions have full access to FSM data and state.
+Actions have full access to the data and states of the FSM.
 
 ## Tests
 
 For basic functions the project contains several unit tests. The current status of these tests can be seen on the
 repository start page.
 
-More complex tests are done by test scripts that executes SCXML-files provided by the W3C.<br/>
+More complex tests are done by test scripts that executes SCXML-files provided by the W3C.</br>
 Currently, the project passed all 160 of the mandatory automated tests from the W3C test-suite.
-For the details, see [W3C Test README](test/w3c/README.md) and [W3C Test Report](test/w3c/REPORT.MD).
+For the detailed test process see [Test Readme](test/w3c/README.md) and for the results [Test Report](test/w3c/REPORT.MD).
 
 ## To-Dos:
 
-+ Implement the Trace-Server to support IDE plugins.
-+ Design and implement production-ready I/O processors (beyond the basic HTTP), e.g.:
++ Implement the Trace-Server to bind IDEs to the runtime.
++ Design and implement some meaning full I/O-processor as the "basic-html" is not usable for production.
   + MQTT?
-  + REST API?
-  + Fast IPC: Domain socket (Linux) or Named pipe (Windows)? 
+  + REST-API?
+  + Some fast Domain-Socket (linux) / Pipe (Windows) based I/O-Processor? 
+
 
 
 > [!NOTE]
 > ### Not conformant or not implemented features of the W3C recommendation
 >
-> + XML inside &lt;content> is not handled according to _[content_and_namespaces](doc/W3C_SCXML_2024_07_13/index.html#content_and_namespaces)_. The content inside &lt;content&gt; is not
->   interpreted and send to the receiver unmodified.
-> + The BasicHTTP Event I/O processor does not populate the '_event.raw' member, which is required by W3C optional tests 178, 509, 519, 520 and 534.
+> + XML inside &lt;content> is not handled according to _[content_and_namespaces](doc/W3C_SCXML_2024_07_13/index.html#content_and_namespaces)_. The content inside &lt;content> is not
+    >  interpreted and send to the receiver unmodified.
+> + BasicHTTP Event I/O processor doesn't set the '_event.raw' member, that is needed for optional
+    >   tests 178, 509, 519, 520 and 534.

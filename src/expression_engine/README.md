@@ -1,13 +1,13 @@
 # Expression Datamodel
 
 This module implements a fast and simple W3C-SCXML Datamodel.
-It an expression-like, non-Turing-complete language. 
+It an expression-like, non-Turing-complete language.
 
 It is available if feature _"RfsmExpressionModel"_ is turned on.
 
 ### Selection of Datamodel
 
-To select this model in SCXML use `datamodel="rfsm-expression"`. 
+To select this model in SCXML use `datamodel="rfsm-expression"`.
 
 ### Syntax (_DRAFT_)
 
@@ -43,12 +43,12 @@ Numbers are represented as specified in JSON.
 
 ### Encoding
 
-Expression are authored as part of the SCXML document, do the source-encoding is the same as the XML document is using.
+Expression are authored as part of the SCXML document, so the source-encoding is the same as the XML document is using.
 The XML parser converts all expressions into the encoding of the RUST-runtime. We expect RUST will stick to utf-8,
 so the effective structure of a string in the runtime will be utf-8-encoded.<br/>
-The structure of strings is therefore not always identical to the XML source. 
-In particular, the length and the individual characters can be different. 
-Keep this in mind when performing string operations.   
+The structure of strings is therefore not always identical to the XML source.
+In particular, the length and the individual characters can be different.
+Keep this in mind when performing string operations.
 
 ### Operators
 
@@ -69,9 +69,10 @@ The available operators and their meaning
 
 As mentioned above, the "+" operator aggregates arrays and maps.
 
-If the first operant is an `Data::Array` the second operant will be added to the resulting array. 
+If the first operant is an `Data::Array` the second operant will be added to the resulting array.
 If the second operant is also some array, both will be merged. <br/>
 The following expression will return _true_:
+
 ```
     ['a'] + ['b'] + 'c' == ['a','b'] + ['c']
 ```
@@ -79,9 +80,11 @@ The following expression will return _true_:
 If the first operant is an `Data::Map` (which represents objects),
 the second operant must be also a `Data::Map`, as we can't add elements without a name.<br/>
 The following expression will return _true_:
+
 ```
     {'b':'abc'} + {'a':123} == {'a':123, 'b':'abc'}
 ```
+
 Due to the nature of maps, identical fields are overwritten by a merge:
 
 ```
@@ -89,34 +92,37 @@ Due to the nature of maps, identical fields are overwritten by a merge:
 ```
 
 SCXML requires that only declared variables can be written. An `=` to an undefined variable will return an error.
-Nevertheless, it should  be possible to declare variables in the global &lt;script&gt; element.<br/>
-In the ECMA-datamodel (in which the ECMA-interpreter is executed in strict mode) this is done via a _"var"_ declaration. <br/>
-This expression language is not a script languages and thus has no such declaration syntax. Instead, you can use the "Initialisation" assignment operator `?=` 
+Nevertheless, it should be possible to declare variables in the global &lt;script&gt; element.<br/>
+In the ECMA-datamodel (in which the ECMA-interpreter is executed in strict mode) this is done via a _"var"_
+declaration. <br/>
+This expression language is not a script languages and thus has no such declaration syntax. Instead, you can use the "
+Initialisation" assignment operator `?=`
 to create and initialize a variable.<br/>
 
 ```
   myVar ?= [1,2,3,4]
 ```
 
-SCXML aldo requires that system variables are read-only. To support this, the Datamodel has a "readonly" flag in each data-element. 
+SCXML aldo requires that system variables are read-only. To support this, the Datamodel has a "readonly" flag in each
+data-element.
 Assignments to a read-only marked data will fail. <br/>
-There is currently no way to set this flag from the expression language. 
+There is currently no way to set this flag from the expression language.
 
 #### Conditional (ternary) operator
 
-The language has no ternary operator, but you can simulate it with a map:  
+The language has no ternary operator, but you can simulate it with a map:
 
 ```
   {true:'this is correct', false:'this is wrong'}[ condition ]
 ```
 
 Example:
+
 ```
   {true:'is One', false:'is not 1'}[ A == 1 ]
 ```
 
 Will return "_is not One_" if "_A_" is not 1.
-
 
 ### Custom Actions
 
@@ -147,7 +153,7 @@ There are several pre-defined Actions:
 | toString  | One argument of any type except Data::Error                                                                                                                                                        | Data::String  | Calculates the textual representation of the argument.                                              |
 | In        | One argument of type Data::String.                                                                                                                                                                 | Data::Boolean | Implements SCXML "In" function. Returns _true_, if the given state is in the current configuration. |
 
-### Control Structures 
+### Control Structures
 
 This Expression Language has no control-structures like a script language.<br/>
 For If/For/While constructs use the SCXML Executable Content elements with this functionality.

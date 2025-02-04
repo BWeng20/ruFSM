@@ -1,22 +1,20 @@
 //! Implementation of a simple expression parser.
 
-use crate::datamodel::{Data, GlobalDataLock};
-use crate::expression_engine::expressions::{
-    get_expression_as, Expression, ExpressionArray, ExpressionAssign, ExpressionAssignUndefined, ExpressionConstant,
-    ExpressionIndex, ExpressionMap, ExpressionMemberAccess, ExpressionMethod, ExpressionNot, ExpressionOperator,
-    ExpressionResult, ExpressionSequence, ExpressionVariable,
-};
-use crate::expression_engine::lexer::{ExpressionLexer, NumericToken, Operator, Token};
-
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::Deref;
 
 #[cfg(feature = "Debug")]
-use crate::fsm::vec_to_string;
-
-#[cfg(feature = "Debug")]
 use crate::common::debug;
+use crate::datamodel::{Data, GlobalDataLock};
+use crate::expression_engine::expressions::{
+    get_expression_as, Expression, ExpressionArray, ExpressionAssign, ExpressionAssignUndefined,
+    ExpressionConstant, ExpressionIndex, ExpressionMap, ExpressionMemberAccess, ExpressionMethod,
+    ExpressionNot, ExpressionOperator, ExpressionResult, ExpressionSequence, ExpressionVariable,
+};
+use crate::expression_engine::lexer::{ExpressionLexer, NumericToken, Operator, Token};
+#[cfg(feature = "Debug")]
+use crate::fsm::vec_to_string;
 
 /// Static tool struct to process expressions.
 pub struct ExpressionParser {}
@@ -46,7 +44,8 @@ impl ExpressionParser {
         let mut r = Vec::new();
         let mut stop_c;
         loop {
-            let (_stop_key, key_expression_option) = Self::parse_sub_expression(lexer, &[':', stop])?;
+            let (_stop_key, key_expression_option) =
+                Self::parse_sub_expression(lexer, &[':', stop])?;
             match key_expression_option {
                 None => {
                     if r.is_empty() {
@@ -57,7 +56,8 @@ impl ExpressionParser {
                     }
                 }
                 Some(key_expression) => {
-                    let (stop_val, value_expression_option) = Self::parse_sub_expression(lexer, &[',', stop])?;
+                    let (stop_val, value_expression_option) =
+                        Self::parse_sub_expression(lexer, &[',', stop])?;
                     stop_c = stop_val;
                     match value_expression_option {
                         None => {
@@ -80,7 +80,10 @@ impl ExpressionParser {
     }
 
     /// Parse an argument list, stops at the matching stop char
-    fn parse_argument_list(lexer: &mut ExpressionLexer, stop: char) -> Result<Vec<Box<dyn Expression>>, String> {
+    fn parse_argument_list(
+        lexer: &mut ExpressionLexer,
+        stop: char,
+    ) -> Result<Vec<Box<dyn Expression>>, String> {
         let mut r = Vec::new();
         loop {
             let (stopc, expression) = Self::parse_sub_expression(lexer, &[',', stop])?;
@@ -252,7 +255,8 @@ impl ExpressionParser {
                                         let mut v = Self::parse_argument_list(lexer, ']')?;
                                         if v.len() != 1 {
                                             return Result::Err(
-                                                "index operator '[]' allows only one argument".to_string(),
+                                                "index operator '[]' allows only one argument"
+                                                    .to_string(),
                                             );
                                         }
                                         Box::new(ExpressionIndex::new(
@@ -273,7 +277,10 @@ impl ExpressionParser {
                                 ExpressionParserItem::SExpression(expression) => {
                                     let mut v = Self::parse_argument_list(lexer, ']')?;
                                     if v.len() != 1 {
-                                        return Result::Err("index operator '[]' allows only one argument".to_string());
+                                        return Result::Err(
+                                            "index operator '[]' allows only one argument"
+                                                .to_string(),
+                                        );
                                     }
                                     Box::new(ExpressionIndex::new(expression, v.remove(0)))
                                 }
@@ -361,7 +368,9 @@ impl ExpressionParser {
     }
 
     /// Tries to create an expression from the current contents of the parser-stack.
-    fn stack_to_expression(stack: &mut Vec<ExpressionParserItem>) -> Result<Option<Box<dyn Expression>>, String> {
+    fn stack_to_expression(
+        stack: &mut Vec<ExpressionParserItem>,
+    ) -> Result<Option<Box<dyn Expression>>, String> {
         #[cfg(feature = "Debug")]
         debug!(
             "ExpressionParser.stack_to_expression: stack={:?}",
@@ -444,7 +453,9 @@ impl ExpressionParser {
                         if Self::fold_stack_at(
                             stack,
                             best_idx,
-                            |le: Box<dyn Expression>, re: Box<dyn Expression>| -> Result<Box<dyn Expression>, String> {
+                            |le: Box<dyn Expression>,
+                             re: Box<dyn Expression>|
+                             -> Result<Box<dyn Expression>, String> {
                                 Ok(Box::new(ExpressionOperator::new(op.clone(), le, re)))
                             },
                         ) {
@@ -455,7 +466,9 @@ impl ExpressionParser {
                         if Self::fold_stack_at(
                             stack,
                             best_idx,
-                            |le: Box<dyn Expression>, re: Box<dyn Expression>| -> Result<Box<dyn Expression>, String> {
+                            |le: Box<dyn Expression>,
+                             re: Box<dyn Expression>|
+                             -> Result<Box<dyn Expression>, String> {
                                 Ok(Box::new(ExpressionAssignUndefined::new(le, re)))
                             },
                         ) {
@@ -466,7 +479,9 @@ impl ExpressionParser {
                         if Self::fold_stack_at(
                             stack,
                             best_idx,
-                            |le: Box<dyn Expression>, re: Box<dyn Expression>| -> Result<Box<dyn Expression>, String> {
+                            |le: Box<dyn Expression>,
+                             re: Box<dyn Expression>|
+                             -> Result<Box<dyn Expression>, String> {
                                 Ok(Box::new(ExpressionAssign::new(le, re)))
                             },
                         ) {
@@ -480,7 +495,9 @@ impl ExpressionParser {
                             if let ExpressionParserItem::SExpression(re) = right {
                                 stack.insert(
                                     best_idx,
-                                    ExpressionParserItem::SExpression(Box::new(ExpressionNot::new(re))),
+                                    ExpressionParserItem::SExpression(Box::new(
+                                        ExpressionNot::new(re),
+                                    )),
                                 );
                                 return Self::stack_to_expression(stack);
                             }
@@ -494,14 +511,19 @@ impl ExpressionParser {
                     && Self::fold_stack_at(
                         stack,
                         best_idx,
-                        |le: Box<dyn Expression>, re: Box<dyn Expression>| -> Result<Box<dyn Expression>, String> {
-                            if let Some(variable) = get_expression_as::<ExpressionVariable>(re.deref()) {
+                        |le: Box<dyn Expression>,
+                         re: Box<dyn Expression>|
+                         -> Result<Box<dyn Expression>, String> {
+                            if let Some(variable) =
+                                get_expression_as::<ExpressionVariable>(re.deref())
+                            {
                                 return Ok(Box::new(ExpressionMemberAccess::new(
                                     le,
                                     variable.name.clone(),
                                 )));
                             }
-                            if let Some(method) = get_expression_as::<ExpressionMethod>(re.deref()) {
+                            if let Some(method) = get_expression_as::<ExpressionMethod>(re.deref())
+                            {
                                 let mut method_copy = method.get_copy();
                                 method_copy.arguments.insert(0, le);
                                 Ok(method_copy)
@@ -531,15 +553,22 @@ impl ExpressionParser {
 
 #[cfg(test)]
 mod tests {
-    use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
-    use crate::expression_engine::expressions::{get_expression_as, ExpressionIndex, ExpressionResult};
-    use crate::expression_engine::parser::ExpressionParser;
     use std::collections::HashMap;
     use std::ops::Deref;
 
+    use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
+    use crate::expression_engine::expressions::{
+        get_expression_as, ExpressionIndex, ExpressionResult,
+    };
+    use crate::expression_engine::parser::ExpressionParser;
+    use crate::tracer::TraceMode;
+
     #[test]
     fn parser_can_parse_a_simple_expression_without_identifiers() {
-        let global_data = create_global_data_arc();
+        let global_data = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
 
         let r = ExpressionParser::parse("12 * 3.4".to_string()).unwrap();
         print!("Parsed: {:?}", r);
@@ -566,7 +595,10 @@ mod tests {
 
     #[test]
     fn expressions_prioritize_multiplication_division_operations() {
-        let global_data = create_global_data_arc();
+        let global_data = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
 
         let r = ExpressionParser::parse("12 + 2 * 4".to_string()).unwrap();
         print!("Parsed: {:?}", r);
@@ -606,7 +638,10 @@ mod tests {
         let r2 = ExpressionParser::parse("A.b.c".to_string()).unwrap();
         println!("Parsed: {:?}", r2);
 
-        let global_data = create_global_data_arc();
+        let global_data = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
         let mut hs1 = HashMap::new();
         let mut hs2 = HashMap::new();
         hs2.insert(
@@ -641,7 +676,10 @@ mod tests {
         let r1 = ExpressionParser::parse("A=2*6".to_string()).unwrap();
         println!("Parsed: {:?}", r1);
 
-        let global_data = create_global_data_arc();
+        let global_data = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
 
         let rs1 = r1.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs1);
@@ -668,7 +706,10 @@ mod tests {
         let r1 = ExpressionParser::parse("X?=2;A=X*6".to_string()).unwrap();
         println!("Parsed: {:?}", r1);
 
-        let global_data = create_global_data_arc();
+        let global_data = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
         let rs1 = r1.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs1);
         assert_eq!(

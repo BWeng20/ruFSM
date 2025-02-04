@@ -1,30 +1,30 @@
 //! Module to write the binary ruFsm format.\
 
-use crate::datamodel::DataArc;
-
-#[cfg(feature = "Debug_Serializer")]
-use crate::common::debug;
 use std::collections::HashMap;
 use std::io::Write;
 
+#[cfg(feature = "Debug_Serializer")]
+use crate::common::debug;
+use crate::datamodel::DataArc;
 use crate::executable_content;
 use crate::executable_content::{
-    Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, Script, SendParameters,
+    Assign, Cancel, ExecutableContent, Expression, ForEach, If, Log, Raise, SendParameters,
 };
 use crate::fsm::{
-    CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, Invoke, Parameter, State, StateId, Transition,
-    TransitionId,
+    CommonContent, DocumentId, DoneData, ExecutableContentId, Fsm, Invoke, Parameter, State,
+    StateId, Transition, TransitionId,
 };
 use crate::serializer::default_protocol_definitions::{
-    FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY, FSM_PROTOCOL_FLAG_INVOKE,
-    FSM_PROTOCOL_FLAG_IS_FINAL, FSM_PROTOCOL_FLAG_IS_PARALLEL, FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT,
-    FSM_PROTOCOL_FLAG_STATES,
+    FSM_PROTOCOL_FLAG_DATA, FSM_PROTOCOL_FLAG_DONE_DATA, FSM_PROTOCOL_FLAG_HISTORY,
+    FSM_PROTOCOL_FLAG_INVOKE, FSM_PROTOCOL_FLAG_IS_FINAL, FSM_PROTOCOL_FLAG_IS_PARALLEL,
+    FSM_PROTOCOL_FLAG_ON_ENTRY, FSM_PROTOCOL_FLAG_ON_EXIT, FSM_PROTOCOL_FLAG_STATES,
+    FSM_SERIALIZER_VERSION,
 };
 use crate::serializer::protocol_writer::ProtocolWriter;
 
-pub const FSM_PROTOCOL_WRITER_VERSION: &str = "fsmW1.1";
-
-fn get_executable_content_as<T: 'static>(ec: &dyn crate::executable_content::ExecutableContent) -> &T {
+fn get_executable_content_as<T: 'static>(
+    ec: &dyn crate::executable_content::ExecutableContent,
+) -> &T {
     let va = ec.as_any();
     va.downcast_ref::<T>()
         .unwrap_or_else(|| panic!("Failed to cast executable content"))
@@ -35,6 +35,7 @@ where
     W: Write + 'a,
 {
     pub writer: Box<dyn ProtocolWriter<W> + 'a>,
+    pub id_2_doc_id: HashMap<StateId, DocumentId>,
 }
 
 impl<'a, W> FsmWriter<'a, W>
@@ -46,18 +47,22 @@ where
     }
 
     pub fn new(writer: Box<(dyn ProtocolWriter<W> + 'a)>) -> FsmWriter<'a, W> {
-        FsmWriter { writer }
+        FsmWriter {
+            writer,
+            id_2_doc_id: HashMap::new(),
+        }
     }
 
     pub fn write(&mut self, fsm: &Fsm) {
-        self.writer.write_str(FSM_PROTOCOL_WRITER_VERSION);
+        self.writer.write_str(FSM_SERIALIZER_VERSION);
         self.writer.write_str(fsm.name.as_str());
         self.writer.write_str(&fsm.datamodel);
         self.writer.write_u8(fsm.binding.ordinal());
-        self.write_state_id(fsm.pseudo_root);
-        self.write_executable_content_id(fsm.script);
 
         self.writer.write_usize(fsm.states.len());
+        for state in &fsm.states {
+            self.id_2_doc_id.insert(state.id, state.doc_id);
+        }
         for state in &fsm.states {
             self.write_state(state);
         }
@@ -68,21 +73,37 @@ where
         }
 
         self.writer.write_usize(fsm.executableContent.len());
-        for (content_id, content) in &fsm.executableContent {
-            self.write_executable_content_id(*content_id);
+        for content in &fsm.executableContent {
             self.writer.write_usize(content.len());
             for executable_content in content {
                 self.write_executable_content(executable_content.as_ref());
             }
         }
+
+        self.write_doc_id_for_state_id(fsm.pseudo_root);
+        self.write_executable_content_id(fsm.script);
     }
 
     pub fn close(&mut self) {
         self.writer.close();
     }
 
-    pub fn write_state_id(&mut self, value: StateId) {
-        self.writer.write_uint(value as u64);
+    /// Writes the doc id of the state with this id.
+    pub fn write_doc_id_for_state_id(&mut self, value: StateId) {
+        if value == 0 {
+            self.writer.write_uint(0);
+        } else {
+            match self.id_2_doc_id.get(&value) {
+                None => {
+                    panic!("Unknown State Id {}", value);
+                }
+                Some(doc_id) => {
+                    #[cfg(feature = "Debug_Serializer")]
+                    debug!("Write StateId {} -> DocId {}", value, doc_id);
+                    self.writer.write_uint(*doc_id as u64);
+                }
+            }
+        }
     }
 
     pub fn write_doc_id(&mut self, value: DocumentId) {
@@ -106,7 +127,7 @@ where
     }
 
     pub fn write_common_content(&mut self, value: &CommonContent) {
-        self.writer.write_option_string(&value.content);
+        self.writer.write_data(&value.content);
         self.writer.write_option_string(&value.content_expr);
     }
 
@@ -176,10 +197,10 @@ where
         debug!(">>Transition #{}", transition.id);
         self.write_transition_id(transition.id);
         self.write_doc_id(transition.doc_id);
-        self.write_state_id(transition.source);
+        self.write_doc_id_for_state_id(transition.source);
         self.writer.write_usize(transition.target.len());
         for t in &transition.target {
-            self.write_state_id(*t);
+            self.write_doc_id_for_state_id(*t);
         }
         self.writer.write_usize(transition.events.len());
         for e in &transition.events {
@@ -187,9 +208,9 @@ where
         }
         self.writer.write_u8(
             transition.transition_type.ordinal() // 0 - 1
-            | if transition.wildcard {2u8} else {0u8}
-            | if transition.cond.is_empty() {0u8} else {4u8}
-            | if transition.content != 0 {8u8} else {0u8},
+                | if transition.wildcard { 2u8 } else { 0u8 }
+                | if transition.cond.is_empty() { 0u8 } else { 4u8 }
+                | if transition.content != 0 { 8u8 } else { 0u8 },
         );
 
         if !transition.cond.is_empty() {
@@ -207,27 +228,26 @@ where
         #[cfg(feature = "Debug_Serializer")]
         debug!(">>State {}", state.name);
 
-        self.write_state_id(state.id);
-        self.write_doc_id(state.doc_id);
+        self.write_doc_id_for_state_id(state.id);
         self.writer.write_str(state.name.as_str());
 
         let flags = state.history_type.ordinal() as u16 // 0 - 2
-                | if state.onentry.is_empty() {0} else {FSM_PROTOCOL_FLAG_ON_ENTRY}
-                | if state.onexit.is_empty() {0} else {FSM_PROTOCOL_FLAG_ON_EXIT}
-                | if !state.states.is_empty() {FSM_PROTOCOL_FLAG_STATES} else {0}
-                | if state.is_final {FSM_PROTOCOL_FLAG_IS_FINAL} else {0}
-                | if state.is_parallel {FSM_PROTOCOL_FLAG_IS_PARALLEL} else {0}
-                | if state.donedata.is_some() {FSM_PROTOCOL_FLAG_DONE_DATA} else {0}
-                | if state.invoke.size()>0 {FSM_PROTOCOL_FLAG_INVOKE} else {0}
-                | if !state.data.is_empty()  {FSM_PROTOCOL_FLAG_DATA} else {0}
-                | if state.history.size() > 0 {FSM_PROTOCOL_FLAG_HISTORY} else {0};
+            | if state.onentry.is_empty() { 0 } else { FSM_PROTOCOL_FLAG_ON_ENTRY }
+            | if state.onexit.is_empty() { 0 } else { FSM_PROTOCOL_FLAG_ON_EXIT }
+            | if state.states.is_empty() { 0 } else { FSM_PROTOCOL_FLAG_STATES }
+            | if state.is_final { FSM_PROTOCOL_FLAG_IS_FINAL } else { 0 }
+            | if state.is_parallel { FSM_PROTOCOL_FLAG_IS_PARALLEL } else { 0 }
+            | if state.donedata.is_some() { FSM_PROTOCOL_FLAG_DONE_DATA } else { 0 }
+            | if state.invoke.size() > 0 { FSM_PROTOCOL_FLAG_INVOKE } else { 0 }
+            | if state.data.is_empty() { 0 } else { FSM_PROTOCOL_FLAG_DATA }
+            | if state.history.size() > 0 { FSM_PROTOCOL_FLAG_HISTORY } else { 0 };
         self.writer.write_uint(flags as u64);
 
         if !state.states.is_empty() {
             self.write_transition_id(state.initial);
             self.writer.write_usize(state.states.len());
             for state_id in &state.states {
-                self.write_state_id(*state_id);
+                self.write_doc_id_for_state_id(*state_id);
             }
         }
 
@@ -259,7 +279,7 @@ where
         if state.history.size() > 0 {
             self.writer.write_usize(state.history.size());
             for history in state.history.iterator() {
-                self.write_state_id(*history);
+                self.write_doc_id_for_state_id(*history);
             }
         }
 
@@ -267,7 +287,7 @@ where
             self.write_data_map(&state.data);
         }
 
-        self.write_state_id(state.parent);
+        self.write_doc_id_for_state_id(state.parent);
 
         if state.donedata.is_some() {
             self.write_done_data(state.donedata.as_ref().unwrap())
@@ -282,33 +302,28 @@ where
         self.writer.write_u8(ec_type);
 
         match ec_type {
-            executable_content::TYPE_IF => {
-                self.write_executable_content_if(get_executable_content_as::<If>(executable_content))
-            }
-            executable_content::TYPE_EXPRESSION => {
-                self.write_executable_content_expression(get_executable_content_as::<Expression>(executable_content))
-            }
-            executable_content::TYPE_SCRIPT => {
-                self.write_executable_content_script(get_executable_content_as::<Script>(executable_content))
-            }
-            executable_content::TYPE_LOG => {
-                self.write_executable_content_log(get_executable_content_as::<Log>(executable_content))
-            }
-            executable_content::TYPE_FOREACH => {
-                self.write_executable_content_for_each(get_executable_content_as::<ForEach>(executable_content))
-            }
-            executable_content::TYPE_SEND => self.write_executable_content_send(get_executable_content_as::<
-                SendParameters,
-            >(executable_content)),
-            executable_content::TYPE_RAISE => {
-                self.write_executable_content_raise(get_executable_content_as::<Raise>(executable_content))
-            }
-            executable_content::TYPE_CANCEL => {
-                self.write_executable_content_cancel(get_executable_content_as::<Cancel>(executable_content))
-            }
-            executable_content::TYPE_ASSIGN => {
-                self.write_executable_content_assign(get_executable_content_as::<Assign>(executable_content))
-            }
+            executable_content::TYPE_IF => self
+                .write_executable_content_if(get_executable_content_as::<If>(executable_content)),
+            executable_content::TYPE_EXPRESSION => self.write_executable_content_expression(
+                get_executable_content_as::<Expression>(executable_content),
+            ),
+            executable_content::TYPE_LOG => self
+                .write_executable_content_log(get_executable_content_as::<Log>(executable_content)),
+            executable_content::TYPE_FOREACH => self.write_executable_content_for_each(
+                get_executable_content_as::<ForEach>(executable_content),
+            ),
+            executable_content::TYPE_SEND => self.write_executable_content_send(
+                get_executable_content_as::<SendParameters>(executable_content),
+            ),
+            executable_content::TYPE_RAISE => self.write_executable_content_raise(
+                get_executable_content_as::<Raise>(executable_content),
+            ),
+            executable_content::TYPE_CANCEL => self.write_executable_content_cancel(
+                get_executable_content_as::<Cancel>(executable_content),
+            ),
+            executable_content::TYPE_ASSIGN => self.write_executable_content_assign(
+                get_executable_content_as::<Assign>(executable_content),
+            ),
             ut => {
                 panic!("Unknown Executable Content: {}", ut)
             }
@@ -320,17 +335,12 @@ where
         self.write_executable_content_id(executable_content_if.content);
         self.write_executable_content_id(executable_content_if.else_content);
     }
-    pub fn write_executable_content_expression(&mut self, executable_content_expression: &Expression) {
+    pub fn write_executable_content_expression(
+        &mut self,
+        executable_content_expression: &Expression,
+    ) {
         self.writer
             .write_data(&executable_content_expression.content);
-    }
-
-    pub fn write_executable_content_script(&mut self, executable_content_script: &Script) {
-        self.writer
-            .write_usize(executable_content_script.content.len());
-        for ec_id in &executable_content_script.content {
-            self.write_executable_content_id(*ec_id);
-        }
     }
 
     pub fn write_executable_content_log(&mut self, executable_content_log: &Log) {
