@@ -1,28 +1,24 @@
 //! Common functions.
 //!
 
-#[cfg(all(not(test), feature = "EnvLog"))]
-pub use log::{debug, error, info, warn};
-
+use std::collections::HashMap;
+use std::env;
+#[cfg(feature = "EnvLog")]
+use std::io::Write;
+#[cfg(feature = "Trace")]
+use std::str::FromStr;
+#[cfg(feature = "Trace")]
+use std::sync::mpsc::Sender;
 #[cfg(any(test, not(feature = "EnvLog")))]
 pub use std::{println as info, println as debug, println as error, println as warn};
 
 #[cfg(feature = "EnvLog")]
 use chrono::Local;
-#[cfg(feature = "EnvLog")]
-use std::io::Write;
-
-use std::collections::HashMap;
-use std::env;
-#[cfg(feature = "Trace")]
-use std::sync::mpsc::Sender;
-
-#[cfg(feature = "Trace")]
-use std::str::FromStr;
+#[cfg(all(not(test), feature = "EnvLog"))]
+pub use log::{debug, error, info, warn};
 
 #[cfg(feature = "Trace")]
 use crate::fsm::Event;
-
 #[cfg(feature = "Trace")]
 use crate::tracer::TraceMode;
 
@@ -164,8 +160,8 @@ pub fn get_features() -> Vec<&'static str> {
         "xml",
         #[cfg(feature = "Trace")]
         "Trace",
-        #[cfg(feature = "TraceServer")]
-        "TraceServer",
+        #[cfg(feature = "ThriftTrace")]
+        "MqttTrace",
         #[cfg(feature = "Debug_Reader")]
         "Debug_Reader",
         #[cfg(feature = "Debug_Serializer")]

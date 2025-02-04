@@ -8,10 +8,12 @@ use std::sync::mpsc::Sender;
 
 #[cfg(feature = "Debug")]
 use crate::common::debug;
-
 use crate::datamodel::{Datamodel, GlobalDataArc, ToAny};
 use crate::fsm::SessionId;
 use crate::fsm::{Event, Fsm, EVENT_CANCEL_SESSION};
+
+#[cfg(feature = "ThriftIOProcessor")]
+pub(crate) mod thrift;
 
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 pub mod http_event_io_processor;
@@ -20,10 +22,11 @@ pub mod scxml_event_io_processor;
 
 pub const SYS_IO_PROCESSORS: &str = "_ioprocessors";
 
+/// Holds the external queues of FSM, that are connected to an IO-Processor.
 #[derive(Debug, Clone, Default)]
 pub struct ExternalQueueContainer {
-    /// The FSMs that are connected to this IO Processor
-    pub fsms: HashMap<u32, Sender<Box<Event>>>,
+    /// The FSMs that are connected to this IO Processor. Key is the session-id.
+    pub fsms: HashMap<SessionId, Sender<Box<Event>>>,
 }
 
 impl ExternalQueueContainer {
@@ -52,7 +55,7 @@ pub trait EventIOProcessor: ToAny + Debug + Send {
     /// Returns the location of this session and processor.
     fn get_location(&self, id: SessionId) -> String;
 
-    /// Returns the type of this processor.
+    /// Returns the type names of this processor.
     fn get_types(&self) -> &[&str];
 
     fn get_external_queues(&mut self) -> &mut ExternalQueueContainer;

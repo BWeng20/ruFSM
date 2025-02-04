@@ -29,7 +29,7 @@ async fn main() {
 
     let include_paths = include_path_from_arguments(&named_opt);
     println!("Reading from {}", source_file);
-    match scxml_reader::parse_from_uri(source_file, &include_paths) {
+    match scxml_reader::parse_from_url(source_file, &include_paths) {
         Ok(fsm) => match File::create(target_file.clone()) {
             Ok(f) => {
                 println!("Writing to {}", &target_file);

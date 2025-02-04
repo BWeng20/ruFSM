@@ -1,16 +1,21 @@
-use crate::common::info;
-use lazy_static::lazy_static;
+//! The Tracer module, monitoring and remote-control.
+
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::DerefMut;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
+use lazy_static::lazy_static;
+
+use crate::common::info;
 use crate::common::ArgOption;
 use crate::fsm;
-use crate::fsm::{Event, OrderedSet, State};
+use crate::fsm::{Event, OrderedSet, SessionId, State};
+
+#[cfg(feature = "ThriftTrace")]
+pub mod thrift_trace_server;
 
 /// Trace mode for FSM Tracer.
 #[derive(Debug, Clone, PartialEq, Copy, Hash, Eq)]
@@ -78,13 +83,7 @@ impl FromStr for TraceMode {
 pub trait Tracer: Send + Debug {
     /// Needed by a minimalistic implementation. Default methods below call this
     /// Method with a textual representation of the trace-event.
-    fn trace(&self, msg: &str);
-
-    /// Enter a sub-scope, e.g. by increase the log indentation.
-    fn enter(&self);
-
-    /// Leave the current sub-scope, e.g. by decrease the log indentation.
-    fn leave(&self);
+    fn trace(&self, session_id: SessionId, msg: &str);
 
     /// Enable traces for the specified scope.
     fn enable_trace(&mut self, flag: TraceMode);
@@ -96,32 +95,47 @@ pub trait Tracer: Send + Debug {
     fn is_trace(&self, flag: TraceMode) -> bool;
 
     /// Called by FSM if a method is entered
-    fn enter_method(&self, what: &str) {
-        if self.is_trace(TraceMode::METHODS) {
-            self.trace(format!(">>> {}", what).as_str());
-            self.enter();
-        }
-    }
+    fn enter_method(&self, session_id: SessionId, what: &str, arguments: &[(&str, &dyn Display)]);
 
     /// Called by FSM if a method is exited
-    fn exit_method(&self, what: &str) {
+    fn exit_method(&self, session_id: SessionId, what: &str, arguments: &[(&str, &dyn Display)]) {
+        #[cfg(feature = "Trace_Method")]
         if self.is_trace(TraceMode::METHODS) {
-            self.leave();
-            self.trace(format!("<<< {}", what).as_str());
+            DefaultTracer::decrease_indent();
+
+            self.trace(
+                session_id,
+                format!(
+                    "<<< {} {}",
+                    what,
+                    arguments
+                        .iter()
+                        .map(|(k, v)| format!("{k}:{v}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .as_str(),
+            )
         }
     }
 
     /// Called by FSM if an internal event is sent
-    fn event_internal_send(&self, what: &Event) {
+    fn event_internal_sent(&self, session_id: SessionId, what: &Event) {
+        #[cfg(feature = "Trace_Event")]
         if self.is_trace(TraceMode::EVENTS) {
-            self.trace(format!("Send Internal Event: {} #{:?}", what.name, what.invoke_id).as_str());
+            self.trace(
+                session_id,
+                format!("Sent Internal Event: {} #{:?}", what.name, what.invoke_id).as_str(),
+            );
         }
     }
 
     /// Called by FSM if an internal event is received
-    fn event_internal_received(&self, what: &Event) {
+    fn event_internal_received(&self, session_id: SessionId, what: &Event) {
+        #[cfg(feature = "Trace_Event")]
         if self.is_trace(TraceMode::EVENTS) {
             self.trace(
+                session_id,
                 format!(
                     "Received Internal Event: {}, invokeId {:?}, content {:?}, param {:?}",
                     what.name, what.invoke_id, what.content, what.param_values
@@ -131,15 +145,28 @@ pub trait Tracer: Send + Debug {
         }
     }
 
-    /// Called by FSM if an external event is send
-    fn event_external_send(&self, what: &Event) {
+    /// Called by FSM if an external event is sent
+    fn event_external_sent(
+        &self,
+        from_session_id: SessionId,
+        to_session_id: SessionId,
+        what: &Event,
+    ) {
+        #[cfg(feature = "Trace_Event")]
         if self.is_trace(TraceMode::EVENTS) {
-            self.trace(format!("Send External Event: {} #{:?}", what.name, what.invoke_id).as_str());
+            self.trace(
+                from_session_id,
+                format!(
+                    "Send External Event: {} #{:?} to {}",
+                    what.name, what.invoke_id, to_session_id
+                )
+                .as_str(),
+            );
         }
     }
 
     /// Called by FSM if an external event is received
-    fn event_external_received(&mut self, what: &Event) {
+    fn event_external_received(&mut self, session_id: SessionId, what: &Event) {
         if what.name.starts_with("trace.") {
             let p = what.name.as_str().split('.').collect::<Vec<&str>>();
             if p.len() == 3 {
@@ -153,6 +180,7 @@ pub trait Tracer: Send + Debug {
                         }
                         _ => {
                             self.trace(
+                                session_id,
                                 format!(
                                     "Trace event '{}' with illegal flag '{}'. Use 'On' or 'Off'.",
                                     what.name,
@@ -164,6 +192,7 @@ pub trait Tracer: Send + Debug {
                     },
                     Err(_e) => {
                         self.trace(
+                            session_id,
                             format!(
                                 "Trace event '{}' has unknown trace flag '{}'",
                                 what.name,
@@ -175,8 +204,10 @@ pub trait Tracer: Send + Debug {
                 }
             }
         }
+        #[cfg(feature = "Trace_Event")]
         if self.is_trace(TraceMode::EVENTS) {
             self.trace(
+                session_id,
                 format!(
                     "Received External Event: {} #{:?}",
                     what.name, what.invoke_id
@@ -187,48 +218,46 @@ pub trait Tracer: Send + Debug {
     }
 
     /// Called by FSM if a state is entered or left.
-    fn trace_state(&self, what: &str, s: &State) {
+    fn trace_state(&self, session_id: SessionId, what: &str, s: &State) {
+        #[cfg(feature = "Trace_State")]
         if self.is_trace(TraceMode::STATES) {
             if s.name.is_empty() {
-                self.trace(format!("{} #{}", what, s.id).as_str());
+                self.trace(session_id, format!("{} #{}", what, s.id).as_str());
             } else {
-                self.trace(format!("{} <{}> #{}", what, &s.name, s.id).as_str());
+                self.trace(
+                    session_id,
+                    format!("{} <{}> #{}", what, &s.name, s.id).as_str(),
+                );
             }
         }
     }
 
     /// Called by FSM if a state is entered. Calls [Tracer::trace_state].
-    fn trace_enter_state(&self, s: &State) {
-        self.trace_state("Enter", s);
+    fn trace_enter_state(&self, session_id: SessionId, s: &State) {
+        #[cfg(feature = "Trace_State")]
+        self.trace_state(session_id, "Enter", s);
     }
 
     /// Called by FSM if a state is left. Calls [Tracer::trace_state].
-    fn trace_exit_state(&self, s: &State) {
-        self.trace_state("Exit", s);
-    }
-
-    /// Called by FSM for input arguments in methods.
-    fn trace_argument(&self, what: &str, d: &dyn Display) {
-        if self.is_trace(TraceMode::ARGUMENTS) {
-            self.trace(format!("Argument:{}={}", what, d).as_str());
-        }
-    }
-
-    /// Called by FSM for results in methods.
-    fn trace_result(&self, what: &str, d: &dyn Display) {
-        if self.is_trace(TraceMode::RESULTS) {
-            self.trace(format!("Result:{}={}", what, d).as_str());
-        }
+    fn trace_exit_state(&self, session_id: SessionId, s: &State) {
+        #[cfg(feature = "Trace_State")]
+        self.trace_state(session_id, "Exit", s);
     }
 
     /// Helper method to trace a vector of ids.
-    fn trace_id_vec(&self, what: &str, l: &[u32]) {
-        self.trace(format!("{}=[{}]", what, &fsm::vec_to_string(l)).as_str());
+    fn trace_id_vec(&self, session_id: SessionId, what: &str, l: &[u32]) {
+        self.trace(
+            session_id,
+            format!("{}=[{}]", what, &fsm::vec_to_string(l)).as_str(),
+        );
     }
 
     /// Helper method to trace a OrderedSet of ids.
-    fn trace_id_set(&self, what: &str, l: &OrderedSet<u32>) {
-        self.trace(format!("{}=({})", what, fsm::vec_to_string(&l.data)).as_str());
+    fn trace_id_set(&self, session_id: SessionId, what: &str, l: &OrderedSet<u32>) {
+        self.trace(
+            session_id,
+            format!("{}=({})", what, fsm::vec_to_string(&l.data)).as_str(),
+        );
     }
 
     /// Get trace mode
@@ -236,22 +265,14 @@ pub trait Tracer: Send + Debug {
 }
 
 impl Tracer for DefaultTracer {
-    fn trace(&self, msg: &str) {
-        info!("{}{}", DefaultTracer::get_prefix(), msg);
-    }
-
-    fn enter(&self) {
-        let mut prefix = DefaultTracer::get_prefix();
-        prefix += " ";
-        DefaultTracer::set_prefix(prefix);
-    }
-
-    fn leave(&self) {
-        let mut prefix = DefaultTracer::get_prefix();
-        if !prefix.is_empty() {
-            prefix.remove(0);
-            DefaultTracer::set_prefix(prefix);
-        }
+    fn trace(&self, session_id: SessionId, msg: &str) {
+        info!(
+            "Trace {}>{:w$}{}",
+            session_id,
+            " ",
+            msg,
+            w = DefaultTracer::get_indent() as usize
+        );
     }
 
     fn enable_trace(&mut self, flag: TraceMode) {
@@ -264,6 +285,27 @@ impl Tracer for DefaultTracer {
 
     fn is_trace(&self, flag: TraceMode) -> bool {
         self.trace_flags.contains(&flag) || self.trace_flags.contains(&TraceMode::ALL)
+    }
+
+    /// Called by FSM if a method is entered
+    fn enter_method(&self, session_id: SessionId, what: &str, arguments: &[(&str, &dyn Display)]) {
+        #[cfg(feature = "Trace_Method")]
+        if self.is_trace(TraceMode::METHODS) {
+            self.trace(
+                session_id,
+                format!(
+                    ">>> {}({})",
+                    what,
+                    arguments
+                        .iter()
+                        .map(|(k, v)| format!("{k}: {v}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .as_str(),
+            );
+            DefaultTracer::increase_indent();
+        }
     }
 
     fn trace_mode(&self) -> TraceMode {
@@ -299,20 +341,26 @@ impl DefaultTracer {
         }
     }
 
-    fn get_prefix() -> String {
-        TRACE_PREFIX.with(|p| p.borrow().clone())
+    fn get_indent() -> u16 {
+        TRACE_INDENT.with_borrow(|v| *v)
     }
 
-    fn set_prefix(p: String) {
-        TRACE_PREFIX.with(|pfx: &RefCell<String>| {
-            *pfx.borrow_mut().deref_mut() = p;
+    fn increase_indent() {
+        TRACE_INDENT.with_borrow_mut(|v| *v += 2);
+    }
+
+    fn decrease_indent() {
+        TRACE_INDENT.with_borrow_mut(|v| {
+            if *v > 2 {
+                *v -= 2
+            }
         });
     }
 }
 
 thread_local! {
    /// Trace prefix for [DefaultTracer]
-   static TRACE_PREFIX: RefCell<String> = RefCell::new("".to_string());
+   static TRACE_INDENT:  RefCell<u16> = RefCell::new(1);
 }
 
 pub trait TracerFactory: Send {

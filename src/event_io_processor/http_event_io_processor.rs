@@ -4,16 +4,16 @@
 //! This implementation is based on Rocket, but can be used as template for implementations based on other frameworks.\
 //! The event input form is only added for test & de debugging and should not be used in production.
 
-use rocket::response::content::RawHtml;
-use rocket::{post, Shutdown};
-use rocket::{route, Request, Response};
-use rocket::{routes, Config};
-
-use rocket::http::ContentType;
-use rocket::response::Responder;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::IpAddr;
+
+use rocket::http::ContentType;
+use rocket::response::content::RawHtml;
+use rocket::response::Responder;
+use rocket::{post, Shutdown};
+use rocket::{route, Request, Response};
+use rocket::{routes, Config};
 
 use crate::common::{debug, error, info};
 use crate::datamodel::{Data, GlobalDataArc, BASIC_HTTP_EVENT_PROCESSOR};

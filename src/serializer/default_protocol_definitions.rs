@@ -1,5 +1,8 @@
 //! Constants, used in the protocol.
 
+/// The serializer version, reader and writer must match the same version.
+pub const FSM_SERIALIZER_VERSION: &str = "fsmW2.0";
+
 pub const FSM_PROTOCOL_TYPE_PROTOCOL_VERSION: &str = "DwP1.1";
 pub const FSM_PROTOCOL_TYPE_OPT_STRING_NONE: u8 = 0x10;
 pub const FSM_PROTOCOL_TYPE_BOOLEAN_TRUE: u8 = 0x1F;
