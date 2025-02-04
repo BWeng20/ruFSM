@@ -75,6 +75,8 @@ impl ScxmlEventIOProcessor {
     }
 }
 
+
+
 const TYPES: &[&str] = &[SCXML_EVENT_PROCESSOR, SCXML_EVENT_PROCESSOR_SHORT_TYPE];
 
 impl EventIOProcessor for ScxmlEventIOProcessor {

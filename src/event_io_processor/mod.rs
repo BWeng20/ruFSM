@@ -13,6 +13,9 @@ use crate::datamodel::{Datamodel, GlobalDataArc, ToAny};
 use crate::fsm::SessionId;
 use crate::fsm::{Event, Fsm, EVENT_CANCEL_SESSION};
 
+#[cfg(feature = "MqttIOProcessor")]
+pub mod mqtt_event_io_processor;
+
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 pub mod http_event_io_processor;
 

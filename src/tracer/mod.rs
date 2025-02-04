@@ -1,3 +1,5 @@
+//! The Tracer module, monitoring and remote-control.
+
 use crate::common::info;
 use lazy_static::lazy_static;
 use std::cell::RefCell;
@@ -11,6 +13,9 @@ use std::sync::{Arc, Mutex};
 use crate::common::ArgOption;
 use crate::fsm;
 use crate::fsm::{Event, OrderedSet, State};
+
+#[cfg(feature = "MqttTrace")]
+pub mod mqtt_trace_server;
 
 /// Trace mode for FSM Tracer.
 #[derive(Debug, Clone, PartialEq, Copy, Hash, Eq)]
@@ -126,7 +131,7 @@ pub trait Tracer: Send + Debug {
                     "Received Internal Event: {}, invokeId {:?}, content {:?}, param {:?}",
                     what.name, what.invoke_id, what.content, what.param_values
                 )
-                .as_str(),
+                    .as_str(),
             );
         }
     }
@@ -158,7 +163,7 @@ pub trait Tracer: Send + Debug {
                                     what.name,
                                     *p.get(2).unwrap()
                                 )
-                                .as_str(),
+                                    .as_str(),
                             );
                         }
                     },
@@ -169,7 +174,7 @@ pub trait Tracer: Send + Debug {
                                 what.name,
                                 p.get(1).unwrap()
                             )
-                            .as_str(),
+                                .as_str(),
                         );
                     }
                 }
@@ -181,7 +186,7 @@ pub trait Tracer: Send + Debug {
                     "Received External Event: {} #{:?}",
                     what.name, what.invoke_id
                 )
-                .as_str(),
+                    .as_str(),
             );
         }
     }

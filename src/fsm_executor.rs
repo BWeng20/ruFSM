@@ -37,6 +37,8 @@ use crate::serializer::fsm_reader::FsmReader;
 use crate::tracer::TraceMode;
 #[cfg(feature = "BasicHttpEventIOProcessor")]
 use std::net::{IpAddr, Ipv4Addr};
+use rumqttc::v5::MqttOptions;
+use crate::event_io_processor::mqtt_event_io_processor::MqttEventIOProcessor;
 
 #[derive(Default)]
 pub struct ExecutorState {
@@ -137,6 +139,12 @@ impl FsmExecutor {
                 )
                 .await,
             );
+            e.add_processor(w);
+        }
+        #[cfg(feature = "MqttIOProcessor")]
+        {
+            let mqtt_options: MqttOptions = MqttOptions::new("123", "localhost", 5555);
+            let w = Box::new( MqttEventIOProcessor::new(e.state.clone(), mqtt_options) );
             e.add_processor(w);
         }
         e.add_processor(Box::new(ScxmlEventIOProcessor::new()));

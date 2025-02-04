@@ -15,11 +15,7 @@ pub mod scxml_reader;
 #[cfg(feature = "serializer")]
 pub mod serializer;
 
-#[cfg(feature = "Trace")]
 pub mod tracer;
-
-#[cfg(feature = "TraceServer")]
-pub mod remote_tracer;
 
 pub mod actions;
 pub mod common;
