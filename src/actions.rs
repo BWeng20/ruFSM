@@ -2,6 +2,7 @@
 //! If the datamodel supports it, these Actions can be invoked from script and expressions.
 
 #![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::doc_overindented_list_items)]
 #![allow(dead_code)]
 
 use crate::datamodel::Data;
@@ -60,7 +61,12 @@ impl ActionWrapper {
         self.actions.lock().unwrap()
     }
 
-    pub fn execute(&self, action_name: &str, arguments: &[Data], global: &GlobalData) -> Result<Data, String> {
+    pub fn execute(
+        &self,
+        action_name: &str,
+        arguments: &[Data],
+        global: &GlobalData,
+    ) -> Result<Data, String> {
         let rt = if let Some(action) = self.actions.lock().unwrap().get_mut(action_name) {
             action.execute(arguments, global)
         } else {

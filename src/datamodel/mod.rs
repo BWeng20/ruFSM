@@ -1,11 +1,5 @@
 //! Defines the API used to access the data models.
 
-use crate::common::{debug, error, info, warn};
-use crate::expression_engine::lexer::{ExpressionLexer, Token};
-use crate::fsm::{
-    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair, Parameter, State,
-    StateId,
-};
 use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -15,7 +9,14 @@ use std::ops::Deref;
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
 use crate::actions::ActionMap;
+use crate::common::{debug, error, info, warn};
 use crate::event_io_processor::EventIOProcessor;
+use crate::expression_engine::lexer::{ExpressionLexer, Token};
+use crate::fsm::{
+    vec_to_string, CommonContent, Event, ExecutableContentId, Fsm, GlobalData, InvokeId, ParamPair,
+    Parameter, State, StateId,
+};
+use crate::tracer::TraceMode;
 
 #[cfg(feature = "ECMAScriptModel")]
 pub mod ecma_script;
@@ -87,7 +88,11 @@ pub const EVENT_VARIABLE_FIELD_DATA: &str = "data";
 /// Factory trait to handle creation of data-models dynamically.
 pub trait DatamodelFactory: Send {
     /// Create a NEW datamodel.
-    fn create(&mut self, global_data: GlobalDataArc, options: &HashMap<String, String>) -> Box<dyn Datamodel>;
+    fn create(
+        &mut self,
+        global_data: GlobalDataArc,
+        options: &HashMap<String, String>,
+    ) -> Box<dyn Datamodel>;
 }
 
 pub type GlobalDataLock<'a> = MutexGuard<'a, GlobalData>;
@@ -97,8 +102,11 @@ pub type GlobalDataLock<'a> = MutexGuard<'a, GlobalData>;
 pub type GlobalDataArc = Arc<Mutex<GlobalData>>;
 
 /// Helper to create the global data instance. Should be used to minimize dependencies.
-pub fn create_global_data_arc() -> GlobalDataArc {
-    GlobalDataArc::new(Mutex::from(crate::fsm::GlobalData::new()))
+pub fn create_global_data_arc(#[cfg(feature = "Trace")] trace: TraceMode) -> GlobalDataArc {
+    GlobalDataArc::new(Mutex::from(crate::fsm::GlobalData::new(
+        #[cfg(feature = "Trace")]
+        trace,
+    )))
 }
 
 /// Data model interface trait.\
@@ -179,7 +187,11 @@ pub trait Datamodel {
     /// If value_expression is empty, Ok(value) is returned (if empty or not). If the expression
     /// results in error Err(message) and "error.execute" is put in internal queue.
     /// See [internal_error_execution](Datamodel::internal_error_execution).
-    fn get_expression_alternative_value(&mut self, value: &Data, value_expression: &Data) -> Result<DataArc, String> {
+    fn get_expression_alternative_value(
+        &mut self,
+        value: &Data,
+        value_expression: &Data,
+    ) -> Result<DataArc, String> {
         if value_expression.is_empty() {
             Ok(create_data_arc(value.clone()))
         } else {
@@ -262,7 +274,11 @@ pub trait Datamodel {
     /// *W3C says*:\
     /// Indicates that an error internal to the execution of the document has occurred, such as one
     /// arising from expression evaluation.
-    fn internal_error_execution_for_event(&mut self, send_id: &Option<String>, invoke_id: &Option<InvokeId>) {
+    fn internal_error_execution_for_event(
+        &mut self,
+        send_id: &Option<String>,
+        invoke_id: &Option<InvokeId>,
+    ) {
         get_global!(self).enqueue_internal(Event::error_execution(send_id, invoke_id));
     }
 
@@ -286,16 +302,16 @@ pub trait Datamodel {
             None => None,
             Some(ct) => {
                 match &ct.content_expr {
-                    None => ct
-                        .content
-                        .as_ref()
-                        .map(|ct_content| match ct_content.parse::<f64>() {
+                    None => {
+                        let ct_content = ct.content.to_string();
+                        match ct_content.parse::<f64>() {
                             Ok(value) => match numeric_to_integer(&Data::Double(value)) {
-                                Some(i) => create_data_arc(Data::Integer(i)),
-                                None => create_data_arc(Data::Double(value)),
+                                Some(i) => Some(create_data_arc(Data::Integer(i))),
+                                None => Some(create_data_arc(Data::Double(value))),
                             },
-                            Err(_) => create_data_arc(Data::String(ct_content.clone())),
-                        }),
+                            Err(_) => Some(create_data_arc(Data::String(ct_content))),
+                        }
+                    }
                     Some(expr) => {
                         match self.execute(&str_to_source(expr.as_str())) {
                             Err(msg) => {
@@ -402,7 +418,11 @@ pub struct NullDatamodel {
 pub struct NullDatamodelFactory {}
 
 impl DatamodelFactory for NullDatamodelFactory {
-    fn create(&mut self, global_data: GlobalDataArc, _options: &HashMap<String, String>) -> Box<dyn Datamodel> {
+    fn create(
+        &mut self,
+        global_data: GlobalDataArc,
+        _options: &HashMap<String, String>,
+    ) -> Box<dyn Datamodel> {
         Box::new(NullDatamodel::new(global_data))
     }
 }
@@ -499,7 +519,9 @@ impl Datamodel for NullDatamodel {
     /// The predicate must return 'true' if and only if that state is in the current state configuration.
     fn execute_condition(&mut self, script: &Data) -> Result<bool, String> {
         let mut lexer = ExpressionLexer::new(script.to_string());
-        if lexer.next_token() == Token::Identifier("In".to_string()) && lexer.next_token() == Token::Bracket('(') {
+        if lexer.next_token() == Token::Identifier("In".to_string())
+            && lexer.next_token() == Token::Bracket('(')
+        {
             match lexer.next_token() {
                 Token::TString(state_name) | Token::Identifier(state_name) => {
                     if lexer.next_token() != Token::Bracket(')') {
@@ -721,7 +743,10 @@ pub fn operation_modulus(left: &Data, right: &Data) -> Data {
 }
 
 /// Implements a "<" (less) operation on Data items.
-pub fn operation_less(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
+pub fn operation_less(
+    left: &crate::datamodel::Data,
+    right: &crate::datamodel::Data,
+) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() < right.as_number())
     } else {
@@ -739,7 +764,10 @@ pub fn operation_less(left: &crate::datamodel::Data, right: &crate::datamodel::D
 }
 
 /// Implements a "<=" (less or equal) operation on Data items.
-pub fn operation_less_equal(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
+pub fn operation_less_equal(
+    left: &crate::datamodel::Data,
+    right: &crate::datamodel::Data,
+) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() <= right.as_number())
     } else {
@@ -757,7 +785,10 @@ pub fn operation_less_equal(left: &crate::datamodel::Data, right: &crate::datamo
 }
 
 /// Implements a ">" (greater) operation on Data items.
-pub fn operation_greater(left: &crate::datamodel::Data, right: &crate::datamodel::Data) -> crate::datamodel::Data {
+pub fn operation_greater(
+    left: &crate::datamodel::Data,
+    right: &crate::datamodel::Data,
+) -> crate::datamodel::Data {
     if left.is_numeric() && right.is_numeric() {
         Data::Boolean(left.as_number() > right.as_number())
     } else {
@@ -873,6 +904,35 @@ pub enum Data {
     Source(SourceCode),
     /// Special placeholder to indicate empty content.
     None(),
+}
+
+impl From<u32> for Data {
+    fn from(value: u32) -> Self {
+        Data::Integer(value as i64)
+    }
+}
+
+impl From<&String> for Data {
+    fn from(value: &String) -> Self {
+        Data::String(value.clone())
+    }
+}
+
+impl From<String> for Data {
+    fn from(value: String) -> Self {
+        Data::String(value.clone())
+    }
+}
+
+pub fn wrap_splice_to_data<T>(input: &[T]) -> Data
+where
+    T: Into<Data> + Clone,
+{
+    let r = input
+        .iter()
+        .map(|v| create_data_arc(v.clone().into()))
+        .collect();
+    Data::Array(r)
 }
 
 /// Create a Data::Source from a str with invalid id.\
@@ -1133,7 +1193,8 @@ impl PartialEq for DataArc {
     fn eq(&self, other: &Self) -> bool {
         // It's really important to check first of both arc reference the same object, otherwise the compare
         // a deadlock will occur.
-        Arc::ptr_eq(&self.arc, &other.arc) || self.arc.lock().unwrap().eq(other.lock().unwrap().deref())
+        Arc::ptr_eq(&self.arc, &other.arc)
+            || self.arc.lock().unwrap().eq(other.lock().unwrap().deref())
     }
 }
 

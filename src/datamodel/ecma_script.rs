@@ -3,31 +3,31 @@
 //! See [W3C:The ECMAScript Data Model](/doc/W3C_SCXML_2024_07_13/index.html#ecma-profile).\
 //! See [GitHub:Boa Engine](https://github.com/boa-dev/boa).
 
-use crate::common::ArgOption;
-use crate::common::{debug, error, info, warn};
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::string::ToString;
+
 use boa_engine::context::ContextBuilder;
 use boa_engine::object::builtins::{JsArray, JsMap};
 use boa_engine::object::ObjectInitializer;
 use boa_engine::property::{Attribute, PropertyDescriptor, PropertyKey};
 use boa_engine::value::Type;
-use boa_engine::{js_string, native_function::NativeFunction, Context, JsBigInt, JsError, JsValue, Source};
+use boa_engine::{
+    js_string, native_function::NativeFunction, Context, JsBigInt, JsError, JsValue, Source,
+};
 use boa_engine::{JsArgs, JsData, JsResult};
 use boa_gc::{empty_trace, Finalize, Trace};
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::string::ToString;
 
+use crate::common::ArgOption;
+use crate::common::{debug, error, info, warn};
 use crate::datamodel::{
     create_data_arc, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
-    EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN,
-    EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
+    EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME,
+    EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID,
+    EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::SYS_IO_PROCESSORS;
-
-#[cfg(feature = "Trace")]
-use crate::executable_content::DefaultExecutableContentTracer;
-
-use crate::executable_content::{ExecutableContent, ExecutableContentTracer};
+use crate::executable_content::ExecutableContent;
 use crate::fsm::{ExecutableContentId, Fsm, StateId};
 
 pub const ECMA_SCRIPT: &str = "ECMAScript";
@@ -47,14 +47,17 @@ pub static ECMA_STRICT_ARGUMENT: ArgOption = ArgOption {
 pub struct ECMAScriptDatamodel {
     pub global_data: GlobalDataArc,
     pub context: Context,
-    pub tracer: Option<Box<dyn ExecutableContentTracer>>,
     pub strict_mode: bool,
 }
 
 pub struct ECMAScriptDatamodelFactory {}
 
 impl DatamodelFactory for ECMAScriptDatamodelFactory {
-    fn create(&mut self, global_data: GlobalDataArc, options: &HashMap<String, String>) -> Box<dyn Datamodel> {
+    fn create(
+        &mut self,
+        global_data: GlobalDataArc,
+        options: &HashMap<String, String>,
+    ) -> Box<dyn Datamodel> {
         let mut ecma = Box::new(ECMAScriptDatamodel::new(global_data));
         for (key, value) in options {
             ecma.set_option(key.as_str(), value.as_str());
@@ -135,8 +138,6 @@ impl ECMAScriptDatamodel {
         ECMAScriptDatamodel {
             global_data,
             context: ContextBuilder::new().build().unwrap(),
-            #[cfg(feature = "Trace")]
-            tracer: Some(Box::new(DefaultExecutableContentTracer::new())),
             #[cfg(not(feature = "Trace"))]
             tracer: None,
             strict_mode: false,
@@ -184,7 +185,9 @@ impl ECMAScriptDatamodel {
                         for key in &keys {
                             let name = match key {
                                 PropertyKey::String(ref name) => name.to_std_string().unwrap(),
-                                PropertyKey::Symbol(ref name) => name.fn_name().to_std_string().unwrap(),
+                                PropertyKey::Symbol(ref name) => {
+                                    name.fn_name().to_std_string().unwrap()
+                                }
                                 PropertyKey::Index(idx) => idx.get().to_string(),
                             };
                             #[cfg(feature = "Debug")]
@@ -238,7 +241,7 @@ impl ECMAScriptDatamodel {
                         Ok(s) => Ok(create_data_arc(s)),
                         Err(err) => {
                             let msg = format!(
-                                "Script Error - failed to convert result to string: {} => {}",
+                                "Script Error - failed to convert result: {} => {}",
                                 script, err
                             );
                             warn!("{}", msg);
@@ -260,12 +263,6 @@ impl ECMAScriptDatamodel {
     }
 
     fn execute_content(&mut self, fsm: &Fsm, e: &dyn ExecutableContent) -> bool {
-        match &mut self.tracer {
-            Some(t) => {
-                e.trace(t.as_mut(), fsm);
-            }
-            None => {}
-        }
         e.execute(self, fsm)
     }
 
@@ -283,7 +280,12 @@ impl ECMAScriptDatamodel {
             .set(js_string!(name), value, false, &mut self.context);
     }
 
-    fn assign_internal(&mut self, left_expr: &str, right_expr: &str, allow_undefined: bool) -> bool {
+    fn assign_internal(
+        &mut self,
+        left_expr: &str,
+        right_expr: &str,
+        allow_undefined: bool,
+    ) -> bool {
         let exp = format!("{}={}", left_expr, right_expr);
         if allow_undefined && self.strict_mode {
             self.context.strict(false);
@@ -363,7 +365,11 @@ impl ECMAScriptDatamodel {
         }
     }
 
-    fn in_configuration(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    fn in_configuration(
+        _this: &JsValue,
+        args: &[JsValue],
+        context: &mut Context,
+    ) -> JsResult<JsValue> {
         let state = args.get_or_undefined(0);
 
         if let Ok(name) = state.to_string(context) {
@@ -478,7 +484,11 @@ impl Datamodel for ECMAScriptDatamodel {
                 let processor_js = JsMap::new(ctx);
                 let location = js_string!(processor.lock().unwrap().get_location(session_id));
                 _ = processor_js.create_data_property(js_string!("location"), location, ctx);
-                _ = io_processors_js.create_data_property(js_string!(name.as_str()), processor_js, ctx);
+                _ = io_processors_js.create_data_property(
+                    js_string!(name.as_str()),
+                    processor_js,
+                    ctx,
+                );
             }
             let r = self.context.global_object().define_property_or_throw(
                 js_string!(SYS_IO_PROCESSORS),
@@ -496,11 +506,11 @@ impl Datamodel for ECMAScriptDatamodel {
     }
 
     fn set_from_state_data(&mut self, data: &HashMap<String, DataArc>, set_data: bool) {
-        for (name, data) in data {
+        for (name, value) in data {
             if set_data {
-                let data_guard = data.lock().unwrap();
-                if let Data::Source(src) = data_guard.deref() {
+                if let Data::Source(src) = value.lock().unwrap().deref() {
                     if !src.is_empty() {
+                        // The data from state-data needs to be evaluated
                         let rs = self.context.eval(Source::from_bytes(src.as_str()));
                         match rs {
                             Ok(val) => {
@@ -521,7 +531,7 @@ impl Datamodel for ECMAScriptDatamodel {
                         self.set_js_property(name.as_str(), JsValue::Null);
                     };
                 } else {
-                    let ds = self.data_value_to_js(data_guard.deref());
+                    let ds = self.data_value_to_js(value.lock().unwrap().deref());
                     self.set_js_property(name.as_str(), ds);
                 }
             } else {
@@ -700,13 +710,18 @@ impl Datamodel for ECMAScriptDatamodel {
                         if self.assign_internal(item_name, "null", true) {
                             for item_prop in p.index_property_values() {
                                 // Skip the last "length" element
-                                if item_prop.enumerable().is_some() && item_prop.enumerable().unwrap() {
+                                if item_prop.enumerable().is_some()
+                                    && item_prop.enumerable().unwrap()
+                                {
                                     match item_prop.value() {
                                         Some(item) => {
                                             #[cfg(feature = "Debug")]
                                             debug!("ForEach: #{} {}={:?}", idx, item_name, item);
                                             let str = js_to_string(item, &mut self.context);
-                                            if self.assign(&str_to_source(item_name), &str_to_source(str.as_str())) {
+                                            if self.assign(
+                                                &str_to_source(item_name),
+                                                &str_to_source(str.as_str()),
+                                            ) {
                                                 if !index.is_empty() {
                                                     self.set_js_property(index, idx);
                                                 }
@@ -758,7 +773,7 @@ impl Datamodel for ECMAScriptDatamodel {
 
     #[allow(non_snake_case)]
     fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) -> bool {
-        let ec = fsm.executableContent.get(&content_id);
+        let ec = fsm.executableContent.get((content_id - 1) as usize);
         for e in ec.unwrap().iter() {
             if !self.execute_content(fsm, e.as_ref()) {
                 return false;
@@ -770,8 +785,9 @@ impl Datamodel for ECMAScriptDatamodel {
 
 #[cfg(test)]
 mod tests {
-    use log::info;
     use std::collections::HashMap;
+
+    use log::info;
 
     use crate::scxml_reader;
     use crate::test::run_test_manual;

@@ -1,19 +1,17 @@
 //! Implements the SCXML Data model for rFSM Expressions.
 
-use crate::actions::{Action, ActionWrapper};
 use std::collections::HashMap;
 use std::ops::Deref;
 
-use crate::common::{error, info};
-
+use crate::actions::{Action, ActionWrapper};
 #[cfg(feature = "Debug")]
 use crate::common::debug;
-
+use crate::common::{error, info};
 use crate::datamodel::{
-    create_data_arc, data_to_string, str_to_source, Data, DataArc, Datamodel, DatamodelFactory, GlobalDataArc,
-    SourceCode, EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID, EVENT_VARIABLE_FIELD_NAME,
-    EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE, EVENT_VARIABLE_FIELD_SEND_ID,
-    EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
+    create_data_arc, data_to_string, str_to_source, Data, DataArc, Datamodel, DatamodelFactory,
+    GlobalDataArc, SourceCode, EVENT_VARIABLE_FIELD_DATA, EVENT_VARIABLE_FIELD_INVOKE_ID,
+    EVENT_VARIABLE_FIELD_NAME, EVENT_VARIABLE_FIELD_ORIGIN, EVENT_VARIABLE_FIELD_ORIGIN_TYPE,
+    EVENT_VARIABLE_FIELD_SEND_ID, EVENT_VARIABLE_FIELD_TYPE, EVENT_VARIABLE_NAME,
 };
 use crate::event_io_processor::SYS_IO_PROCESSORS;
 use crate::expression_engine::expressions::{
@@ -79,7 +77,12 @@ impl RFsmExpressionDatamodel {
         }
     }
 
-    fn assign_internal(&mut self, left_expr: &Data, right_expr: &Data, allow_undefined: bool) -> bool {
+    fn assign_internal(
+        &mut self,
+        left_expr: &Data,
+        right_expr: &Data,
+        allow_undefined: bool,
+    ) -> bool {
         let r = match (self.parse(left_expr), self.parse(right_expr)) {
             (Ok(left_parsed), Ok(right_parsed)) => {
                 let expression: Box<dyn Expression> = if allow_undefined {
@@ -119,7 +122,11 @@ impl RFsmExpressionDatamodel {
         r
     }
 
-    fn execute_internal_source(&mut self, source: &SourceCode, handle_error: bool) -> Result<DataArc, String> {
+    fn execute_internal_source(
+        &mut self,
+        source: &SourceCode,
+        handle_error: bool,
+    ) -> Result<DataArc, String> {
         let parser_result = self.compile(source);
         match parser_result {
             Ok(expression) => {
@@ -187,7 +194,11 @@ impl RFsmExpressionDatamodel {
 pub struct RFsmExpressionDatamodelFactory {}
 
 impl DatamodelFactory for RFsmExpressionDatamodelFactory {
-    fn create(&mut self, global_data: GlobalDataArc, _options: &HashMap<String, String>) -> Box<dyn Datamodel> {
+    fn create(
+        &mut self,
+        global_data: GlobalDataArc,
+        _options: &HashMap<String, String>,
+    ) -> Box<dyn Datamodel> {
         Box::new(RFsmExpressionDatamodel::new(global_data))
     }
 }
@@ -291,6 +302,7 @@ impl Action for IndexOfAction {
 
 #[derive(Clone)]
 pub struct LengthAction {}
+
 impl Action for LengthAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
@@ -316,6 +328,7 @@ impl Action for LengthAction {
 
 #[derive(Clone)]
 pub struct AbsAction {}
+
 impl Action for AbsAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
@@ -336,6 +349,7 @@ impl Action for AbsAction {
 
 #[derive(Clone)]
 pub struct IsDefinedAction {}
+
 impl Action for IsDefinedAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
@@ -355,6 +369,7 @@ impl Action for IsDefinedAction {
 
 #[derive(Clone)]
 pub struct LogAction {}
+
 impl Action for LogAction {
     fn execute(&self, arguments: &[Data], _global: &GlobalData) -> Result<Data, String> {
         if arguments.len() == 1 {
@@ -672,7 +687,7 @@ impl Datamodel for RFsmExpressionDatamodel {
 
     #[allow(non_snake_case)]
     fn executeContent(&mut self, fsm: &Fsm, content_id: ExecutableContentId) -> bool {
-        let ec = fsm.executableContent.get(&content_id);
+        let ec = fsm.executableContent.get((content_id - 1) as usize);
         for e in ec.unwrap().iter() {
             if !e.execute(self, fsm) {
                 return false;
@@ -684,26 +699,33 @@ impl Datamodel for RFsmExpressionDatamodel {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::common::init_logging;
     use crate::datamodel::expression_engine::RFsmExpressionDatamodel;
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
-    use std::collections::HashMap;
+    use crate::tracer::TraceMode;
 
     #[test]
     fn index_of_works() {
         init_logging();
-        let gd = create_global_data_arc();
+        let gd = create_global_data_arc(
+            #[cfg(feature = "Trace")]
+            TraceMode::ALL,
+        );
         RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         // As normal function.
-        let rs = ExpressionParser::execute("indexOf('abc', 'bc')".to_string(), &mut gd.lock().unwrap());
+        let rs =
+            ExpressionParser::execute("indexOf('abc', 'bc')".to_string(), &mut gd.lock().unwrap());
 
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(1i64))));
 
         // As Member function.
-        let rs = ExpressionParser::execute("'abc'.indexOf('bc')".to_string(), &mut gd.lock().unwrap());
+        let rs =
+            ExpressionParser::execute("'abc'.indexOf('bc')".to_string(), &mut gd.lock().unwrap());
 
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(1i64))));
 
@@ -713,7 +735,10 @@ mod tests {
     #[test]
     fn length_works() {
         init_logging();
-        let gd = create_global_data_arc();
+        let gd = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
         RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         // As normal function.
@@ -725,7 +750,8 @@ mod tests {
         );
 
         // On an array
-        let rs = ExpressionParser::execute("length([1,2,3,4])".to_string(), &mut gd.lock().unwrap());
+        let rs =
+            ExpressionParser::execute("length([1,2,3,4])".to_string(), &mut gd.lock().unwrap());
         assert_eq!(
             rs,
             ExpressionResult::Ok(create_data_arc(Data::Integer(4i64)))
@@ -761,7 +787,10 @@ mod tests {
     #[test]
     fn abs_of_works() {
         init_logging();
-        let gd = create_global_data_arc();
+        let gd = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
         RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         // As normal function.
@@ -778,7 +807,10 @@ mod tests {
     #[test]
     fn to_string_works() {
         init_logging();
-        let gd = create_global_data_arc();
+        let gd = create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        );
         RFsmExpressionDatamodel::add_internal_functions_to_wrapper(&mut gd.lock().unwrap().actions);
 
         let rs = ExpressionParser::execute("toString(-102)".to_string(), &mut gd.lock().unwrap());
@@ -793,7 +825,8 @@ mod tests {
             Ok(create_data_arc(Data::String("1,2,abc,1.2".to_string())))
         );
 
-        let rs = ExpressionParser::execute("'abcdef'.toString()".to_string(), &mut gd.lock().unwrap());
+        let rs =
+            ExpressionParser::execute("'abcdef'.toString()".to_string(), &mut gd.lock().unwrap());
         assert_eq!(rs, Ok(create_data_arc(Data::String("abcdef".to_string()))));
     }
 }

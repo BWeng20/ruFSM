@@ -3,21 +3,26 @@
 //!    rfsm \<scxml-file\> \[-trace flag\]
 extern crate core;
 
-use log::error;
-#[cfg(feature = "ECMAScriptModel")]
-use rufsm::datamodel::ecma_script::ECMA_STRICT_ARGUMENT;
 use std::io::{stdout, Write};
 use std::sync::mpsc::Sender;
 use std::{io, process, thread, time};
 
+use log::error;
+
 use rufsm::actions::ActionWrapper;
 #[cfg(feature = "Trace")]
 use rufsm::common::handle_trace;
-use rufsm::common::init_logging;
+use rufsm::common::{debug, init_logging};
+#[cfg(feature = "ECMAScriptModel")]
+use rufsm::datamodel::ecma_script::ECMA_STRICT_ARGUMENT;
 use rufsm::fsm::{Event, EventType};
 use rufsm::fsm_executor::FsmExecutor;
 #[cfg(feature = "xml")]
 use rufsm::scxml_reader::INCLUDE_PATH_ARGUMENT_OPTION;
+#[cfg(feature = "ThriftTrace")]
+use rufsm::tracer::set_tracer_factory;
+#[cfg(feature = "ThriftTrace")]
+use rufsm::tracer::thrift_trace_server::ThriftTracerFactory;
 #[cfg(feature = "Trace")]
 use rufsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
 
@@ -113,7 +118,11 @@ async fn main_internal() {
     ]);
 
     #[cfg(feature = "Trace")]
-    let trace = TraceMode::from_arguments(&named_opt);
+    let trace = {
+        let trace = TraceMode::from_arguments(&named_opt);
+        debug!("TraceMode {}", trace);
+        trace
+    };
 
     if final_args.is_empty() {
         println!("Missing argument. Please specify one or more scxml file");
@@ -127,6 +136,9 @@ async fn main_internal() {
 
     #[allow(unused_mut)]
     let mut session;
+
+    #[cfg(feature = "ThriftTrace")]
+    set_tracer_factory(Box::new(ThriftTracerFactory::new()));
 
     match executor.execute(
         final_args[0].as_str(),

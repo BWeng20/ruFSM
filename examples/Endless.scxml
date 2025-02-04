@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scxml xmlns="http://www.w3.org/2005/07/scxml" initial="s0" version="1.0" datamodel="null" name='Endless'>
+    <script>
+        log("Hello");
+    </script>
+    <state id="s0">
+    </state>
+</scxml>

@@ -1,7 +1,8 @@
 //! Low level protocol used to read the binary ruFsm format.
 
-use crate::datamodel::{create_data_arc, Data, DataArc};
 use std::io::Read;
+
+use crate::datamodel::{create_data_arc, Data, DataArc};
 
 /// Trait for reading binary data in some platform independent way.\
 /// The resulting data should be sharable with different systems (different OS, Byte-Order... whatever).

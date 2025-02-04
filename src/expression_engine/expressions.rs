@@ -7,12 +7,11 @@ use std::sync::Arc;
 
 #[cfg(feature = "Debug")]
 use crate::common::debug;
-
 use crate::datamodel::{
-    create_data_arc, data_arc_to_string, numeric_to_integer, operation_and, operation_divide, operation_equal,
-    operation_greater, operation_greater_equal, operation_less, operation_less_equal, operation_minus,
-    operation_modulus, operation_multiply, operation_not_equal, operation_or, operation_plus, Data, DataArc,
-    GlobalDataLock, ToAny,
+    create_data_arc, data_arc_to_string, numeric_to_integer, operation_and, operation_divide,
+    operation_equal, operation_greater, operation_greater_equal, operation_less,
+    operation_less_equal, operation_minus, operation_modulus, operation_multiply,
+    operation_not_equal, operation_or, operation_plus, Data, DataArc, GlobalDataLock, ToAny,
 };
 use crate::expression_engine::lexer::Operator;
 
@@ -69,6 +68,8 @@ impl Expression for ExpressionArray {
     }
 }
 
+/// Expression that represents a map or object like structure.
+/// Keys and Values are expressions.
 #[derive(Debug)]
 pub struct ExpressionMap {
     pub map: Vec<(Box<dyn Expression>, Box<dyn Expression>)>,
@@ -128,7 +129,11 @@ impl ExpressionMethod {
         }
     }
 
-    pub fn execute_with_arguments(&self, arguments: &[Data], context: &mut GlobalDataLock) -> ExpressionResult {
+    pub fn execute_with_arguments(
+        &self,
+        arguments: &[Data],
+        context: &mut GlobalDataLock,
+    ) -> ExpressionResult {
         match context
             .actions
             .execute(self.method.as_str(), arguments, context)
@@ -138,7 +143,11 @@ impl ExpressionMethod {
         }
     }
 
-    fn eval_arguments(&self, v: &mut Vec<Data>, context: &mut GlobalDataLock) -> Result<(), String> {
+    fn eval_arguments(
+        &self,
+        v: &mut Vec<Data>,
+        context: &mut GlobalDataLock,
+    ) -> Result<(), String> {
         for arg in &self.arguments {
             v.push(match arg.execute(context, false) {
                 Ok(data_arc) => data_arc.lock().unwrap().clone(),
@@ -280,7 +289,8 @@ impl Expression for ExpressionIndex {
                         },
                         Err(err) => Err(err),
                     },
-                    Data::Array(m) => match numeric_to_integer(index_value.lock().unwrap().deref()) {
+                    Data::Array(m) => match numeric_to_integer(index_value.lock().unwrap().deref())
+                    {
                         Some(index) => match m.get(index as usize) {
                             None => Err(format!("Index not found: {} (len={})", index, m.len())),
                             Some(value) => Ok(value.clone()),
@@ -404,7 +414,9 @@ impl Expression for ExpressionAssign {
                                     Ok(v.clone())
                                 }
                             }
-                            Data::Error(_) | Data::None() => Err(format!("Can't assign from '{}'", right_guard)),
+                            Data::Error(_) | Data::None() => {
+                                Err(format!("Can't assign from '{}'", right_guard))
+                            }
                         }
                     }
                 },
@@ -484,7 +496,11 @@ pub struct ExpressionOperator {
 }
 
 impl ExpressionOperator {
-    pub fn new(op: Operator, left: Box<dyn Expression>, right: Box<dyn Expression>) -> ExpressionOperator {
+    pub fn new(
+        op: Operator,
+        left: Box<dyn Expression>,
+        right: Box<dyn Expression>,
+    ) -> ExpressionOperator {
         ExpressionOperator {
             left,
             right,
@@ -570,6 +586,7 @@ impl Expression for ExpressionOperator {
 pub struct ExpressionNot {
     pub right: Box<dyn Expression>,
 }
+
 impl ExpressionNot {
     pub fn new(right: Box<dyn Expression>) -> ExpressionNot {
         ExpressionNot { right }
@@ -634,16 +651,21 @@ impl Expression for ExpressionSequence {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::common::init_logging;
     use crate::datamodel::expression_engine::RFsmExpressionDatamodel;
     use crate::datamodel::{create_data_arc, create_global_data_arc, Data};
     use crate::expression_engine::expressions::ExpressionResult;
     use crate::expression_engine::parser::ExpressionParser;
-    use std::collections::HashMap;
+    use crate::tracer::TraceMode;
 
     #[test]
     fn can_assign_members() {
-        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        ));
         let mut data_members = HashMap::new();
         data_members.insert("_b".to_string(), create_data_arc(Data::Null()));
         let mut gdata = ec.global_data.lock().unwrap();
@@ -658,7 +680,10 @@ mod tests {
 
     #[test]
     fn can_assign_variable() {
-        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        ));
         let rs = ExpressionParser::execute_str("a = 2", &mut ec.global_data.lock().unwrap());
 
         println!("{:?}", rs);
@@ -667,10 +692,14 @@ mod tests {
     #[test]
     fn arrays_work() {
         init_logging();
-        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        ));
         let context = &mut ec.global_data.lock().unwrap();
 
-        let _ = ExpressionParser::execute("v1 ?= [1,2,4, 'abc', ['a', 'b', 'c']]".to_string(), context);
+        let _ =
+            ExpressionParser::execute("v1 ?= [1,2,4, 'abc', ['a', 'b', 'c']]".to_string(), context);
 
         let rs = ExpressionParser::execute_str("v1[1]", context);
         assert_eq!(rs, Ok(create_data_arc(Data::Integer(2))));
@@ -713,7 +742,10 @@ mod tests {
     #[test]
     fn maps_work() {
         init_logging();
-        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        ));
 
         let data_true = Ok(create_data_arc(Data::Boolean(true)));
         let data_false = Ok(create_data_arc(Data::Boolean(false)));
@@ -772,7 +804,10 @@ mod tests {
         let data_true = Ok(create_data_arc(Data::Boolean(true)));
         let data_false = Ok(create_data_arc(Data::Boolean(false)));
 
-        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        ));
         let context = &mut ec.global_data.lock().unwrap();
 
         let rs = ExpressionParser::execute_str("2 + 1", context);
@@ -804,7 +839,10 @@ mod tests {
     fn sequence_work() {
         init_logging();
 
-        let ec = RFsmExpressionDatamodel::new(create_global_data_arc());
+        let ec = RFsmExpressionDatamodel::new(create_global_data_arc(
+            #[cfg(feature = "Trace_Method")]
+            TraceMode::ALL,
+        ));
         let rs = ExpressionParser::execute_str("1+1;2+2;3*3", &mut ec.global_data.lock().unwrap());
         println!("{:?}", rs);
         assert_eq!(rs, ExpressionResult::Ok(create_data_arc(Data::Integer(9))));
