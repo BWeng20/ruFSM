@@ -164,7 +164,7 @@ pub fn get_features() -> Vec<&'static str> {
         "xml",
         #[cfg(feature = "Trace")]
         "Trace",
-        #[cfg(feature = "MqttTrace")]
+        #[cfg(feature = "ThriftTrace")]
         "MqttTrace",
         #[cfg(feature = "Debug_Reader")]
         "Debug_Reader",

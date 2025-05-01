@@ -37,7 +37,7 @@ pub const SCXML_EVENT_PROCESSOR_SHORT_TYPE: &str = "scxml";
 #[derive(Debug, Default)]
 pub struct ScxmlEventIOProcessor {
     pub location: String,
-    pub handle: ExternalQueueContainer,
+    pub sessions: ExternalQueueContainer,
 }
 
 impl ScxmlEventIOProcessor {
@@ -47,7 +47,7 @@ impl ScxmlEventIOProcessor {
 
         ScxmlEventIOProcessor {
             location: SCXML_TARGET_SESSION_ID_PREFIX.to_string(),
-            handle: ExternalQueueContainer::new(),
+            sessions: ExternalQueueContainer::new(),
         }
     }
 
@@ -90,13 +90,13 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     }
 
     fn get_external_queues(&mut self) -> &mut ExternalQueueContainer {
-        &mut self.handle
+        &mut self.sessions
     }
 
     fn get_copy(&self) -> Box<dyn EventIOProcessor> {
         let b = ScxmlEventIOProcessor {
             location: self.location.clone(),
-            handle: self.handle.clone(),
+            sessions: self.sessions.clone(),
         };
         Box::new(b)
     }
@@ -194,6 +194,6 @@ impl EventIOProcessor for ScxmlEventIOProcessor {
     fn shutdown(&mut self) {
         #[cfg(feature = "Debug")]
         debug!("Scxml Event IO Processor shutdown...");
-        self.handle.shutdown();
+        self.sessions.shutdown();
     }
 }
