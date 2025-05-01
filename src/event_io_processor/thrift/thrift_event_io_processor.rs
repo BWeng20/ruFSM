@@ -10,9 +10,8 @@ use crate::fsm::{Event, SessionId};
 use crate::fsm_executor::{ExecutorStateArc};
 
 
-use thrift::protocol::{TBinaryInputProtocol, TBinaryOutputProtocol, TCompactInputProtocol, TCompactInputProtocolFactory, TCompactOutputProtocol, TCompactOutputProtocolFactory};
-use thrift::transport::{TTcpChannel, TBufferedReadTransport, TBufferedWriteTransport, TIoChannel, TFramedReadTransport, TFramedWriteTransport, TFramedReadTransportFactory, TFramedWriteTransportFactory, ReadHalf, WriteHalf};
-use thrift::server::TServer;
+use thrift::protocol::{TBinaryInputProtocol, TBinaryOutputProtocol, TCompactInputProtocolFactory, TCompactOutputProtocol };
+use thrift::transport::{TTcpChannel, TIoChannel, TFramedReadTransport, TFramedWriteTransport, ReadHalf, WriteHalf};
 use thrift::TThriftClient;
 use crate::common::error;
 use crate::event_io_processor::thrift::rufsm;
