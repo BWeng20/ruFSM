@@ -20,6 +20,11 @@ use rufsm::fsm_executor::FsmExecutor;
 use rufsm::scxml_reader::INCLUDE_PATH_ARGUMENT_OPTION;
 #[cfg(feature = "Trace")]
 use rufsm::tracer::{TraceMode, TRACE_ARGUMENT_OPTION};
+use rufsm::tracer::set_tracer_factory;
+
+#[cfg(feature = "ThriftTrace")]
+use rufsm::tracer::thrift_trace_server::ThriftTracerFactory;
+
 
 #[allow(unused_mut)]
 fn input_loop(mut sender: Sender<Box<Event>>) {
@@ -127,6 +132,10 @@ async fn main_internal() {
 
     #[allow(unused_mut)]
     let mut session;
+
+    #[cfg(feature = "ThriftTrace")]
+    set_tracer_factory(Box::new(ThriftTracerFactory::new()));
+
 
     match executor.execute(
         final_args[0].as_str(),

@@ -15,7 +15,7 @@ use crate::fsm;
 use crate::fsm::{Event, OrderedSet, State};
 
 #[cfg(feature = "ThriftTrace")]
-pub mod mqtt_trace_server;
+pub mod thrift_trace_server;
 
 /// Trace mode for FSM Tracer.
 #[derive(Debug, Clone, PartialEq, Copy, Hash, Eq)]
