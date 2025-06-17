@@ -14,3 +14,5 @@
 /test/w3c/dependencies/
 /test/w3c/rfsm/
 /test/w3c/rfsm_logs/
+/thriftserver/.idea/
+/thriftserver/gradle/
