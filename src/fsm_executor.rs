@@ -319,7 +319,7 @@ impl FsmExecutor {
     }
 
     /// Called by FSM after session ends and FinishMode::DISPOSE.
-    pub fn remove_session(&mut self, session_id: SessionId) {
+    pub fn remove_session(&self, session_id: SessionId) {
         self.state.lock().unwrap().sessions.remove(&session_id);
     }
 

@@ -203,6 +203,7 @@ pub fn start_fsm_with_data_and_finish_mode(
                 }
                 sm.interpret(datamodel.deref_mut());
             }
+            executor.remove_session(session_id);
             #[cfg(feature = "Debug")]
             debug!("SM finished");
         });
