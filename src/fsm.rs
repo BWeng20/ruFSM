@@ -132,7 +132,7 @@ pub fn start_fsm_with_data_and_finish_mode(
 
     match finish_mode {
         FinishMode::DISPOSE => {}
-        FinishMode::KEEP_CONFIGURATION => {
+        FinishMode::KEEP => {
             // FSM shall keep the final configuration after exit.
             let _ = session
                 .global_data
@@ -141,7 +141,6 @@ pub fn start_fsm_with_data_and_finish_mode(
                 .final_configuration
                 .insert(Vec::new());
         }
-        FinishMode::NOTHING => {}
     }
 
     let options = {
@@ -202,8 +201,14 @@ pub fn start_fsm_with_data_and_finish_mode(
                     }
                 }
                 sm.interpret(datamodel.deref_mut());
+                let mut global = get_global!(datamodel);
+                match finish_mode {
+                    FinishMode::DISPOSE => {
+                        global.executor.as_mut().unwrap().remove_session(session_id);
+                    }
+                    FinishMode::KEEP => {}
+                }
             }
-            executor.remove_session(session_id);
             #[cfg(feature = "Debug")]
             debug!("SM finished");
         });
@@ -1134,8 +1139,7 @@ impl GlobalData {
 #[derive(Debug, Clone)]
 pub enum FinishMode {
     DISPOSE,
-    KEEP_CONFIGURATION,
-    NOTHING,
+    KEEP
 }
 
 /// Represents some external session.

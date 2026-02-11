@@ -233,7 +233,7 @@ pub fn run_test_manual_with_send(
         ActionWrapper::new(),
         Box::new(executor),
         &Vec::new(),
-        FinishMode::KEEP_CONFIGURATION,
+        FinishMode::KEEP,
         #[cfg(feature = "Trace")]
         trace_mode,
     );
@@ -270,7 +270,7 @@ pub fn run_test_manual_with_send(
             .get(&session.session_id)
         {
             None => {
-                error!("FSM Session lost");
+                error!("FSM Session '{}' lost", session.session_id);
                 false
             }
             Some(session) => match &session.global_data.lock().unwrap().final_configuration {

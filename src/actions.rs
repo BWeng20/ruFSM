@@ -57,7 +57,7 @@ impl ActionWrapper {
         copy
     }
 
-    pub fn lock(&self) -> ActionLock {
+    pub fn lock(&self) -> ActionLock<'_> {
         self.actions.lock().unwrap()
     }
 

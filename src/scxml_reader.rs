@@ -2065,8 +2065,8 @@ mod tests {
             for tid in s.transitions.iterator() {
                 let tr = fsm.transitions.get(tid).unwrap();
                 debug!(" Transition #{} content {}", tr.id, tr.content);
-                if tr.content != 0 {
-                    debug!(" -> {:?}", fsm.executableContent.get(&tr.content).unwrap());
+                if (tr.content as usize) < fsm.executableContent.len() {
+                    debug!(" -> {:?}", fsm.executableContent.get(tr.content as usize).unwrap());
                     b = true;
                 }
             }
