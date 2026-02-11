@@ -92,14 +92,14 @@ If you don’t want to implement a full datamodel, see the **Custom Actions** se
 Examples can be found in the `examples/` directory.  
 
 Each datamodel has a unique ID that can be referenced in the SCXML source.  
-This enables multiple datamodels to coexist in a single binary and be used in parallel.
+This enables multiple data models to coexist in a single binary and be used in parallel.
 
-To register new datamodels, call:
+To register new data models, call:
 ```rust
 rufsm::fsm::register_datamodel
 ```
 
-### Built-in Datamodels
+### Built-in Data Models
 
 + ECMAScript datamodel, use `datamodel="ecmascript"` (requires feature `ECMAScriptModel` feature).
 + The Null-Datamodel, use `datamodel="null"`
@@ -115,7 +115,7 @@ More info: [Expression-Engine-Readme](src/expression_engine/README.md).
 You can define custom logic by implementing the `Action` trait. 
 Each FSM instance can register its own actions; these are inherited by child sessions.
 
-In the ECMAScript or `rfsm-expression` datamodels, these actions can be called like normal functions. 
+In the ECMAScript or `rfsm-expression` data models, these actions can be called like normal functions. 
 Parameters and return values are converted automatically — see the `Data` enum for supported types.
 
 Custom actions have full access to FSM data and state.

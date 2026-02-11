@@ -45,7 +45,7 @@ where
         return self.writer.get_writer();
     }
 
-    pub fn new(writer: Box<(dyn ProtocolWriter<W> + 'a)>) -> FsmWriter<'a, W> {
+    pub fn new(writer: Box<dyn ProtocolWriter<W> + 'a>) -> FsmWriter<'a, W> {
         FsmWriter { writer }
     }
 
