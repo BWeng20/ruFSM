@@ -712,26 +712,6 @@ impl ExecutableContent for SendParameters {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::executable_content::parse_duration_to_milliseconds;
-
-    #[test]
-    fn delay_parse() {
-        assert_eq!(parse_duration_to_milliseconds("6.7s"), 6700);
-        assert_eq!(parse_duration_to_milliseconds("0.5d"), 12 * 60 * 60 * 1000);
-        assert_eq!(parse_duration_to_milliseconds("1m"), 60 * 1000);
-        assert_eq!(parse_duration_to_milliseconds("0.001s"), 1);
-        assert_eq!(parse_duration_to_milliseconds("6.7S"), 6700);
-        assert_eq!(parse_duration_to_milliseconds("0.5D"), 12 * 60 * 60 * 1000);
-        assert_eq!(parse_duration_to_milliseconds("1M"), 60 * 1000);
-        assert_eq!(parse_duration_to_milliseconds("0.001S"), 1);
-
-        assert_eq!(parse_duration_to_milliseconds("x1S"), -1);
-        assert_eq!(parse_duration_to_milliseconds("1Sx"), -1);
-    }
-}
-
 /// a duration.
 /// RegExp: "\\d*(\\.\\d+)?(ms|s|m|h|d))").
 pub fn parse_duration_to_milliseconds(d: &str) -> i64 {
@@ -767,5 +747,25 @@ pub fn parse_duration_to_milliseconds(d: &str) -> i64 {
             }
         }
         v.round() as i64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::executable_content::parse_duration_to_milliseconds;
+
+    #[test]
+    fn delay_parse() {
+        assert_eq!(parse_duration_to_milliseconds("6.7s"), 6700);
+        assert_eq!(parse_duration_to_milliseconds("0.5d"), 12 * 60 * 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("1m"), 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("0.001s"), 1);
+        assert_eq!(parse_duration_to_milliseconds("6.7S"), 6700);
+        assert_eq!(parse_duration_to_milliseconds("0.5D"), 12 * 60 * 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("1M"), 60 * 1000);
+        assert_eq!(parse_duration_to_milliseconds("0.001S"), 1);
+
+        assert_eq!(parse_duration_to_milliseconds("x1S"), -1);
+        assert_eq!(parse_duration_to_milliseconds("1Sx"), -1);
     }
 }

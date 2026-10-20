@@ -252,12 +252,9 @@ pub fn run_test_manual_with_send(
     }
     let _ = session.thread.unwrap().join();
 
-    match &watchdog_sender {
-        Some(sender) => {
-            // Inform watchdog
-            disable_watchdog(sender);
-        }
-        None => {}
+    if let Some(sender) = &watchdog_sender {
+        // Inform watchdog
+        disable_watchdog(sender);
     }
 
     if expected_final_configuration.is_empty() {

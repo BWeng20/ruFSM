@@ -214,14 +214,11 @@ impl ECMAScriptDatamodel {
 
     pub fn set_option(&mut self, name: &str, _value: &str) {
         if let Some(ecma_option) = name.strip_prefix(ECMA_OPTION_INFIX) {
-            match ecma_option {
-                ECMA_OPTION_STRICT_POSTFIX => {
-                    #[cfg(feature = "Debug")]
-                    debug!("Running ECMA in strict mode");
-                    self.strict_mode = true;
-                    self.context.strict(true);
-                }
-                &_ => {}
+            if ecma_option == ECMA_OPTION_STRICT_POSTFIX {
+                #[cfg(feature = "Debug")]
+                debug!("Running ECMA in strict mode");
+                self.strict_mode = true;
+                self.context.strict(true);
             }
         }
     }

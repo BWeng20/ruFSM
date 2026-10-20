@@ -1989,7 +1989,7 @@ impl Fsm {
             "selectEventlessTransitions",
             &[(
                 "enabledTransitions",
-                &vec_to_string(&enabledTransitions.data.as_slice()),
+                &vec_to_string(enabledTransitions.data.as_slice()),
             )],
         );
         enabledTransitions
@@ -3418,17 +3418,12 @@ impl Fsm {
     /// TODO: needs to be extended if the tests get more complex.
     #[cfg(test)]
     pub fn compare_to(&self, other: &Fsm) -> bool {
-        if self.name.eq(&other.name)
+        self.name.eq(&other.name)
             && self.binding == other.binding
             && self.states.len() == other.states.len()
             && self.transitions.len() == other.transitions.len()
             && self.executableContent.len() == other.executableContent.len()
             && self.datamodel.eq(&other.datamodel)
-        {
-            true
-        } else {
-            false
-        }
     }
 
     #[cfg(feature = "Trace")]

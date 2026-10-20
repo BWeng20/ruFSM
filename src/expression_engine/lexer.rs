@@ -545,7 +545,7 @@ mod tests {
         if let Token::Separator(d) = n3 {
             assert_eq!(d, '.');
         } else {
-            assert!(false);
+            panic!("expected separator token");
         }
 
         let n4 = l.next_name();
@@ -558,7 +558,7 @@ mod tests {
         if let Token::Separator(d) = n5 {
             assert_eq!(d, '.');
         } else {
-            assert!(false);
+            panic!("expected separator token");
         }
 
         let n6 = l.next_name();

@@ -657,11 +657,7 @@ mod tests {
             .set_undefined("A".to_string(), Data::Map(hs1));
         let rs1 = r1.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs1);
-        assert!(if let ExpressionResult::Ok(_x) = rs1 {
-            true
-        } else {
-            false
-        });
+        assert!(matches!(rs1, ExpressionResult::Ok(_)));
 
         let rs2 = r2.execute(&mut global_data.lock().unwrap(), true);
         println!("==> {:?}", rs2);
@@ -692,7 +688,7 @@ mod tests {
                 .lock()
                 .unwrap()
                 .data
-                .get(&"A".to_string())
+                .get("A")
                 .unwrap()
                 .lock()
                 .unwrap()
@@ -721,7 +717,7 @@ mod tests {
                 .lock()
                 .unwrap()
                 .data
-                .get(&"A".to_string())
+                .get("A")
                 .unwrap()
                 .lock()
                 .unwrap()

@@ -360,7 +360,7 @@ impl DefaultTracer {
 
 thread_local! {
    /// Trace prefix for [DefaultTracer]
-   static TRACE_INDENT:  RefCell<u16> = RefCell::new(1);
+   static TRACE_INDENT:  RefCell<u16> = const { RefCell::new(1) };
 }
 
 pub trait TracerFactory: Send {

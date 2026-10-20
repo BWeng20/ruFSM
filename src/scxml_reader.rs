@@ -368,9 +368,8 @@ impl ReaderState {
     }
 
     fn pop(&mut self) {
-        let p = self.stack.pop();
-        if p.is_some() {
-            self.current = p.unwrap();
+        if let Some(p) = self.stack.pop() {
+            self.current = p;
         }
     }
 
@@ -807,7 +806,7 @@ impl ReaderState {
         // but must not have both. Furthermore, if either attribute is present, the element must not have any children.
         // Thus 'src', 'expr' and children are mutually exclusive in the <data> element.
 
-        let data_value = if src.is_some() {
+        let data_value = if let Some(src_value) = src {
             if !(expr.is_none() && content.is_empty()) {
                 panic!(
                     "{} shall have only {}, {} or children, but not some combination of it.",
@@ -821,7 +820,7 @@ impl ReaderState {
             // at the time specified by the 'binding' attribute of \<scxml\> and must assign it as
             // the value of the data element
 
-            match self.read_from_url(src.unwrap()) {
+            match self.read_from_url(src_value) {
                 Ok(source) => {
                     #[cfg(feature = "Debug_Reader")]
 
@@ -829,17 +828,17 @@ impl ReaderState {
                     source
                 }
                 Err(e) => {
-                    panic!("Can't read data source '{}'. {}", src.unwrap(), e);
+                    panic!("Can't read data source '{}'. {}", src_value, e);
                 }
             }
-        } else if expr.is_some() {
+        } else if let Some(expr_value) = expr {
             if !content.is_empty() {
                 panic!(
                     "{} shall have only {}, {} or children, but not some combination of it.",
                     TAG_DATA, ATTR_SRC, ATTR_EXPR
                 );
             }
-            expr.unwrap().clone()
+            expr_value.clone()
         } else if !content.is_empty() {
             content
         } else {
@@ -940,10 +939,8 @@ impl ReaderState {
         // Start script.
         self.start_executable_content_block(false, TAG_TRANSITION);
 
-        let event = attr.get(TAG_EVENT);
-        if event.is_some() {
+        if let Some(event) = attr.get(TAG_EVENT) {
             t.events = event
-                .unwrap()
                 .split_whitespace()
                 .map(|s| {
                     // Strip redundant "." and ".*" suffix
@@ -972,9 +969,8 @@ impl ReaderState {
             t.wildcard = t.events.contains(&"*".to_string());
         }
 
-        let cond = attr.get(ATTR_COND);
-        if cond.is_some() {
-            t.cond = self.create_source(cond.unwrap().as_str());
+        if let Some(cond) = attr.get(ATTR_COND) {
+            t.cond = self.create_source(cond.as_str());
         }
 
         let target = attr.get(ATTR_TARGET);
@@ -985,9 +981,8 @@ impl ReaderState {
             }
         }
 
-        let trans_type = attr.get(TAG_TYPE);
-        if trans_type.is_some() {
-            t.transition_type = Self::map_transition_type(trans_type.unwrap())
+        if let Some(trans_type) = attr.get(TAG_TYPE) {
+            t.transition_type = Self::map_transition_type(trans_type)
         }
 
         let state = self.get_current_state();
@@ -1039,9 +1034,7 @@ impl ReaderState {
 
         let mut s = Expression::new();
 
-        let src = attr.get(ATTR_SRC);
-        if src.is_some() {
-            let file_src = src.unwrap();
+        if let Some(file_src) = attr.get(ATTR_SRC) {
             // W3C:
             // If the script can not be downloaded within a platform-specific timeout interval,
             // the document is considered non-conformant, and the platform must reject it.
@@ -1383,11 +1376,8 @@ impl ReaderState {
                 );
             }
             send_params.delay_expr = self.create_source(delay_expr_attr_value);
-        } else if delay_attr.is_some() {
-            if (!delay_attr.unwrap().is_empty())
-                && type_attr.is_some()
-                && type_attr.unwrap().eq(TARGET_INTERNAL)
-            {
+        } else if let Some(delay_value) = delay_attr {
+            if !delay_value.is_empty() && type_attr.is_some_and(|t| t.eq(TARGET_INTERNAL)) {
                 panic!(
                     "{}: {} with {} {} is not possible",
                     TAG_SEND,
@@ -1396,7 +1386,7 @@ impl ReaderState {
                     type_attr.unwrap()
                 );
             }
-            let delayms = parse_duration_to_milliseconds(delay_attr.unwrap());
+            let delayms = parse_duration_to_milliseconds(delay_value);
             if delayms < 0 {
                 panic!(
                     "{}: {} with illegal value '{}'",
@@ -1495,8 +1485,8 @@ impl ReaderState {
             TAG_SEND => {
                 let ec_id = self.current_executable_content;
                 let ec = self.get_last_executable_content_entry_for_block(ec_id);
-                if ec.is_some() {
-                    let send = get_safe_executable_content_as::<SendParameters>(ec.unwrap());
+                if let Some(ec) = ec {
+                    let send = get_safe_executable_content_as::<SendParameters>(ec);
                     if expr.is_some() || !content_data.is_empty() {
                         send.content = Some(CommonContent {
                             content_expr: Option::map(expr, |v| v.clone()),
@@ -1668,22 +1658,19 @@ impl ReaderState {
                 // @TODO: Filename?
             }
         }
-        let datamodel = attr.get(ATTR_DATAMODEL);
-        if datamodel.is_some() {
+        if let Some(datamodel) = attr.get(ATTR_DATAMODEL) {
             #[cfg(feature = "Debug_Reader")]
-
-            debug!(" scxml.datamodel = {}", datamodel.unwrap());
-            self.fsm.datamodel = datamodel.unwrap().to_string();
+            debug!(" scxml.datamodel = {}", datamodel);
+            self.fsm.datamodel = datamodel.to_string();
         }
 
-        let binding = attr.get(ATTR_BINDING);
-        if binding.is_some() {
-            match BindingType::from_str(binding.unwrap()) {
+        if let Some(binding) = attr.get(ATTR_BINDING) {
+            match BindingType::from_str(binding) {
                 Ok(t) => {
                     self.fsm.binding = t;
                 }
                 Err(_e) => {
-                    panic!("{}: unsupported value {}", ATTR_BINDING, binding.unwrap())
+                    panic!("{}: unsupported value {}", ATTR_BINDING, binding)
                 }
             }
         }
