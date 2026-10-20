@@ -237,6 +237,9 @@ pub const ATTR_EXPR: &str = "expr";
 
 pub const NS_XINCLUDE: &str = "http://www.w3.org/2001/XInclude";
 
+/// Result of reader operations, errors are reported as text.
+type R<T = ()> = Result<T, String>;
+
 struct ReaderStackItem {
     current_state: StateId,
     current_transition: TransitionId,
@@ -333,17 +336,23 @@ impl ReaderState {
                 }
                 Ok(Event::Eof) => break,
                 Ok(Event::Start(e)) => {
-                    self.start_element(&mut reader, &e, true);
+                    self.start_element(&mut reader, &e, true)?;
                 }
                 Ok(Event::End(e)) => {
-                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap());
+                    self.end_element(Self::tag_name(&e.local_name())?)?;
                 }
                 Ok(Event::Empty(e)) => {
                     // Element without content.
-                    self.start_element(&mut reader, &e, false);
-                    self.end_element(str::from_utf8(e.local_name().as_ref()).unwrap());
+                    self.start_element(&mut reader, &e, false)?;
+                    self.end_element(Self::tag_name(&e.local_name())?)?;
                 }
-                Ok(Event::Text(e)) => txt.push(e.unescape().unwrap().into_owned()),
+                Ok(Event::Text(e)) => txt.push(
+                    e.unescape()
+                        .map_err(|err| {
+                            format!("Error at position {}: {:?}", reader.buffer_position(), err)
+                        })?
+                        .into_owned(),
+                ),
                 Ok(Event::Comment(_e)) => {
                     #[cfg(feature = "Debug_Reader")]
                     debug!("Comment :{}", _e.unescape().unwrap())
@@ -360,6 +369,11 @@ impl ReaderState {
 
         debug!("<<< {:?}", self.file);
         Ok("ok")
+    }
+
+    /// Decodes a tag name.
+    fn tag_name<'a>(n: &'a quick_xml::name::LocalName<'a>) -> R<&'a str> {
+        str::from_utf8(n.as_ref()).map_err(|e| format!("Illegal tag name: {}", e))
     }
 
     fn push(&mut self, tag: &str) {
@@ -415,20 +429,20 @@ impl ReaderState {
         self.fsm.get_state_by_id_mut(id)
     }
 
-    fn get_current_state(&mut self) -> &mut State {
+    fn get_current_state(&mut self) -> R<&mut State> {
         let id = self.current.current_state;
         if id == 0 {
-            panic!("Internal error: Current State is unknown");
+            return Err("Internal error: Current State is unknown".to_string());
         }
-        self.get_state_by_id_mut(id)
+        Ok(self.get_state_by_id_mut(id))
     }
 
-    fn get_current_transition(&mut self) -> &mut Transition {
+    fn get_current_transition(&mut self) -> R<&mut Transition> {
         let id = self.current.current_transition;
         if id == 0 {
-            panic!("Internal error: Current Transition is unknown");
+            return Err("Internal error: Current Transition is unknown".to_string());
         }
-        self.fsm.get_transition_by_id_mut(id)
+        Ok(self.fsm.get_transition_by_id_mut(id))
     }
 
     /// Starts a new block of executable content.\
@@ -475,7 +489,7 @@ impl ReaderState {
     ) -> Option<&mut dyn ExecutableContent> {
         let v = self.fsm.executableContent.get_mut((ec_id - 1) as usize);
         match v {
-            Some(vc) => Some(vc.last_mut().unwrap().as_mut()),
+            Some(vc) => vc.last_mut().map(|e| e.as_mut()),
             None => None,
         }
     }
@@ -483,9 +497,9 @@ impl ReaderState {
     /// Ends the current executable content block and returns the old block id.\
     /// The current id is reset to 0 or popped from stack if the stack is not empty.
     /// See [start_executable_content](Self::start_executable_content).
-    fn end_executable_content_block(&mut self, tag: &'static str) -> ExecutableContentId {
+    fn end_executable_content_block(&mut self, tag: &'static str) -> R<ExecutableContentId> {
         if self.current_executable_content == 0 {
-            panic!("Try to get executable content in unsupported document part.");
+            Err("Try to get executable content in unsupported document part.".to_string())
         } else {
             let ec_id = self.current_executable_content;
             #[cfg(feature = "Debug_Reader")]
@@ -496,25 +510,25 @@ impl ReaderState {
                     #[cfg(feature = "Debug_Reader")]
                     debug!(" pop executable content block #{} {}", oec_id, oec_tag);
                     if (!tag.is_empty()) && tag.ne(oec_tag) {
-                        self.end_executable_content_block(tag);
+                        self.end_executable_content_block(tag)?;
                     }
                 }
                 None => {
                     self.current_executable_content = 0;
                 }
             };
-            if self.fsm.executableContent.len() > (ec_id as usize) {
+            Ok(if self.fsm.executableContent.len() > (ec_id as usize) {
                 ec_id
             } else {
                 0
-            }
+            })
         }
     }
 
     /// Adds content to the current executable content block.
-    fn add_executable_content(&mut self, ec: Box<dyn ExecutableContent>) {
+    fn add_executable_content(&mut self, ec: Box<dyn ExecutableContent>) -> R {
         if self.current_executable_content == 0 {
-            panic!("Try to add executable content to unsupported document part.");
+            return Err("Try to add executable content to unsupported document part.".to_string());
         } else {
             #[cfg(feature = "Debug_Reader")]
 
@@ -526,9 +540,10 @@ impl ReaderState {
             self.fsm
                 .executableContent
                 .get_mut((self.current_executable_content - 1) as usize)
-                .unwrap()
+                .ok_or_else(|| "Internal Error: executable content block not found".to_string())?
                 .push(ec);
         }
+        Ok(())
     }
 
     fn get_parent_tag(&self) -> &str {
@@ -539,7 +554,7 @@ impl ReaderState {
         r
     }
 
-    pub fn verify_parent_tag(&self, name: &str, allowed_parents: &[&str]) -> &str {
+    pub fn verify_parent_tag(&self, name: &str, allowed_parents: &[&str]) -> R<&str> {
         let parent_tag = self.get_parent_tag();
         if !allowed_parents.contains(&parent_tag) {
             let mut allowed_parents_s = "".to_string();
@@ -560,12 +575,12 @@ impl ReaderState {
                 )
                 .as_str();
             }
-            panic!(
+            return Err(format!(
                 "<{}> inside <{}>. Only allowed inside {}",
                 name, parent_tag, allowed_parents_s
-            );
+            ));
         }
-        parent_tag
+        Ok(parent_tag)
     }
 
     fn get_or_create_state(&mut self, name: &str, parallel: bool) -> StateId {
@@ -664,12 +679,9 @@ impl ReaderState {
         id
     }
 
-    fn get_required_attr<'a>(tag: &str, attribute: &str, attr: &'a AttributeMap) -> &'a String {
-        let attr = attr.get(attribute);
-        if attr.is_none() {
-            panic!("<{}> requires attribute {}", tag, attribute);
-        }
-        attr.unwrap()
+    fn get_required_attr<'a>(tag: &str, attribute: &str, attr: &'a AttributeMap) -> R<&'a String> {
+        attr.get(attribute)
+            .ok_or_else(|| format!("<{}> requires attribute {}", tag, attribute))
     }
 
     fn read_from_url(&mut self, url_s: &String) -> Result<String, String> {
@@ -702,7 +714,7 @@ impl ReaderState {
                 #[cfg(feature = "Debug_Reader")]
                 debug!(
                     "{} is not a URI ({}). Try loading as relative path...",
-                    uri, _e
+                    url_s, _e
                 );
                 self.read_from_relative_path(url_s.as_str())
             }
@@ -714,7 +726,7 @@ impl ReaderState {
         self.file.clone_from(&file_src);
         match File::open(file_src.clone()) {
             Ok(mut file) => {
-                let mut buf = String::with_capacity(file.metadata().unwrap().len() as usize);
+                let mut buf = String::new();
                 match file.read_to_string(&mut buf) {
                     Ok(_r) => Ok(buf),
                     Err(e) => Err(e.to_string()),
@@ -728,38 +740,39 @@ impl ReaderState {
     }
 
     /// A new "parallel" element started
-    fn start_parallel(&mut self, attr: &AttributeMap) -> StateId {
-        self.verify_parent_tag(TAG_PARALLEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
+    fn start_parallel(&mut self, attr: &AttributeMap) -> R<StateId> {
+        self.verify_parent_tag(TAG_PARALLEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL])?;
         let state_id =
             self.get_or_create_state_with_attributes(attr, true, self.current.current_state);
         self.current.current_state = state_id;
-        state_id
+        Ok(state_id)
     }
 
     /// A new "final" element started
-    fn start_final(&mut self, attr: &AttributeMap) -> StateId {
-        self.verify_parent_tag(TAG_FINAL, &[TAG_SCXML, TAG_STATE]);
+    fn start_final(&mut self, attr: &AttributeMap) -> R<StateId> {
+        self.verify_parent_tag(TAG_FINAL, &[TAG_SCXML, TAG_STATE])?;
         let state_id =
             self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
 
         self.fsm.get_state_by_id_mut(state_id).is_final = true;
         self.current.current_state = state_id;
-        state_id
+        Ok(state_id)
     }
 
     /// A new "donedata" element started
-    fn start_donedata(&mut self) {
-        self.verify_parent_tag(TAG_DONEDATA, &[TAG_FINAL]);
-        self.get_current_state().donedata = Some(DoneData::new());
+    fn start_donedata(&mut self) -> R {
+        self.verify_parent_tag(TAG_DONEDATA, &[TAG_FINAL])?;
+        self.get_current_state()?.donedata = Some(DoneData::new());
+        Ok(())
     }
 
     /// A new "history" element started
-    fn start_history(&mut self, attr: &AttributeMap) -> StateId {
-        self.verify_parent_tag(TAG_HISTORY, &[TAG_STATE, TAG_PARALLEL]);
+    fn start_history(&mut self, attr: &AttributeMap) -> R<StateId> {
+        self.verify_parent_tag(TAG_HISTORY, &[TAG_STATE, TAG_PARALLEL])?;
         // Don't add history-states to "states" (parent = 0)
         let state_id = self.get_or_create_state_with_attributes(attr, false, 0);
         if self.current.current_state > 0 {
-            let parent_state = self.get_current_state();
+            let parent_state = self.get_current_state()?;
             parent_state.history.push(state_id);
         }
         let hstate = self.fsm.get_state_by_id_mut(state_id);
@@ -771,32 +784,33 @@ impl ReaderState {
             Some(type_name) => hstate.history_type = map_history_type(type_name),
         }
         self.current.current_state = state_id;
-        state_id
+        Ok(state_id)
     }
 
     // A new "state" element started
-    fn start_state(&mut self, attr: &AttributeMap) -> StateId {
-        self.verify_parent_tag(TAG_STATE, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
+    fn start_state(&mut self, attr: &AttributeMap) -> R<StateId> {
+        self.verify_parent_tag(TAG_STATE, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL])?;
         let sid = self.get_or_create_state_with_attributes(attr, false, self.current.current_state);
         self.current.current_state = sid;
-        sid
+        Ok(sid)
     }
 
     // A "datamodel" element started (node, not attribute)
-    fn start_datamodel(&mut self) {
-        self.verify_parent_tag(TAG_DATAMODEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL]);
+    fn start_datamodel(&mut self) -> R {
+        self.verify_parent_tag(TAG_DATAMODEL, &[TAG_SCXML, TAG_STATE, TAG_PARALLEL])?;
+        Ok(())
     }
 
-    fn start_data(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
-        self.verify_parent_tag(TAG_DATA, &[TAG_DATAMODEL]);
+    fn start_data(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) -> R {
+        self.verify_parent_tag(TAG_DATA, &[TAG_DATAMODEL])?;
 
-        let id = Self::get_required_attr(TAG_DATA, ATTR_ID, attr);
+        let id = Self::get_required_attr(TAG_DATA, ATTR_ID, attr)?;
         let src = attr.get(ATTR_SRC);
 
         let expr = attr.get(ATTR_EXPR);
 
         let content = if has_content {
-            self.read_content(TAG_DATA, reader)
+            self.read_content(TAG_DATA, reader)?
         } else {
             String::new()
         };
@@ -808,10 +822,10 @@ impl ReaderState {
 
         let data_value = if let Some(src_value) = src {
             if !(expr.is_none() && content.is_empty()) {
-                panic!(
+                return Err(format!(
                     "{} shall have only {}, {} or children, but not some combination of it.",
                     TAG_DATA, ATTR_SRC, ATTR_EXPR
-                );
+                ));
             }
 
             // W3C:
@@ -824,19 +838,19 @@ impl ReaderState {
                 Ok(source) => {
                     #[cfg(feature = "Debug_Reader")]
 
-                    debug!("src='{}':\n{}", src.unwrap(), source);
+                    debug!("src='{}':\n{}", src_value, source);
                     source
                 }
                 Err(e) => {
-                    panic!("Can't read data source '{}'. {}", src_value, e);
+                    return Err(format!("Can't read data source '{}'. {}", src_value, e));
                 }
             }
         } else if let Some(expr_value) = expr {
             if !content.is_empty() {
-                panic!(
+                return Err(format!(
                     "{} shall have only {}, {} or children, but not some combination of it.",
                     TAG_DATA, ATTR_SRC, ATTR_EXPR
-                );
+                ));
             }
             expr_value.clone()
         } else if !content.is_empty() {
@@ -845,25 +859,27 @@ impl ReaderState {
             "".to_string()
         };
         let src = self.create_source(data_value.as_str());
-        self.get_current_state()
+        self.get_current_state()?
             .data
             .insert(id.to_string(), create_data_arc(src));
+        Ok(())
     }
 
     /// A "initial" element started (the element, not the attribute)
-    fn start_initial(&mut self) {
-        self.verify_parent_tag(TAG_INITIAL, &[TAG_STATE, TAG_PARALLEL]);
-        if self.get_current_state().initial > 0 {
-            panic!(
+    fn start_initial(&mut self) -> R {
+        self.verify_parent_tag(TAG_INITIAL, &[TAG_STATE, TAG_PARALLEL])?;
+        if self.get_current_state()?.initial > 0 {
+            return Err(format!(
                 "<{}> must not be specified if {}-attribute was given",
                 TAG_INITIAL, ATTR_INITIAL
-            )
+            ));
         }
+        Ok(())
     }
 
-    fn start_invoke(&mut self, attr: &AttributeMap) {
+    fn start_invoke(&mut self, attr: &AttributeMap) -> R {
         let _parent_tag = self
-            .verify_parent_tag(TAG_INVOKE, &[TAG_STATE, TAG_PARALLEL])
+            .verify_parent_tag(TAG_INVOKE, &[TAG_STATE, TAG_PARALLEL])?
             .to_string();
         let mut invoke = Invoke::new();
         invoke.doc_id = DOC_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -890,7 +906,7 @@ impl ReaderState {
 
         invoke
             .parent_state_name
-            .clone_from(&self.get_current_state().name);
+            .clone_from(&self.get_current_state()?.name);
 
         if let Some(idlocation) = attr.get(ATTR_IDLOCATION) {
             invoke.external_id_location.clone_from(idlocation);
@@ -901,36 +917,38 @@ impl ReaderState {
         }
         invoke.autoforward = self.parse_boolean(&attr.get(ATTR_AUTOFORWARD), false);
 
-        self.get_current_state().invoke.push(invoke);
+        self.get_current_state()?.invoke.push(invoke);
+        Ok(())
     }
 
-    fn start_finalize(&mut self, _attr: &AttributeMap) {
+    fn start_finalize(&mut self, _attr: &AttributeMap) -> R {
         let _parent_tag = self
-            .verify_parent_tag(TAG_FINALIZE, &[TAG_INVOKE])
+            .verify_parent_tag(TAG_FINALIZE, &[TAG_INVOKE])?
             .to_string();
         self.start_executable_content_block(false, TAG_FINALIZE);
+        Ok(())
     }
 
-    fn end_finalize(&mut self) {
-        let ec_id = self.end_executable_content_block(TAG_FINALIZE);
-        self.get_current_state().invoke.last_mut().finalize = ec_id;
+    fn end_finalize(&mut self) -> R {
+        let ec_id = self.end_executable_content_block(TAG_FINALIZE)?;
+        self.get_current_state()?.invoke.last_mut().finalize = ec_id;
+        Ok(())
     }
 
-    fn map_transition_type(ts: &String) -> TransitionType {
+    fn map_transition_type(ts: &String) -> R<TransitionType> {
         match ts.to_lowercase().as_str() {
-            "internal" => TransitionType::Internal,
-            "external" => TransitionType::External,
-            "" => TransitionType::External,
-            _ => panic!("Unknown transition type '{}'", ts),
+            "internal" => Ok(TransitionType::Internal),
+            "external" | "" => Ok(TransitionType::External),
+            _ => Err(format!("Unknown transition type '{}'", ts)),
         }
     }
 
-    fn start_transition(&mut self, attr: &AttributeMap) {
+    fn start_transition(&mut self, attr: &AttributeMap) -> R {
         let parent_tag = self
             .verify_parent_tag(
                 TAG_TRANSITION,
                 &[TAG_HISTORY, TAG_INITIAL, TAG_STATE, TAG_PARALLEL],
-            )
+            )?
             .to_string();
 
         let mut t = Transition::new();
@@ -982,14 +1000,16 @@ impl ReaderState {
         }
 
         if let Some(trans_type) = attr.get(TAG_TYPE) {
-            t.transition_type = Self::map_transition_type(trans_type)
+            t.transition_type = Self::map_transition_type(trans_type)?
         }
 
-        let state = self.get_current_state();
+        let state = self.get_current_state()?;
 
         if parent_tag.eq(TAG_INITIAL) {
             if state.initial > 0 {
-                panic!("<initial> must not be specified if initial-attribute was given")
+                return Err(
+                    "<initial> must not be specified if initial-attribute was given".to_string(),
+                );
             }
             #[cfg(feature = "Debug_Reader")]
 
@@ -1001,16 +1021,18 @@ impl ReaderState {
         t.source = state.id;
         self.current.current_transition = t.id;
         self.fsm.transitions.insert(t.id, t);
+        Ok(())
     }
 
-    fn end_transition(&mut self) {
-        let ec_id = self.end_executable_content_block(TAG_TRANSITION);
-        let trans = self.get_current_transition();
+    fn end_transition(&mut self) -> R {
+        let ec_id = self.end_executable_content_block(TAG_TRANSITION)?;
+        let trans = self.get_current_transition()?;
         // Assign the collected content to the transition.
         trans.content = ec_id;
+        Ok(())
     }
 
-    fn start_script(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
+    fn start_script(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) -> R {
         let at_root = self.get_parent_tag().eq(TAG_SCXML);
 
         if !at_root {
@@ -1025,7 +1047,7 @@ impl ReaderState {
                     TAG_FOR_EACH,
                     TAG_FINALIZE,
                 ],
-            );
+            )?;
         };
 
         if at_root {
@@ -1045,13 +1067,13 @@ impl ReaderState {
                     s.content = self.create_source_moved(source);
                 }
                 Err(e) => {
-                    panic!("Can't read script '{}'. {}", file_src, e);
+                    return Err(format!("Can't read script '{}'. {}", file_src, e));
                 }
             }
         }
 
         let script_text = if has_content {
-            self.read_content(TAG_SCRIPT, reader)
+            self.read_content(TAG_SCRIPT, reader)?
         } else {
             String::new()
         };
@@ -1060,18 +1082,19 @@ impl ReaderState {
 
         if !src.is_empty() {
             if !s.content.is_empty() {
-                panic!("<script> with 'src' attribute shall not have content.")
+                return Err("<script> with 'src' attribute shall not have content.".to_string());
             }
             s.content = self.create_source_moved(src.to_string());
         }
 
-        self.add_executable_content(Box::new(s));
+        self.add_executable_content(Box::new(s))?;
         if at_root {
-            self.fsm.script = self.end_executable_content_block(TAG_SCRIPT);
+            self.fsm.script = self.end_executable_content_block(TAG_SCRIPT)?;
         }
+        Ok(())
     }
 
-    fn start_for_each(&mut self, attr: &AttributeMap) {
+    fn start_for_each(&mut self, attr: &AttributeMap) -> R {
         self.verify_parent_tag(
             TAG_FOR_EACH,
             &[
@@ -1082,17 +1105,17 @@ impl ReaderState {
                 TAG_IF,
                 TAG_FINALIZE,
             ],
-        );
+        )?;
 
         let ec_id = self.current_executable_content;
         let mut fe = ForEach::new();
-        fe.array = self.create_source(Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr));
+        fe.array = self.create_source(Self::get_required_attr(TAG_FOR_EACH, ATTR_ARRAY, attr)?);
         fe.item
-            .clone_from(Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr));
+            .clone_from(Self::get_required_attr(TAG_FOR_EACH, ATTR_ITEM, attr)?);
         if let Some(index) = attr.get(ATTR_INDEX) {
             fe.index.clone_from(index);
         }
-        self.add_executable_content(Box::new(fe));
+        self.add_executable_content(Box::new(fe))?;
         let content_id = self.start_executable_content_block(true, TAG_FOR_EACH);
 
         let ec_opt = self.get_last_executable_content_entry_for_block(ec_id);
@@ -1101,19 +1124,21 @@ impl ReaderState {
                 fe.content = content_id;
             }
             None => {
-                panic!(
+                return Err(format!(
                     "Internal Error: Executable Content missing in start_for_each in block #{}",
                     ec_id
-                );
+                ));
             }
         }
+        Ok(())
     }
 
-    fn end_for_each(&mut self) {
-        self.end_executable_content_block(TAG_FOR_EACH);
+    fn end_for_each(&mut self) -> R {
+        self.end_executable_content_block(TAG_FOR_EACH)?;
+        Ok(())
     }
 
-    fn start_cancel(&mut self, attr: &AttributeMap) {
+    fn start_cancel(&mut self, attr: &AttributeMap) -> R {
         self.verify_parent_tag(
             TAG_CANCEL,
             &[
@@ -1123,7 +1148,7 @@ impl ReaderState {
                 TAG_IF,
                 TAG_FOR_EACH,
             ],
-        );
+        )?;
 
         let sendid = attr.get(ATTR_SENDID);
         let sendidexpr = attr.get(ATTR_SENDIDEXPR);
@@ -1132,48 +1157,53 @@ impl ReaderState {
 
         if let Some(sendid_value) = sendid {
             if sendidexpr.is_some() {
-                panic!(
+                return Err(format!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_CANCEL, ATTR_SENDID, ATTR_SENDIDEXPR
-                );
+                ));
             }
             cancel.send_id.clone_from(sendid_value);
         } else if let Some(sendidexpr_value) = sendidexpr {
             cancel.send_id_expr = self.create_source(sendidexpr_value);
         } else {
-            panic!(
+            return Err(format!(
                 "{}: attribute {} or {} must be given",
                 TAG_CANCEL, ATTR_SENDID, ATTR_SENDIDEXPR
-            );
+            ));
         }
-        self.add_executable_content(Box::new(cancel));
+        self.add_executable_content(Box::new(cancel))?;
+        Ok(())
     }
 
-    fn start_on_entry(&mut self, _attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_ON_ENTRY, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
+    fn start_on_entry(&mut self, _attr: &AttributeMap) -> R {
+        self.verify_parent_tag(TAG_ON_ENTRY, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL])?;
         self.start_executable_content_block(false, TAG_ON_ENTRY);
+        Ok(())
     }
 
-    fn end_on_entry(&mut self) {
-        let ec_id = self.end_executable_content_block(TAG_ON_ENTRY);
-        let state = self.get_current_state();
+    fn end_on_entry(&mut self) -> R {
+        let ec_id = self.end_executable_content_block(TAG_ON_ENTRY)?;
+        let state = self.get_current_state()?;
         // Add the collected content to on-entry.
         state.onentry.push(ec_id);
+        Ok(())
     }
 
-    fn start_on_exit(&mut self, _attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL]);
+    fn start_on_exit(&mut self, _attr: &AttributeMap) -> R {
+        self.verify_parent_tag(TAG_ON_EXIT, &[TAG_STATE, TAG_PARALLEL, TAG_FINAL])?;
         self.start_executable_content_block(false, TAG_ON_EXIT);
+        Ok(())
     }
 
-    fn end_on_exit(&mut self) {
-        let ec_id = self.end_executable_content_block(TAG_ON_EXIT);
-        let state = self.get_current_state();
+    fn end_on_exit(&mut self) -> R {
+        let ec_id = self.end_executable_content_block(TAG_ON_EXIT)?;
+        let state = self.get_current_state()?;
         // Add the collected content to the on-exit.
         state.onexit.push(ec_id);
+        Ok(())
     }
 
-    fn start_if(&mut self, attr: &AttributeMap) {
+    fn start_if(&mut self, attr: &AttributeMap) -> R {
         self.verify_parent_tag(
             TAG_IF,
             &[
@@ -1184,10 +1214,10 @@ impl ReaderState {
                 TAG_IF,
                 TAG_FINALIZE,
             ],
-        );
+        )?;
 
-        let ec_if = If::new(self.create_source(Self::get_required_attr(TAG_IF, ATTR_COND, attr)));
-        self.add_executable_content(Box::new(ec_if));
+        let ec_if = If::new(self.create_source(Self::get_required_attr(TAG_IF, ATTR_COND, attr)?));
+        self.add_executable_content(Box::new(ec_if))?;
         let parent_content_id = self.current_executable_content;
 
         self.start_executable_content_block(true, TAG_IF);
@@ -1199,23 +1229,25 @@ impl ReaderState {
                 evc_if.content = if_cid;
             }
             None => {
-                panic!(
+                return Err(format!(
                     "Internal Error: Executable Content missing in start_if in block #{}",
                     parent_content_id
-                );
+                ));
             }
         }
+        Ok(())
     }
 
-    fn end_if(&mut self) {
-        let _content_id = self.end_executable_content_block(TAG_IF);
+    fn end_if(&mut self) -> R {
+        let _content_id = self.end_executable_content_block(TAG_IF)?;
+        Ok(())
     }
 
-    fn start_else_if(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_ELSEIF, &[TAG_IF]);
+    fn start_else_if(&mut self, attr: &AttributeMap) -> R {
+        self.verify_parent_tag(TAG_ELSEIF, &[TAG_IF])?;
 
         // Close parent <if> content block
-        self.end_executable_content_block(TAG_IF);
+        self.end_executable_content_block(TAG_IF)?;
 
         let mut if_id = self.current_executable_content;
 
@@ -1224,8 +1256,9 @@ impl ReaderState {
         let else_id = self.current_executable_content;
 
         // Add new "if"
-        let else_if = If::new(self.create_source(Self::get_required_attr(TAG_IF, ATTR_COND, attr)));
-        self.add_executable_content(Box::new(else_if));
+        let else_if =
+            If::new(self.create_source(Self::get_required_attr(TAG_IF, ATTR_COND, attr)?));
+        self.add_executable_content(Box::new(else_if))?;
 
         let else_if_content_id = self.start_executable_content_block(true, TAG_ELSEIF);
 
@@ -1236,10 +1269,10 @@ impl ReaderState {
                 evc_if.content = else_if_content_id;
             }
             None => {
-                panic!(
+                return Err(format!(
                     "Internal Error: Executable Content missing in start_else_if in block #{}",
                     else_id
-                );
+                ));
             }
         }
 
@@ -1258,17 +1291,20 @@ impl ReaderState {
                     }
                 }
                 None => {
-                    panic!("Internal Error: Executable Content missing in start_else_if");
+                    return Err(
+                        "Internal Error: Executable Content missing in start_else_if".to_string(),
+                    );
                 }
             }
         }
+        Ok(())
     }
 
-    fn start_else(&mut self, _attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_ELSE, &[TAG_IF]);
+    fn start_else(&mut self, _attr: &AttributeMap) -> R {
+        self.verify_parent_tag(TAG_ELSE, &[TAG_IF])?;
 
         // Close parent <if> content block
-        self.end_executable_content_block(TAG_IF);
+        self.end_executable_content_block(TAG_IF)?;
 
         let mut if_id = self.current_executable_content;
 
@@ -1288,13 +1324,16 @@ impl ReaderState {
                     }
                 }
                 None => {
-                    panic!("Internal Error: Executable Content missing in start_else");
+                    return Err(
+                        "Internal Error: Executable Content missing in start_else".to_string()
+                    );
                 }
             }
         }
+        Ok(())
     }
 
-    fn start_send(&mut self, attr: &AttributeMap) {
+    fn start_send(&mut self, attr: &AttributeMap) -> R {
         self.verify_parent_tag(
             TAG_SEND,
             &[
@@ -1304,7 +1343,7 @@ impl ReaderState {
                 TAG_IF,
                 TAG_FOR_EACH,
             ],
-        );
+        )?;
 
         let mut send_params = SendParameters::new();
 
@@ -1313,10 +1352,10 @@ impl ReaderState {
 
         if let Some(event_value) = event {
             if eventexpr.is_some() {
-                panic!(
+                return Err(format!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_EVENT, ATTR_EVENTEXPR
-                );
+                ));
             }
             send_params.event = self.create_source(event_value);
         } else if let Some(eventexpr_value) = eventexpr {
@@ -1327,10 +1366,10 @@ impl ReaderState {
         let targetexpr = attr.get(ATTR_TARGETEXPR);
         if let Some(target_val) = target {
             if targetexpr.is_some() {
-                panic!(
+                return Err(format!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_TARGET, ATTR_TARGETEXPR
-                );
+                ));
             }
             send_params.target = self.create_source(target_val);
         } else if let Some(targetexpr_value) = targetexpr {
@@ -1341,10 +1380,10 @@ impl ReaderState {
         let typeexpr = attr.get(ATTR_TYPEEXPR);
         if let Some(type_attr_value) = type_attr {
             if typeexpr.is_some() {
-                panic!(
+                return Err(format!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_TYPE, ATTR_TYPEEXPR
-                );
+                ));
             }
             send_params.type_value = self.create_source(type_attr_value);
         } else if let Some(typeexpr_value) = typeexpr {
@@ -1355,10 +1394,10 @@ impl ReaderState {
         let idlocation = attr.get(ATTR_IDLOCATION);
         if let Some(id_value) = id {
             if idlocation.is_some() {
-                panic!(
+                return Err(format!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_ID, ATTR_IDLOCATION
-                );
+                ));
             }
             send_params.name.clone_from(id_value);
         } else if let Some(idlocation_value) = idlocation {
@@ -1370,30 +1409,28 @@ impl ReaderState {
 
         if let Some(delay_expr_attr_value) = delay_expr_attr {
             if delay_attr.is_some() {
-                panic!(
+                return Err(format!(
                     "{}: attributes {} and {} must not occur both",
                     TAG_SEND, ATTR_DELAY, ATTR_DELAYEXPR
-                );
+                ));
             }
             send_params.delay_expr = self.create_source(delay_expr_attr_value);
         } else if let Some(delay_value) = delay_attr {
             if !delay_value.is_empty() && type_attr.is_some_and(|t| t.eq(TARGET_INTERNAL)) {
-                panic!(
+                return Err(format!(
                     "{}: {} with {} {} is not possible",
                     TAG_SEND,
                     ATTR_DELAY,
                     ATTR_TARGET,
-                    type_attr.unwrap()
-                );
+                    type_attr.map_or("", |t| t.as_str())
+                ));
             }
             let delayms = parse_duration_to_milliseconds(delay_value);
             if delayms < 0 {
-                panic!(
+                return Err(format!(
                     "{}: {} with illegal value '{}'",
-                    TAG_SEND,
-                    ATTR_DELAY,
-                    delay_attr.unwrap()
-                );
+                    TAG_SEND, ATTR_DELAY, delay_value
+                ));
             } else {
                 send_params.delay_ms = delayms as u64;
             }
@@ -1404,12 +1441,13 @@ impl ReaderState {
         }
         send_params
             .parent_state_name
-            .clone_from(&self.get_current_state().name);
-        self.add_executable_content(Box::new(send_params));
+            .clone_from(&self.get_current_state()?.name);
+        self.add_executable_content(Box::new(send_params))?;
+        Ok(())
     }
 
     /// Reads the content until an end-tag is encountered.
-    fn read_content(&mut self, tag: &str, reader: &mut XReader) -> String {
+    fn read_content(&mut self, tag: &str, reader: &mut XReader) -> R<String> {
         let start = BytesStart::new(tag.to_string());
         let end = start.to_end().into_owned();
 
@@ -1424,23 +1462,23 @@ impl ReaderState {
                 r
             }
             Err(e) => {
-                panic!("XML invalid. {}", e);
+                return Err(format!("XML invalid. {}", e));
             }
         };
         // Remove element from stack
         self.pop();
 
-        content
+        Ok(content)
     }
 
-    fn start_content(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
-        self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA]);
+    fn start_content(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) -> R {
+        self.verify_parent_tag(TAG_CONTENT, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA])?;
 
         let parent_tag = self.get_parent_tag().to_string();
         let expr = attr.get(ATTR_EXPR);
 
         let content = if has_content {
-            Some(self.read_content(TAG_CONTENT, reader))
+            Some(self.read_content(TAG_CONTENT, reader)?)
         } else {
             None
         };
@@ -1448,10 +1486,10 @@ impl ReaderState {
         // W3C:
         // A conformant SCXML document must not specify both the 'expr' attribute and child content.
         if expr.is_some() && content.is_some() {
-            panic!(
+            return Err(format!(
                 "{} shall have only {} or children, but not both.",
                 TAG_CONTENT, ATTR_EXPR
-            );
+            ));
         }
 
         let content_data = match content {
@@ -1461,7 +1499,7 @@ impl ReaderState {
 
         match parent_tag.as_str() {
             TAG_DONEDATA => {
-                let state = self.get_current_state();
+                let state = self.get_current_state()?;
                 match state.donedata.as_mut() {
                     Some(dd) => {
                         dd.content = Some(CommonContent {
@@ -1470,12 +1508,12 @@ impl ReaderState {
                         });
                     }
                     None => {
-                        panic!("Internal Error: donedata-Option not initialized")
+                        return Err("Internal Error: donedata-Option not initialized".to_string())
                     }
                 }
             }
             TAG_INVOKE => {
-                let state = self.get_current_state();
+                let state = self.get_current_state()?;
                 let invoke = state.invoke.last_mut();
                 invoke.content = Some(CommonContent {
                     content: content_data,
@@ -1496,16 +1534,17 @@ impl ReaderState {
                 }
             }
             _ => {
-                panic!(
+                return Err(format!(
                     "Internal Error: invalid parent-tag <{}> in start_content",
                     parent_tag
-                )
+                ))
             }
         }
+        Ok(())
     }
 
-    fn start_param(&mut self, attr: &AttributeMap) {
-        self.verify_parent_tag(TAG_PARAM, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA]);
+    fn start_param(&mut self, attr: &AttributeMap) -> R {
+        self.verify_parent_tag(TAG_PARAM, &[TAG_SEND, TAG_INVOKE, TAG_DONEDATA])?;
 
         let parent_tag = self.get_parent_tag().to_string();
 
@@ -1513,7 +1552,7 @@ impl ReaderState {
 
         param
             .name
-            .clone_from(Self::get_required_attr(TAG_PARAM, ATTR_NAME, attr));
+            .clone_from(Self::get_required_attr(TAG_PARAM, ATTR_NAME, attr)?);
         let expr = attr.get(ATTR_EXPR);
         if let Some(expr_value) = expr {
             param.expr.clone_from(expr_value);
@@ -1521,10 +1560,10 @@ impl ReaderState {
         let location = attr.get(ATTR_LOCATION);
         if let Some(location_value) = location {
             if expr.is_some() {
-                panic!(
+                return Err(format!(
                     "{} shall have only {} or {}, but not both.",
                     TAG_PARAM, ATTR_LOCATION, ATTR_EXPR
-                );
+                ));
             }
             param.location = location_value.to_string();
         }
@@ -1533,34 +1572,37 @@ impl ReaderState {
             TAG_SEND => {
                 let ec_id = self.current_executable_content;
                 let ec = self.get_last_executable_content_entry_for_block(ec_id);
-                let send = get_safe_executable_content_as::<SendParameters>(ec.unwrap());
+                let send = get_safe_executable_content_as::<SendParameters>(
+                    ec.ok_or_else(|| "Internal Error: <param> without <send>".to_string())?,
+                );
                 push_param(&mut send.params, param);
             }
             TAG_INVOKE => {
-                let state = self.get_current_state();
+                let state = self.get_current_state()?;
                 push_param(&mut state.invoke.last_mut().params, param);
             }
             TAG_DONEDATA => {
-                let state = self.get_current_state();
+                let state = self.get_current_state()?;
                 match state.donedata.as_mut() {
                     Some(dd) => {
                         push_param(&mut dd.params, param);
                     }
                     None => {
-                        panic!("Internal Error: donedata-Option not initialized")
+                        return Err("Internal Error: donedata-Option not initialized".to_string())
                     }
                 }
             }
             _ => {
-                panic!(
+                return Err(format!(
                     "Internal Error: invalid parent-tag <{}> in start_param",
                     parent_tag
-                )
+                ))
             }
         }
+        Ok(())
     }
 
-    fn start_log(&mut self, attr: &AttributeMap) {
+    fn start_log(&mut self, attr: &AttributeMap) -> R {
         self.verify_parent_tag(
             TAG_LOG,
             &[
@@ -1571,16 +1613,17 @@ impl ReaderState {
                 TAG_FOR_EACH,
                 TAG_FINALIZE,
             ],
-        );
+        )?;
         let label = attr.get(ATTR_LABEL);
         let expr = attr.get(ATTR_EXPR);
         if let Some(exprs) = expr {
             let expression = self.create_source(exprs.as_str());
-            self.add_executable_content(Box::new(Log::new(&label, expression)));
+            self.add_executable_content(Box::new(Log::new(&label, expression)))?;
         }
+        Ok(())
     }
 
-    fn start_assign(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) {
+    fn start_assign(&mut self, attr: &AttributeMap, reader: &mut XReader, has_content: bool) -> R {
         self.verify_parent_tag(
             TAG_ASSIGN,
             &[
@@ -1591,11 +1634,11 @@ impl ReaderState {
                 TAG_FOR_EACH,
                 TAG_FINALIZE,
             ],
-        );
+        )?;
 
         let mut assign = Assign::new();
         assign.location =
-            self.create_source(Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr));
+            self.create_source(Self::get_required_attr(TAG_ASSIGN, ATTR_LOCATION, attr)?);
 
         let expr = attr.get(ATTR_EXPR);
         if let Some(expr_value) = expr {
@@ -1605,7 +1648,7 @@ impl ReaderState {
         let assign_text = if has_content {
             format!(
                 "\"{}\"",
-                self.read_content(TAG_ASSIGN, reader)
+                self.read_content(TAG_ASSIGN, reader)?
                     .replace("\"", "\\\"")
                     .replace("\n", " ")
             )
@@ -1617,15 +1660,16 @@ impl ReaderState {
 
         if !assign_src.is_empty() {
             if !assign.expr.is_empty() {
-                panic!("<assign> with 'expr' attribute shall not have content.")
+                return Err("<assign> with 'expr' attribute shall not have content.".to_string());
             }
             assign.expr = self.create_source_moved(assign_src.to_string());
         }
 
-        self.add_executable_content(Box::new(assign));
+        self.add_executable_content(Box::new(assign))?;
+        Ok(())
     }
 
-    fn start_raise(&mut self, attr: &AttributeMap) {
+    fn start_raise(&mut self, attr: &AttributeMap) -> R {
         self.verify_parent_tag(
             TAG_RAISE,
             &[
@@ -1635,19 +1679,20 @@ impl ReaderState {
                 TAG_IF,
                 TAG_FOR_EACH,
             ],
-        );
+        )?;
 
         let mut raise = Raise::new();
         raise
             .event
-            .clone_from(Self::get_required_attr(TAG_RAISE, ATTR_EVENT, attr));
+            .clone_from(Self::get_required_attr(TAG_RAISE, ATTR_EVENT, attr)?);
 
-        self.add_executable_content(Box::new(raise));
+        self.add_executable_content(Box::new(raise))?;
+        Ok(())
     }
 
-    fn start_scxml(&mut self, attr: &AttributeMap) {
+    fn start_scxml(&mut self, attr: &AttributeMap) -> R {
         if self.in_scxml {
-            panic!("Only one <{}> allowed", TAG_SCXML);
+            return Err(format!("Only one <{}> allowed", TAG_SCXML));
         }
         self.in_scxml = true;
         match attr.get(ATTR_NAME) {
@@ -1669,9 +1714,7 @@ impl ReaderState {
                 Ok(t) => {
                     self.fsm.binding = t;
                 }
-                Err(_e) => {
-                    panic!("{}: unsupported value {}", ATTR_BINDING, binding)
-                }
+                Err(_e) => return Err(format!("{}: unsupported value {}", ATTR_BINDING, binding)),
             }
         }
         let version = attr.get(TAG_VERSION);
@@ -1682,10 +1725,12 @@ impl ReaderState {
         }
         self.fsm.pseudo_root = self.get_or_create_state_with_attributes(attr, false, 0);
         self.current.current_state = self.fsm.pseudo_root;
+        Ok(())
     }
 
-    fn end_scxml(&mut self) {
+    fn end_scxml(&mut self) -> R {
         self.set_default_initial(self.fsm.pseudo_root);
+        Ok(())
     }
 
     fn set_default_initial(&mut self, id: StateId) {
@@ -1707,108 +1752,110 @@ impl ReaderState {
         }
     }
 
-    fn end_state(&mut self) {
+    fn end_state(&mut self) -> R {
         //  W3C: If not specified, the default initial state is the first child state in document order.
         self.set_default_initial(self.current.current_state);
+        Ok(())
     }
 
-    fn start_element(&mut self, reader: &mut XReader, e: &BytesStart, has_content: bool) {
+    fn start_element(&mut self, reader: &mut XReader, e: &BytesStart, has_content: bool) -> R {
         let n = e.local_name();
-        let name = str::from_utf8(n.as_ref()).unwrap();
+        let name = Self::tag_name(&n)?;
         self.push(name);
 
         #[cfg(feature = "Debug_Reader")]
         debug!("Start Element {}", name);
 
-        let attr = &decode_attributes(reader, &mut e.attributes());
+        let attr = &decode_attributes(reader, &mut e.attributes())?;
 
         match name {
             TAG_INCLUDE => {
-                self.include(attr);
+                self.include(attr)?;
             }
             TAG_SCXML => {
-                self.start_scxml(attr);
+                self.start_scxml(attr)?;
             }
             TAG_DATAMODEL => {
-                self.start_datamodel();
+                self.start_datamodel()?;
             }
             TAG_DATA => {
-                self.start_data(attr, reader, has_content);
+                self.start_data(attr, reader, has_content)?;
             }
             TAG_STATE => {
-                self.start_state(attr);
+                self.start_state(attr)?;
             }
             TAG_PARALLEL => {
-                self.start_parallel(attr);
+                self.start_parallel(attr)?;
             }
             TAG_FINAL => {
-                self.start_final(attr);
+                self.start_final(attr)?;
             }
             TAG_DONEDATA => {
-                self.start_donedata();
+                self.start_donedata()?;
             }
             TAG_HISTORY => {
-                self.start_history(attr);
+                self.start_history(attr)?;
             }
             TAG_INITIAL => {
-                self.start_initial();
+                self.start_initial()?;
             }
             TAG_INVOKE => {
-                self.start_invoke(attr);
+                self.start_invoke(attr)?;
             }
             TAG_TRANSITION => {
-                self.start_transition(attr);
+                self.start_transition(attr)?;
             }
             TAG_FINALIZE => {
-                self.start_finalize(attr);
+                self.start_finalize(attr)?;
             }
             TAG_ON_ENTRY => {
-                self.start_on_entry(attr);
+                self.start_on_entry(attr)?;
             }
             TAG_ON_EXIT => {
-                self.start_on_exit(attr);
+                self.start_on_exit(attr)?;
             }
             TAG_SCRIPT => {
-                self.start_script(attr, reader, has_content);
+                self.start_script(attr, reader, has_content)?;
             }
             TAG_RAISE => {
-                self.start_raise(attr);
+                self.start_raise(attr)?;
             }
             TAG_SEND => {
-                self.start_send(attr);
+                self.start_send(attr)?;
             }
             TAG_PARAM => {
-                self.start_param(attr);
+                self.start_param(attr)?;
             }
             TAG_CONTENT => {
-                self.start_content(attr, reader, has_content);
+                self.start_content(attr, reader, has_content)?;
             }
             TAG_LOG => {
-                self.start_log(attr);
+                self.start_log(attr)?;
             }
             TAG_ASSIGN => {
-                self.start_assign(attr, reader, has_content);
+                self.start_assign(attr, reader, has_content)?;
             }
             TAG_FOR_EACH => {
-                self.start_for_each(attr);
+                self.start_for_each(attr)?;
             }
             TAG_CANCEL => {
-                self.start_cancel(attr);
+                self.start_cancel(attr)?;
             }
             TAG_IF => {
-                self.start_if(attr);
+                self.start_if(attr)?;
             }
             TAG_ELSE => {
-                self.start_else(attr);
+                self.start_else(attr)?;
             }
             TAG_ELSEIF => {
-                self.start_else_if(attr);
+                self.start_else_if(attr)?;
             }
             _ => {
                 #[cfg(feature = "Debug_Reader")]
                 debug!("Ignored tag {}", name)
             }
         }
+        Ok(())
     }
 
     /// Try to resolve the file name relative to the current file or include paths.
@@ -1845,15 +1892,20 @@ impl ReaderState {
     /// Handle a XInclude include element.
     /// See https://www.w3.org/TR/xinclude/
     /// Only parse="text" and "href" with a relative path are supported, also no "xpointer" etc.
-    fn include(&mut self, attr: &AttributeMap) {
-        let href = Self::get_required_attr(TAG_INCLUDE, TAG_HREF, attr);
-        let parse = attr.get(ATTR_PARSE);
-        if parse.is_none() || parse.unwrap().ne("text") {
-            panic!("{}: only {}='text' is supported", TAG_INCLUDE, ATTR_PARSE)
+    fn include(&mut self, attr: &AttributeMap) -> R {
+        let href = Self::get_required_attr(TAG_INCLUDE, TAG_HREF, attr)?;
+        if attr.get(ATTR_PARSE).is_none_or(|p| p.ne("text")) {
+            return Err(format!(
+                "{}: only {}='text' is supported",
+                TAG_INCLUDE, ATTR_PARSE
+            ));
         }
         let xpointer = attr.get(ATTR_XPOINTER);
         if xpointer.is_some() {
-            panic!("{}: {} is not supported", TAG_INCLUDE, ATTR_XPOINTER)
+            return Err(format!(
+                "{}: {} is not supported",
+                TAG_INCLUDE, ATTR_XPOINTER
+            ));
         }
 
         // remove "include" from parent-stack as long as we read the content.
@@ -1863,90 +1915,90 @@ impl ReaderState {
             Ok(src) => {
                 let org_file = mem::take(&mut self.file);
                 let org_content = mem::take(&mut self.content);
-                let rs = self.process_file(&src);
-                if rs.is_err() {
-                    panic!("Failed to read {:?}. {}", src, rs.err().unwrap());
+                if let Err(e) = self.process_file(&src) {
+                    return Err(format!("Failed to read {:?}. {}", src, e));
                 }
                 self.file = org_file;
                 self.content = org_content;
             }
             Err(err) => {
-                panic!("Can resolve path {}: {}", href, err);
+                return Err(format!("Can resolve path {}: {}", href, err));
             }
         }
 
         self.push(TAG_INCLUDE);
+        Ok(())
     }
 
     /// Called from SAX handler if some end-tag was read.
-    fn end_element(&mut self, name: &str) {
+    fn end_element(&mut self, name: &str) -> R {
         if !self.current.current_tag.eq(name) {
-            panic!(
+            return Err(format!(
                 "Illegal end-tag {:?}, expected {:?}",
                 &name, &self.current.current_tag
-            );
+            ));
         }
         #[cfg(feature = "Debug_Reader")]
 
         debug!("End Element {}", name);
         match name {
             TAG_SCXML => {
-                self.end_scxml();
+                self.end_scxml()?;
             }
             TAG_IF => {
-                self.end_if();
+                self.end_if()?;
             }
             TAG_TRANSITION => {
-                self.end_transition();
+                self.end_transition()?;
             }
             TAG_ON_EXIT => {
-                self.end_on_exit();
+                self.end_on_exit()?;
             }
             TAG_ON_ENTRY => {
-                self.end_on_entry();
+                self.end_on_entry()?;
             }
             TAG_FOR_EACH => {
-                self.end_for_each();
+                self.end_for_each()?;
             }
             TAG_FINALIZE => {
-                self.end_finalize();
+                self.end_finalize()?;
             }
             TAG_STATE => {
-                self.end_state();
+                self.end_state()?;
             }
             _ => {}
         }
         self.pop();
+        Ok(())
     }
 }
 
 /**
  * Decodes attributes into a hash-map
  */
-fn decode_attributes(reader: &XReader, attr: &mut Attributes) -> AttributeMap {
+fn decode_attributes(reader: &XReader, attr: &mut Attributes) -> R<AttributeMap> {
     attr.map(|attr_result| match attr_result {
         Ok(a) => {
-            let key = reader.decoder().decode(a.key.as_ref());
-            if key.is_err() {
-                panic!(
+            let key = reader.decoder().decode(a.key.as_ref()).map_err(|err| {
+                format!(
                     "unable to read attribute name {:?}, utf8 error {:?}",
-                    &a,
-                    key.err()
-                );
-            }
-            let value = a.decode_and_unescape_value(reader.decoder());
-            if value.is_err() {
-                panic!(
-                    "unable to read attribute value  {:?}, utf8 error {:?}",
-                    &a,
-                    value.err()
-                );
-            }
-            (key.unwrap().to_string(), value.unwrap().to_string())
+                    &a, err
+                )
+            })?;
+            let value = a
+                .decode_and_unescape_value(reader.decoder())
+                .map_err(|err| {
+                    format!(
+                        "unable to read attribute value  {:?}, utf8 error {:?}",
+                        &a, err
+                    )
+                })?;
+            Ok((key.to_string(), value.to_string()))
         }
-        Err(err) => {
-            panic!("unable to read key in DefaultSettings, err = {:?}", err);
-        }
+        Err(err) => Err(format!(
+            "unable to read key in DefaultSettings, err = {:?}",
+            err
+        )),
     })
     .collect()
 }
@@ -2019,20 +2071,20 @@ mod tests {
     use crate::common::debug;
 
     #[test]
-    #[should_panic]
-    fn initial_attribute_should_panic() {
-        let _r = crate::scxml_reader::parse_from_xml(
+    fn initial_attribute_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
             "<scxml initial='Main'><state id='Main' initial='A'>\
     <initial><transition></transition></initial></state></scxml>"
                 .to_string(),
         );
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
-    #[should_panic]
-    fn script_with_src_and_content_should_panic() {
-        let _r = crate::scxml_reader::parse_from_xml("<scxml initial='Main'><state id='Main'>\
+    fn script_with_src_and_content_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml("<scxml initial='Main'><state id='Main'>\
     <initial><transition><script src='xml/example/script.js'>println();</script></transition></initial></state></scxml>".to_string());
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
@@ -2053,7 +2105,10 @@ mod tests {
                 let tr = fsm.transitions.get(tid).unwrap();
                 debug!(" Transition #{} content {}", tr.id, tr.content);
                 if (tr.content as usize) < fsm.executableContent.len() {
-                    debug!(" -> {:?}", fsm.executableContent.get(tr.content as usize).unwrap());
+                    debug!(
+                        " -> {:?}",
+                        fsm.executableContent.get(tr.content as usize).unwrap()
+                    );
                     b = true;
                 }
             }
@@ -2069,7 +2124,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_end_tag_should_panic() {
+    fn wrong_end_tag_should_fail() {
         let r = crate::scxml_reader::parse_from_xml(
             "<scxml initial='Main'><state id='Main' initial='A'></parallel></scxml>".to_string(),
         );
@@ -2077,29 +2132,29 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn wrong_parse_in_xinclude_should_panic() {
-        let _r = crate::scxml_reader::parse_from_xml(
+    fn wrong_parse_in_xinclude_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='xml'/></state></scxml>"
                 .to_string(),
         );
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
-    #[should_panic]
-    fn none_parse_in_xinclude_should_panic() {
-        let _r = crate::scxml_reader::parse_from_xml(
+    fn none_parse_in_xinclude_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml'/></state></scxml>".to_string(),
         );
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
-    #[should_panic]
-    fn xpointer_in_xinclude_should_panic() {
-        let _r = crate::scxml_reader::parse_from_xml(
+    fn xpointer_in_xinclude_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
             "<scxml><state><include href='xml/example/Test2Sub1.xml' parse='text' xpointer='#123'/></state></scxml>"
                 .to_string(),
         );
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
@@ -2111,11 +2166,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn wrong_transition_type_should_panic() {
-        let _r = crate::scxml_reader::parse_from_xml(
+    fn wrong_transition_type_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
             "<scxml><state><transition type='bla'></transition></state></scxml>".to_string(),
         );
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
@@ -2133,12 +2188,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn assign_with_expr_and_content_shall_panic() {
-        let _r = crate::scxml_reader::parse_from_xml(
+    fn assign_with_expr_and_content_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
             "<scxml><state><transition><assign location='x' expr='123'>123</assign></transition></state></scxml>"
                 .to_string(),
         );
+        assert!(r.is_err(), "Shall result in error");
     }
 
     #[test]
@@ -2146,5 +2201,33 @@ mod tests {
         let _r = crate::scxml_reader::parse_from_xml(
             "<scxml><state><transition><assign location='x'>123</assign></transition></state></scxml>".to_string(),
         );
+    }
+
+    #[test]
+    fn unsupported_binding_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
+            "<scxml binding='bogus'><state id='a'/></scxml>".to_string(),
+        );
+        assert!(r.is_err(), "Shall result in error");
+    }
+
+    #[test]
+    fn missing_required_attribute_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
+            "<scxml><state id='a'><transition><raise/></transition></state></scxml>".to_string(),
+        );
+        let Err(e) = r else {
+            panic!("Shall result in error");
+        };
+        assert!(e.contains("requires attribute"), "{}", e);
+    }
+
+    #[test]
+    fn illegal_parent_tag_should_fail() {
+        let r = crate::scxml_reader::parse_from_xml(
+            "<scxml><state id='a'><datamodel><state id='b'/></datamodel></state></scxml>"
+                .to_string(),
+        );
+        assert!(r.is_err(), "Shall result in error");
     }
 }
